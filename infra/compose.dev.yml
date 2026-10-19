@@ -1,0 +1,42 @@
+name: evergreen-dashboard-dev
+
+services:
+  mongodb:
+    image: mongo:8.0
+    container_name: evergreen-mongodb
+    command: ["mongod", "--replSet", "rs0", "--bind_ip_all"]
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  mongodb-init:
+    image: mongo:8.0
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - mongosh
+      - --host
+      - mongodb:27017
+      - --quiet
+      - --eval
+      - >-
+        try {
+          rs.status();
+        } catch (error) {
+          rs.initiate({
+            _id: "rs0",
+            members: [{ _id: 0, host: "localhost:27017" }]
+          });
+        }
+
+volumes:
+  mongodb-data:
