@@ -41,6 +41,20 @@
 - сложная AI-персонализация и генерация полнотекстовых пересказов новостей;
 - офлайн-редактирование с последующим разрешением конфликтов.
 
+### 2.3. Обязательные технологические ограничения
+
+Проект должен использовать следующий стек:
+
+- React;
+- Next.js;
+- TypeScript;
+- Sass/SCSS;
+- Node.js;
+- Express;
+- MongoDB.
+
+Замена любой из перечисленных технологий или перенос backend-логики только в Next.js Route Handlers не допускается без отдельного согласования. Next.js отвечает за frontend и серверный рендеринг интерфейса, а отдельное Node.js + Express приложение — за REST API, бизнес-логику, интеграции, фоновые задачи и доступ к MongoDB.
+
 ## 3. Пользователь и права доступа
 
 В MVP предусмотрена одна роль — авторизованный пользователь. Он имеет доступ только к собственным настройкам, интеграциям, рутинным делам, таймерам и конфигурации дашборда.
@@ -442,24 +456,69 @@ Telegram-уведомление отправляется только привя
 
 ## 12. Техническая архитектура
 
-### 12.1. Рекомендуемый стек
+### 12.1. Обязательный стек
 
-С учётом текущего проекта:
+Frontend:
 
-- Next.js 16 с App Router;
 - React 19;
+- Next.js 16 с App Router;
 - TypeScript в strict-режиме;
-- Tailwind CSS 4 и CSS custom properties для design tokens;
-- PostgreSQL;
-- ORM после отдельного выбора — Prisma или Drizzle;
-- Redis либо совместимое хранилище для кэша, блокировок и очереди;
-- background worker/планировщик для новостей, календаря, таймеров и уведомлений;
+- Sass/SCSS через пакет `sass`;
+- SCSS Modules (`*.module.scss`) для стилей компонентов;
+- глобальный SCSS-файл только для reset, typography, themes и базовых design tokens;
+- CSS custom properties для runtime-переключения светлой/тёмной темы.
+
+Backend:
+
+- актуальная LTS-версия Node.js;
+- Express 5;
+- TypeScript в strict-режиме;
+- REST API с версионированием `/api/v1`;
+- отдельный Node.js worker на общей кодовой базе backend для фоновых задач.
+
+Хранение данных:
+
+- MongoDB как основная и обязательная база данных;
+- официальный MongoDB Node.js Driver с типизированным repository-слоем;
+- MongoDB Atlas рекомендуется для production;
+- Redis либо совместимое хранилище допускается дополнительно для очередей, распределённых блокировок и краткоживущего кэша, но не заменяет MongoDB как источник истины.
+
+Дополнительно:
+
 - service worker для Web Push;
 - облачное объектное хранилище только при появлении пользовательских файлов.
 
-Server Components используются по умолчанию для первичной загрузки. Client Components выделяются для таймера, drag-and-drop, browser notifications, геолокации и других browser API. Внешние интеграции и секреты доступны только на сервере через Route Handlers/серверные сервисы.
+Tailwind CSS, PostgreSQL, Prisma и Drizzle не являются частью целевого стека.
 
-### 12.2. Модули backend
+Server Components Next.js используются по умолчанию для первичной загрузки интерфейса. Client Components выделяются для таймера, drag-and-drop, browser notifications, геолокации и других browser API. Server Components и браузер обращаются к Express API через типизированный API-клиент. Внешние интеграции, бизнес-логика, MongoDB и секреты доступны только Node.js + Express backend; Next.js Route Handlers не должны дублировать доменный API.
+
+### 12.2. Структура приложений
+
+Рекомендуется monorepo:
+
+- `apps/web` — Next.js, React, TypeScript и SCSS;
+- `apps/api` — Node.js, Express, REST API и webhook;
+- `apps/worker` — Node.js worker для синхронизации, таймеров и уведомлений;
+- `packages/contracts` — общие TypeScript-типы и схемы API;
+- `packages/config` — общие настройки TypeScript, lint и тестов.
+
+Web и API развёртываются как отдельные процессы. Предпочтительный production-вариант — один site origin с маршрутизацией `/api/v1/*` на Express через reverse proxy. Если frontend и API находятся на разных origin, Express использует строгий CORS allowlist, `credentials: true` и не допускает wildcard origin.
+
+### 12.3. Архитектура Express backend
+
+Express-приложение разделяется на слои:
+
+- routes — описание URL и HTTP-методов;
+- controllers — преобразование HTTP-запроса и ответа;
+- services — бизнес-правила и orchestration;
+- repositories — единственная точка доступа к MongoDB;
+- integrations — Google, Telegram, погода и новостные провайдеры;
+- jobs — фоновые и периодические задачи;
+- middleware — сессия, авторизация, валидация, rate limit и обработка ошибок.
+
+Асинхронные ошибки передаются в централизованный error middleware. Middleware обработки 404 и ошибок регистрируются после маршрутов. В production отключается заголовок `X-Powered-By`, а `trust proxy` настраивается только под фактическую схему reverse proxy.
+
+Доменные модули:
 
 - Auth и Sessions;
 - User Profile;
@@ -474,7 +533,9 @@ Server Components используются по умолчанию для пер
 - Background Jobs;
 - Audit/Security Events.
 
-### 12.3. Основные сущности данных
+### 12.4. Коллекции MongoDB
+
+Все документы имеют `_id: ObjectId`. Внешние идентификаторы, токены и даты не должны храниться в строковом виде без необходимости. Моменты времени хранятся как BSON Date в UTC, а календарная дата рутины — отдельно как строка `YYYY-MM-DD` вместе с часовым поясом.
 
 `User`:
 
@@ -493,6 +554,7 @@ Server Components используются по умолчанию для пер
 - `userId`, `widgetType`, `enabled`, `position`, `size`;
 - JSON-настройки, прошедшие схемную валидацию;
 - `version`, `updatedAt` для защиты от перезаписи более новой конфигурации.
+- уникальный составной индекс `{ userId: 1, widgetType: 1 }`.
 
 `RoutineRule`:
 
@@ -504,7 +566,7 @@ Server Components используются по умолчанию для пер
 
 - `routineRuleId`, `localDate`;
 - `titleOverride`, `status`, `completedAt`, `excludedAt`;
-- уникальность по паре `routineRuleId + localDate`.
+- уникальный составной индекс `{ routineRuleId: 1, localDate: 1 }`.
 
 `TimerPreset` и `TimerSession`:
 
@@ -518,6 +580,7 @@ Server Components используются по умолчанию для пер
 - зашифрованные credentials;
 - `scope`, `externalUserId`, `lastSyncAt`, `syncCursor`;
 - метаданные, не содержащие секретов.
+- уникальный составной индекс `{ userId: 1, type: 1 }`.
 
 `NewsItem`:
 
@@ -531,27 +594,37 @@ Server Components используются по умолчанию для пер
 - статус доставки и число попыток;
 - endpoint и зашифрованные ключи подписки.
 
-### 12.4. API-контракты верхнего уровня
+Дополнительные требования MongoDB:
 
-- `GET /api/dashboard?date=YYYY-MM-DD` — агрегированные данные первого экрана.
-- `GET /api/widgets/preferences` — настройки виджетов.
-- `PATCH /api/widgets/preferences` — пакетное изменение порядка, размера и видимости.
-- `GET /api/routines?date=YYYY-MM-DD` — экземпляры на дату.
-- `POST /api/routine-rules` — создание правила.
-- `PATCH /api/routine-rules/:id` — изменение правила с областью применения.
-- `DELETE /api/routine-rules/:id` — мягкое удаление.
-- `PATCH /api/routine-occurrences/:id` — выполнение или переопределение экземпляра.
-- `POST /api/timers` — запуск сессии.
-- `PATCH /api/timers/:id` — пауза, продолжение, пропуск, сброс.
-- `GET /api/news` — отфильтрованная лента.
-- `GET /api/weather` — погода для сохранённой или переданной локации.
-- `GET /api/calendar/events` — нормализованные события.
-- `POST /api/integrations/google/connect` — начало подключения.
-- `POST /api/integrations/telegram/link` — создание токена привязки.
-- `POST /api/push/subscriptions` — регистрация Web Push.
-- `DELETE /api/push/subscriptions/:id` — отключение Web Push.
-- `POST /api/webhooks/google-calendar` — уведомления Google.
-- `POST /api/webhooks/telegram` — события Telegram-бота.
+- TTL-индексы применяются для истёкших сессий, одноразовых токенов и временных delivery-логов;
+- индексы проектируются под реальные query patterns и проверяются через `explain`;
+- небольшие атомарно обновляемые настройки допускается встраивать в родительский документ;
+- растущие списки событий, новостей и истории хранятся в отдельных коллекциях, а не в неограниченных массивах;
+- multi-document transactions используются только для операций, где нельзя обеспечить согласованность атомарным обновлением одного документа;
+- окружение MongoDB должно поддерживать replica set, если используются transactions и change streams;
+- миграции структуры документов выполняются версионированными Node.js-скриптами.
+
+### 12.5. API-контракты верхнего уровня
+
+- `GET /api/v1/dashboard?date=YYYY-MM-DD` — агрегированные данные первого экрана.
+- `GET /api/v1/widgets/preferences` — настройки виджетов.
+- `PATCH /api/v1/widgets/preferences` — пакетное изменение порядка, размера и видимости.
+- `GET /api/v1/routines?date=YYYY-MM-DD` — экземпляры на дату.
+- `POST /api/v1/routine-rules` — создание правила.
+- `PATCH /api/v1/routine-rules/:id` — изменение правила с областью применения.
+- `DELETE /api/v1/routine-rules/:id` — мягкое удаление.
+- `PATCH /api/v1/routine-occurrences/:id` — выполнение или переопределение экземпляра.
+- `POST /api/v1/timers` — запуск сессии.
+- `PATCH /api/v1/timers/:id` — пауза, продолжение, пропуск, сброс.
+- `GET /api/v1/news` — отфильтрованная лента.
+- `GET /api/v1/weather` — погода для сохранённой или переданной локации.
+- `GET /api/v1/calendar/events` — нормализованные события.
+- `POST /api/v1/integrations/google/connect` — начало подключения.
+- `POST /api/v1/integrations/telegram/link` — создание токена привязки.
+- `POST /api/v1/push/subscriptions` — регистрация Web Push.
+- `DELETE /api/v1/push/subscriptions/:id` — отключение Web Push.
+- `POST /api/v1/webhooks/google-calendar` — уведомления Google.
+- `POST /api/v1/webhooks/telegram` — события Telegram-бота.
 
 Все изменяющие операции:
 
@@ -702,7 +775,8 @@ MVP считается принятым, если:
 ## 19. Решения, требующие подтверждения до разработки
 
 - Production-хостинг и доступный механизм фоновых задач.
-- Выбор PostgreSQL/Redis-провайдеров.
+- Выбор MongoDB-хостинга; рекомендуемый вариант — MongoDB Atlas.
+- Нужен ли отдельный Redis-провайдер для очередей и распределённых блокировок.
 - Конкретный набор новостных источников и проверка их условий использования.
 - Провайдер погоды, лимиты и коммерческие условия.
 - Нужен ли вход только через Telegram для пользователей без Google.
@@ -722,12 +796,18 @@ MVP считается принятым, если:
 - проверены клавиатура, screen reader labels и reduced motion;
 - не добавлены секреты и персональные данные в логи;
 - обновлена техническая документация и список переменных окружения;
+- UI-компоненты используют SCSS Modules, а не inline styles или Tailwind;
+- бизнес-логика и MongoDB-доступ находятся в Node.js + Express backend;
+- для MongoDB созданы необходимые unique, TTL и query-индексы;
 - сборка, lint, typecheck и тесты проходят в CI.
 
 ## 21. Документационные источники
 
 - [Визуальный референс Dribbble](https://dribbble.com/shots/25241984-Task-Management-Dashboard)
 - [Next.js: Server and Client Components](https://nextjs.org/docs/app/getting-started/server-and-client-components)
+- [Next.js: Sass](https://nextjs.org/docs/app/guides/sass)
+- [Express: документация](https://expressjs.com/)
+- [MongoDB: Data Modeling](https://www.mongodb.com/docs/manual/data-modeling/)
 - [Google Calendar API: Events list](https://developers.google.com/workspace/calendar/api/v3/reference/events/list)
 - [Google Calendar API: Push notifications](https://developers.google.com/workspace/calendar/api/guides/push)
 
