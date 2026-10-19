@@ -1,0 +1,25 @@
+{
+  "name": "@dashboard/config",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint/base": "./eslint/base.mjs",
+    "./eslint/next": "./eslint/next.mjs",
+    "./eslint/node": "./eslint/node.mjs",
+    "./typescript/base": "./typescript/base.json",
+    "./typescript/next": "./typescript/next.json",
+    "./typescript/node": "./typescript/node.json",
+    "./typescript/library": "./typescript/library.json"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint-config-next": "16.4.2",
+    "globals": "17.13.0",
+    "typescript-eslint": "8.71.2"
+  },
+  "peerDependencies": {
+    "eslint": ">=10.0.0",
+    "typescript": ">=6.0.0 <6.1.0"
+  }
+}

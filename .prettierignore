@@ -1,0 +1,11 @@
+node_modules
+.agents
+.next
+dist
+coverage
+playwright-report
+test-results
+package-lock.json
+*.min.*
+*.md
+**/.gitkeep

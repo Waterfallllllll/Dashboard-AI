@@ -1,18 +1,19 @@
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import baseConfig from "@dashboard/config/eslint/base";
+import nextConfig from "@dashboard/config/eslint/next";
+import nodeConfig from "@dashboard/config/eslint/node";
 
-const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  // Override default ignores of eslint-config-next.
+export default defineConfig([
   globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
+    "**/node_modules/**",
+    "**/.next/**",
+    "**/dist/**",
+    "**/coverage/**",
+    "**/next-env.d.ts",
+    "playwright-report/**",
+    "test-results/**"
   ]),
+  ...baseConfig,
+  ...nextConfig,
+  ...nodeConfig
 ]);
-
-export default eslintConfig;
