@@ -4,30 +4,29 @@ Monorepo персонального информационного дашбор�
 
 ## Состав
 
-- `apps/web` — Next.js, React, TypeScript и SCSS.
-- `apps/api` — Express API и worker на Node.js.
+- `apps/web` — frontend-приложение.
+- `apps/api` — backend API и worker.
 - `packages/contracts` — общие runtime-схемы и API DTO.
-- `packages/config` — общие TypeScript и ESLint настройки.
-- `infra` — Docker Compose, Dockerfiles и reverse proxy.
+- `packages/config` — общие настройки разработки.
+- `infra` — конфигурация развёртывания.
 
 Исходный код намеренно не добавлен. Каталоги подготовлены с `.gitkeep`.
 
 ## Требования
 
-- Node.js 24 LTS.
-- npm 11+.
-- Docker с Compose plugin.
+Стек, версии и системные требования зафиксированы в [документе технологий](./docs/TECHNOLOGIES.md).
 
 ## Подготовка окружения
 
-1. Установить зависимости: `npm install`.
+1. Установить зависимости командой из документа технологий.
 2. Создать локальный `.env` из `.env.example`.
-3. Запустить MongoDB: `npm run infra:up`.
+3. Запустить локальную инфраструктуру корневой командой проекта.
 
 Команды разработки станут доступны после добавления entrypoint-файлов приложений.
 
 ## Документация
 
-- [Техническое задание](./TECHNICAL_SPECIFICATION.md)
-- [Архитектура](./architecture.md)
+- [Техническое задание](./docs/TECHNICAL_SPECIFICATION.md)
+- [Архитектура](./docs/architecture.md)
+- [Технологии](./docs/TECHNOLOGIES.md)
 - [Дизайн-система](./Design.md)

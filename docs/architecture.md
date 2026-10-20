@@ -2,32 +2,34 @@
 
 Версия: 1.0  
 Статус: целевая архитектура MVP  
-Основание: [TECHNICAL_SPECIFICATION.md](./TECHNICAL_SPECIFICATION.md)
+Основание: [TECHNICAL_SPECIFICATION.md](./TECHNICAL_SPECIFICATION.md)  
+Технологический стандарт: [TECHNOLOGIES.md](./TECHNOLOGIES.md)
 
 ## 1. Архитектурное резюме
 
 Приложение строится как monorepo и состоит из трёх независимо запускаемых процессов:
 
-1. `web` — React + Next.js + TypeScript + SCSS.
-2. `api` — Node.js + Express + TypeScript.
-3. `worker` — второй процесс из той же кодовой базы Express backend для фоновых и отложенных задач.
+1. `web` — пользовательский интерфейс и серверный рендеринг.
+2. `api` — HTTP API, OAuth callback и webhook.
+3. `worker` — второй процесс из той же backend-кодовой базы для фоновых и отложенных задач.
 
-MongoDB является единственным постоянным источником истины. На MVP Redis не обязателен. Reverse proxy предоставляет единый публичный origin и направляет `/api/v1/*` в Express, а остальные запросы — в Next.js.
+Основное хранилище является единственным постоянным источником истины. Reverse proxy предоставляет единый публичный origin и направляет `/api/v1/*` в backend, а остальные запросы — во frontend.
 
 Основной архитектурный стиль backend — модульный монолит. Это даёт явные границы между доменами без операционной сложности микросервисов.
 
 Ключевые решения:
 
 - один репозиторий и один lock-файл;
-- npm workspaces, так как проект уже использует npm;
-- отдельные Docker-образы для `web` и `api`;
+- независимые deploy artifacts для `web` и `api`;
 - один backend-образ запускается двумя командами: API и worker;
-- Next.js не обращается к MongoDB напрямую;
+- frontend не обращается к базе данных напрямую;
 - бизнес-логика находится только в backend-модулях;
 - frontend и backend используют общие API-контракты, но не общие модели БД;
-- фоновые задачи сначала хранятся в MongoDB;
-- production-развёртывание начинается с Docker Compose на одном сервере и MongoDB Atlas;
-- возможность горизонтального масштабирования сохраняется без внедрения Kubernetes и микросервисов на старте.
+- фоновые задачи на MVP хранятся в основном persistent store;
+- production-развёртывание начинается с одного сервера и managed database;
+- возможность горизонтального масштабирования сохраняется без сложной orchestration platform и микросервисов на старте.
+
+Конкретные frameworks, библиотеки, версии и infrastructure tools перечислены только в [TECHNOLOGIES.md](./TECHNOLOGIES.md).
 
 ## 2. Контекст системы
 
@@ -48,7 +50,7 @@ flowchart LR
     App --> News
 ```
 
-Система не предоставляет внешним клиентам прямой доступ к MongoDB или worker. Все пользовательские операции проходят через Express API.
+Система не предоставляет внешним клиентам прямой доступ к базе данных или worker. Все пользовательские операции проходят через HTTP API.
 
 ## 3. Контейнерная схема
 
@@ -56,10 +58,10 @@ flowchart LR
 flowchart TB
     Browser[Браузер]
     Proxy[Reverse proxy / TLS]
-    Web[Next.js web]
-    API[Express API]
-    Worker[Node.js worker]
-    Mongo[(MongoDB)]
+    Web[Web frontend]
+    API[HTTP API]
+    Worker[Background worker]
+    Store[(Primary data store)]
     Google[Google APIs]
     Telegram[Telegram API]
     Providers[Weather и News providers]
@@ -69,8 +71,8 @@ flowchart TB
     Proxy -->|UI, SSR, static| Web
     Proxy -->|REST, OAuth, webhooks| API
     Web -->|Внутренний REST + cookie| API
-    API --> Mongo
-    Worker --> Mongo
+    API --> Store
+    Worker --> Store
     API --> Google
     API --> Telegram
     API --> Providers
@@ -84,12 +86,12 @@ flowchart TB
 `web`:
 
 - маршрутизация интерфейса;
-- Server и Client Components;
+- серверный и клиентский рендеринг;
 - SSR и streaming;
 - формы и пользовательские взаимодействия;
-- SCSS Modules и темы;
+- локальные стили и темы;
 - service worker для Web Push;
-- вызовы Express API.
+- вызовы HTTP API.
 
 `api`:
 
@@ -98,7 +100,7 @@ flowchart TB
 - валидация запросов;
 - бизнес-операции;
 - webhook Google и Telegram;
-- доступ к MongoDB;
+- доступ к постоянному хранилищу;
 - постановка фоновых задач.
 
 `worker`:
@@ -110,7 +112,7 @@ flowchart TB
 - повторная доставка сообщений;
 - очистка и восстановление зависших задач.
 
-`MongoDB`:
+`Primary data store`:
 
 - пользовательские и доменные данные;
 - сессии и одноразовые токены;
@@ -268,10 +270,10 @@ node dist/worker-main.js
 ### 5.1. Общие правила
 
 - `apps/web` не импортирует код из `apps/api`.
-- `apps/api` не импортирует React/Next.js.
+- `apps/api` не импортирует frontend-код.
 - Оба приложения могут импортировать только публичные API из `packages/contracts` и `packages/config`.
-- `packages/contracts` не зависит от frontend, Express и MongoDB.
-- MongoDB-типы документов не публикуются во frontend.
+- `packages/contracts` не зависит от UI, HTTP framework и реализации хранилища.
+- Внутренние типы документов хранилища не публикуются во frontend.
 - Секреты и server-only код не размещаются в общих пакетах.
 
 Направление зависимостей:
@@ -284,7 +286,7 @@ flowchart LR
     API --> Modules[Backend modules]
     Worker --> Modules
     Modules --> Infra[Infrastructure adapters]
-    Infra --> Mongo[(MongoDB)]
+    Infra --> Store[(Primary data store)]
 ```
 
 ### 5.2. Связи backend-модулей
@@ -300,16 +302,16 @@ flowchart LR
 Допустимое направление:
 
 ```text
-route → controller → service → repository → MongoDB
+route → controller → service → repository → Primary data store
                            ↘ integration → External API
-                           ↘ job queue → MongoDB
+                           ↘ job queue → Persistent queue
 ```
 
 Обратные импорты запрещены.
 
 ## 6. Frontend-архитектура
 
-### 6.1. App Router
+### 6.1. Маршрутизация и layouts
 
 Папка `app` отвечает только за:
 
@@ -326,20 +328,20 @@ route → controller → service → repository → MongoDB
 - `(public)` — страницы без сессии;
 - `(protected)` — маршруты, требующие авторизации.
 
-Проверка защищённого layout выполняется на сервере через Express endpoint `GET /api/v1/auth/session`. Cookie входящего запроса пересылается во внутренний API. При отсутствии сессии Next.js выполняет redirect на `/login`.
+Проверка защищённого layout выполняется на сервере через endpoint `GET /api/v1/auth/session`. Cookie входящего запроса пересылается во внутренний API. При отсутствии сессии выполняется server-side redirect на `/login`.
 
-### 6.2. Server и Client Components
+### 6.2. Серверные и клиентские компоненты
 
-Server Components применяются для:
+Серверные компоненты применяются для:
 
 - layouts и страниц;
 - первичной загрузки dashboard;
 - чтения server-only переменных;
 - уменьшения клиентского JavaScript.
 
-Client Components применяются только там, где нужны:
+Клиентские компоненты применяются только там, где нужны:
 
-- React state и обработчики событий;
+- клиентское состояние и обработчики событий;
 - таймер;
 - drag-and-drop;
 - Geolocation API;
@@ -347,7 +349,7 @@ Client Components применяются только там, где нужны:
 - анимация погоды;
 - optimistic UI.
 
-Граница `'use client'` размещается как можно ниже по дереву.
+Граница клиентских компонентов размещается как можно ниже по дереву. Конкретная директива определяется frontend-фреймворком из [TECHNOLOGIES.md](./TECHNOLOGIES.md).
 
 ### 6.3. Feature-first организация
 
@@ -375,7 +377,7 @@ features/routines/
 
 В `src/lib/api` находятся два клиента:
 
-- `server-api-client.ts` — работает внутри Next.js, использует `INTERNAL_API_URL` и пересылает cookie;
+- `server-api-client.ts` — работает внутри frontend server, использует `INTERNAL_API_URL` и пересылает cookie;
 - `browser-api-client.ts` — использует относительные URL `/api/v1/*`.
 
 Оба клиента:
@@ -388,8 +390,8 @@ features/routines/
 
 Первичная загрузка `/dashboard`:
 
-1. Server Component вызывает агрегирующий endpoint.
-2. Express возвращает независимые секции виджетов.
+1. Серверная страница вызывает агрегирующий endpoint.
+2. Backend возвращает независимые секции виджетов.
 3. Страница передаёт initial data клиентским виджетам.
 4. Дальнейшие обновления и мутации идут из браузера напрямую в `/api/v1`.
 
@@ -399,14 +401,11 @@ features/routines/
 
 Обязательный подход:
 
-- локальные стили — `Component.module.scss`;
-- глобальные стили — только `styles/globals.scss`;
-- Sass подключается через пакет `sass`;
-- современный `@use` вместо устаревшего `@import`;
-- Sass variables/mixins используются для compile-time значений;
-- CSS custom properties используются для runtime-темы;
+- стили компонентов имеют локальную область видимости;
+- глобальные стили содержат только reset, typography, themes и design tokens;
+- runtime-тема использует semantic custom properties;
 - inline styles допускаются только для действительно динамических числовых значений;
-- Tailwind не используется.
+- конкретная технология стилей и правила синтаксиса определены в [TECHNOLOGIES.md](./TECHNOLOGIES.md).
 
 Пример размещения:
 
@@ -421,7 +420,7 @@ features/weather/components/WeatherWidget/
 Design tokens определяются один раз:
 
 ```text
-styles/_tokens.scss      — Sass maps и compile-time tokens
+styles/_tokens.scss      — compile-time style tokens
 styles/globals.scss      — CSS variables для light/dark themes
 ```
 
@@ -456,7 +455,7 @@ modules/routines/
 
 Небольшой модуль может не создавать все файлы сразу. Деление выполняется по ответственности, а не ради количества слоёв.
 
-### 7.2. Express pipeline
+### 7.2. HTTP pipeline
 
 Порядок middleware:
 
@@ -518,7 +517,7 @@ modules/routines/
 - pagination — cursor-based для растущих коллекций;
 - `PATCH` используется для частичных изменений;
 - повторяемые POST-запросы принимают `Idempotency-Key`;
-- API не возвращает MongoDB-документ напрямую;
+- API не возвращает внутренний документ хранилища напрямую;
 - DTO преобразуется явно в service/controller.
 
 ### 7.4. Общие контракты
@@ -526,31 +525,28 @@ modules/routines/
 `packages/contracts` содержит:
 
 - runtime-схемы request/response;
-- выведенные из схем TypeScript-типы;
+- выведенные из схем статические типы;
 - enum/union API-статусов;
 - контракт ошибок;
 - только сериализуемые DTO.
 
 Контракты не содержат:
 
-- `ObjectId`;
-- MongoDB collection types;
-- Express Request/Response;
-- React components;
+- внутренние идентификаторы и collection types;
+- framework Request/Response;
+- UI components;
 - секреты или внутренние поля интеграций.
 
-## 8. MongoDB
+## 8. Хранилище данных
 
 ### 8.1. Подключение
 
-- Каждый процесс создаёт один `MongoClient`.
+- Каждый процесс создаёт один клиент хранилища.
 - Внутри процесса используется общий connection pool.
 - Клиент открывается при старте и закрывается при `SIGTERM`/`SIGINT`.
 - API становится ready только после успешного подключения.
 - На transient errors применяются ограниченные retries с exponential backoff.
-- Запросы имеют разумный `maxTimeMS`.
-
-Production MongoDB должна работать как replica set. Рекомендуемый вариант — MongoDB Atlas.
+- Запросы имеют ограничение максимального времени выполнения.
 
 ### 8.2. Коллекции
 
@@ -642,7 +638,7 @@ Production MongoDB должна работать как replica set. Реком�
 - индекс `{ userId: 1, createdAt: -1 }`;
 - TTL определяется политикой хранения.
 
-Важно: TTL index в MongoDB является однополевым. Его нельзя совмещать с compound index.
+Ограничения TTL и compound indexes определяются возможностями выбранного хранилища из [TECHNOLOGIES.md](./TECHNOLOGIES.md).
 
 ### 8.3. Embedding и references
 
@@ -671,19 +667,19 @@ Production MongoDB должна работать как replica set. Реком�
 - критичное завершение OAuth-привязки;
 - удаление интеграции + отмена связанных задач.
 
-Обычные обновления одного документа используют атомарные операции MongoDB без транзакции.
+Обычные обновления одного документа используют атомарные операции хранилища без транзакции.
 
 ## 9. Фоновые задачи
 
-### 9.1. Почему без Redis на MVP
+### 9.1. Persistent queue на MVP
 
-Отдельный Redis увеличивает количество сервисов, секретов, мониторинга и резервных сценариев. Для ожидаемой нагрузки персонального дашборда MongoDB достаточно для persistent job queue.
+Очередь использует основное persistent store, чтобы не добавлять отдельный инфраструктурный сервис до появления измеримой необходимости. Выбор текущей и возможной будущей реализации зафиксирован в [TECHNOLOGIES.md](./TECHNOLOGIES.md).
 
-Взаимодействие скрывается за интерфейсом `JobQueue`. При росте нагрузки реализацию можно заменить на Redis/BullMQ без изменения доменных сервисов.
+Взаимодействие скрывается за интерфейсом `JobQueue`, поэтому реализацию можно заменить без изменения доменных сервисов.
 
 ### 9.2. Получение задачи worker
 
-Worker атомарно выполняет `findOneAndUpdate`:
+Worker атомарно захватывает следующую доступную задачу:
 
 - выбирает `pending` задачу с `runAt <= now`;
 - устанавливает `status = processing`;
@@ -719,7 +715,7 @@ Unique index не позволяет создать повторную дост�
 - возврат задач с истёкшим lease — постоянно;
 - проверка reminder рутин — согласно локальному времени пользователя.
 
-Периодические задачи используют распределённый lock в MongoDB, чтобы при нескольких worker только один создавал очередную партию.
+Периодические задачи используют распределённый lock в основном хранилище, чтобы при нескольких worker только один создавал очередную партию.
 
 ## 10. Основные потоки данных
 
@@ -728,9 +724,9 @@ Unique index не позволяет создать повторную дост�
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant W as Next.js
-    participant A as Express API
-    participant M as MongoDB
+    participant W as Web frontend
+    participant A as HTTP API
+    participant M as Primary data store
 
     B->>W: GET /dashboard + session cookie
     W->>A: GET /api/v1/auth/session
@@ -752,8 +748,8 @@ Endpoint dashboard использует `Promise.allSettled` для незави
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant A as Express API
-    participant M as MongoDB
+    participant A as HTTP API
+    participant M as Primary data store
     participant W as Worker
     participant T as Telegram/Web Push
 
@@ -772,9 +768,9 @@ sequenceDiagram
 
 ### 10.3. Google Calendar
 
-1. Пользователь начинает подключение через Express.
-2. Express создаёт `state`/PKCE и перенаправляет в Google.
-3. Callback приходит в Express.
+1. Пользователь начинает подключение через backend.
+2. Backend создаёт `state`/PKCE и перенаправляет в Google.
+3. Callback приходит в backend.
 4. Credentials шифруются и сохраняются в `integrations`.
 5. API ставит initial sync job.
 6. Worker получает события и сохраняет нормализованный кэш.
@@ -785,8 +781,8 @@ sequenceDiagram
 
 1. Browser получает координаты после согласия.
 2. Координаты округляются до необходимой точности.
-3. Express вычисляет cache key по координатам и временному bucket.
-4. При свежем кэше возвращает MongoDB-данные.
+3. Backend вычисляет cache key по координатам и временному bucket.
+4. При свежем кэше возвращает сохранённые данные.
 5. При отсутствии вызывает provider adapter, нормализует ответ и сохраняет TTL/`expiresAt`.
 
 ### 10.5. AI-новости
@@ -799,7 +795,7 @@ sequenceDiagram
 
 ## 11. Авторизация и сессия
 
-Express полностью владеет авторизацией.
+Backend полностью владеет авторизацией.
 
 Cookie:
 
@@ -810,7 +806,7 @@ Cookie:
 - `Path=/`;
 - без `Domain`.
 
-В cookie хранится случайный session token. MongoDB хранит только его hash.
+В cookie хранится случайный session token. Постоянное хранилище содержит только его hash.
 
 OAuth state, Telegram link token и recovery token:
 
@@ -819,7 +815,7 @@ OAuth state, Telegram link token и recovery token:
 - хранятся в виде hash;
 - автоматически удаляются TTL index.
 
-Для мутаций Express проверяет `Origin`, CSRF token и session. OAuth callback и внешние webhook имеют отдельные правила.
+Для мутаций backend проверяет `Origin`, CSRF token и session. OAuth callback и внешние webhook имеют отдельные правила.
 
 ## 12. Развёртывание
 
@@ -827,32 +823,23 @@ OAuth state, Telegram link token и recovery token:
 
 Локально запускаются:
 
-- Next.js dev server;
-- Express API с watch mode;
+- frontend dev server;
+- HTTP API с watch mode;
 - worker с watch mode;
-- MongoDB replica set через `compose.dev.yml`.
+- локальный кластер хранилища через `compose.dev.yml`.
 
-Reverse proxy в локальной разработке необязателен. Next.js может проксировать `/api/v1` на Express, чтобы browser продолжал работать с same-origin URL.
+Reverse proxy в локальной разработке необязателен. Frontend dev server может проксировать `/api/v1` в backend, чтобы browser продолжал работать с same-origin URL.
 
-Корневые команды:
-
-```text
-npm run dev
-npm run build
-npm run lint
-npm run typecheck
-npm run test
-npm run test:e2e
-```
+Корневые команды разработки, сборки и тестирования определены в package manifest; выбранный package manager указан в [TECHNOLOGIES.md](./TECHNOLOGIES.md).
 
 ### 12.2. Production на одном сервере
 
 Оптимальный MVP-вариант:
 
-- Linux VPS;
-- Docker Engine + Docker Compose;
-- nginx или Caddy;
-- MongoDB Atlas;
+- один Linux-сервер;
+- container runtime с declarative compose-конфигурацией;
+- reverse proxy;
+- managed database;
 - один контейнер `web`;
 - один контейнер `api`;
 - один контейнер `worker`.
@@ -860,44 +847,34 @@ npm run test:e2e
 ```mermaid
 flowchart TB
     Internet[Internet]
-    Proxy[nginx / Caddy]
+    Proxy[Reverse proxy]
     Web[web container]
     API[api container]
     Worker[worker container]
-    Atlas[(MongoDB Atlas)]
+    Store[(Managed data store)]
 
     Internet -->|443| Proxy
     Proxy -->|/*| Web
     Proxy -->|/api/v1/*| API
     Web -->|internal network| API
-    API --> Atlas
-    Worker --> Atlas
+    API --> Store
+    Worker --> Store
 ```
 
-MongoDB не разворачивается на том же VPS в production, если доступен Atlas: managed backup, replica set и обновления уменьшают операционный риск.
+База данных не разворачивается на том же сервере в production, если доступен managed-вариант: резервное копирование, отказоустойчивость и обновления не должны обслуживаться приложением.
 
-### 12.3. Next.js image
+### 12.3. Frontend image
 
-В `next.config.ts`:
+Multi-stage build формирует автономный runtime artifact и копирует только production server, статические assets и public-файлы.
 
-```text
-output: 'standalone'
-```
-
-Multi-stage Dockerfile копирует:
-
-- `.next/standalone`;
-- `.next/static`;
-- `public`.
-
-Контейнер запускает `node server.js` под непривилегированным пользователем.
+Контейнер запускает runtime entrypoint под непривилегированным пользователем.
 
 ### 12.4. Backend image
 
-Один multi-stage Dockerfile:
+Один multi-stage container build:
 
 1. устанавливает workspace dependencies;
-2. компилирует TypeScript;
+2. компилирует backend и contracts;
 3. копирует production dependencies и `dist`;
 4. запускается под непривилегированным пользователем.
 
@@ -917,20 +894,20 @@ Reverse proxy:
 - завершает TLS;
 - ограничивает body size;
 - добавляет базовый rate limit;
-- перенаправляет `/api/v1` в Express;
-- перенаправляет остальные запросы в Next.js;
+- перенаправляет `/api/v1` в backend;
+- перенаправляет остальные запросы во frontend;
 - передаёт `X-Forwarded-*`;
-- не буферизует streaming-ответы Next.js;
+- не буферизует streaming-ответы frontend;
 - не публикует внутренние порты контейнеров.
 
-Express доверяет только известному reverse proxy.
+Backend доверяет только известному reverse proxy.
 
 ### 12.6. Health checks и shutdown
 
 API:
 
 - `/health/live` — процесс работает;
-- `/health/ready` — MongoDB доступна, конфигурация валидна.
+- `/health/ready` — хранилище доступно, конфигурация валидна.
 
 Web:
 
@@ -939,7 +916,7 @@ Web:
 Worker:
 
 - периодически обновляет heartbeat;
-- readiness означает подключение к MongoDB;
+- readiness означает подключение к хранилищу;
 - мониторинг проверяет возраст heartbeat.
 
 При `SIGTERM`:
@@ -948,10 +925,10 @@ Worker:
 2. Завершает in-flight requests.
 3. Worker перестаёт брать новые задачи.
 4. Активная задача завершается или освобождает lease.
-5. MongoClient закрывается.
+5. Клиент хранилища закрывается.
 6. Процесс завершается до истечения grace period.
 
-Для Next.js предусматривается drain period 10–30 секунд.
+Для frontend server предусматривается drain period 10–30 секунд.
 
 ## 13. Переменные окружения
 
@@ -996,24 +973,24 @@ Worker:
 Pipeline:
 
 1. checkout;
-2. `npm ci`;
+2. воспроизводимая установка по lock-файлу;
 3. lint;
-4. TypeScript typecheck;
+4. статическая проверка типов;
 5. unit tests;
-6. integration tests с MongoDB replica set;
+6. integration tests с production-совместимым кластером хранилища;
 7. build contracts, API и web;
 8. E2E для критичных сценариев;
-9. сборка versioned Docker images;
+9. сборка versioned container images;
 10. security/dependency scan;
 11. публикация images;
-12. запуск MongoDB migration/index scripts;
+12. запуск migration/index scripts;
 13. обновление Compose services;
 14. health checks;
 15. автоматический rollback при неуспешном health check.
 
-Docker images помечаются immutable tag по commit SHA. `latest` не используется как единственный production tag.
+Container images помечаются immutable tag по commit SHA. `latest` не используется как единственный production tag.
 
-MongoDB migrations:
+Миграции хранилища:
 
 - имеют номер версии;
 - идемпотентны;
@@ -1034,7 +1011,7 @@ MongoDB migrations:
 ### Метрики
 
 - HTTP request rate/error rate/latency;
-- MongoDB operation latency и pool saturation;
+- latency операций хранилища и pool saturation;
 - размер очереди по status;
 - возраст самой старой pending job;
 - успешность Web Push и Telegram;
@@ -1050,11 +1027,11 @@ Frontend и backend используют единый release/version identifier
 
 - TLS обязателен.
 - API и web доступны снаружи только через reverse proxy.
-- MongoDB разрешает подключение только от production-сервера/закрытой сети.
+- Хранилище разрешает подключение только от production-сервера/закрытой сети.
 - Все внешние HTTP-клиенты имеют timeout, ограничение ответа и allowlist hosts.
-- RSS HTML не вставляется через `dangerouslySetInnerHTML`.
+- RSS HTML не вставляется в DOM напрямую.
 - Refresh tokens и push keys шифруются authenticated encryption.
-- Ключ шифрования отделён от MongoDB.
+- Ключ шифрования отделён от хранилища.
 - Webhook проверяет секрет/подпись до чтения бизнес-payload.
 - Rate limit различается для login, API и webhook.
 - В production включаются CSP, HSTS и ограничивающая Permissions Policy.
@@ -1071,8 +1048,8 @@ Frontend и backend используют единый release/version identifier
 `api`:
 
 - unit tests services с in-memory fakes интерфейсов;
-- repository integration tests с реальной MongoDB;
-- HTTP integration tests через Express app без открытия внешнего порта;
+- repository integration tests с production-совместимым хранилищем;
+- HTTP integration tests через backend app без открытия внешнего порта;
 - contract tests request/response;
 - adapter tests с записанными безопасными fixtures.
 
@@ -1099,41 +1076,41 @@ Frontend и backend используют единый release/version identifier
 - 1 web;
 - 1 API;
 - 1 worker;
-- MongoDB Atlas;
-- MongoDB job queue;
-- один VPS и Docker Compose.
+- managed database;
+- persistent job queue в основном хранилище;
+- один сервер и compose-конфигурация.
 
 ### Этап 2. Рост нагрузки
 
 - несколько API-контейнеров за proxy;
 - несколько worker с lease;
-- CDN для immutable Next.js assets;
-- Redis для rate limit, shared cache и очереди только при подтверждённой необходимости;
-- общий Next.js cache handler, если web масштабируется горизонтально и используется server cache.
+- CDN для immutable frontend assets;
+- отдельный shared cache/queue только при подтверждённой необходимости;
+- общий cache handler, если web масштабируется горизонтально и используется server cache.
 
 ### Этап 3. Значительный рост
 
 - отдельные worker pools по типам задач;
 - managed queue;
-- read replicas/настройка MongoDB tier;
+- read replicas/увеличение tier хранилища;
 - отдельный сервис новостей только если его нагрузка и цикл релиза действительно отличаются;
 - orchestration platform только при недостаточности Compose.
 
-Микросервисы, Kubernetes, event bus и GraphQL не внедряются заранее.
+Конкретные отложенные технологии перечислены в [TECHNOLOGIES.md](./TECHNOLOGIES.md). Распределённая архитектура не внедряется заранее.
 
 ## 19. Архитектурные ограничения
 
 Запрещено:
 
-- обращаться к MongoDB из Next.js;
-- размещать бизнес-логику в React components;
-- использовать Next.js Route Handlers как второй доменный backend;
+- обращаться к базе данных из frontend;
+- размещать бизнес-логику в UI components;
+- создавать второй доменный backend внутри frontend-приложения;
 - вызывать внешний API из браузера с секретным ключом;
-- использовать MongoDB-документы как API DTO;
+- использовать внутренние документы хранилища как API DTO;
 - создавать неограниченные массивы в пользовательском документе;
 - запускать таймеры через долгоживущий `setTimeout` как источник истины;
 - выполнять тяжёлую работу внутри webhook;
-- добавлять Redis, брокер сообщений или микросервис без измеримой причины;
+- добавлять отдельный cache/queue service, брокер сообщений или микросервис без измеримой причины;
 - импортировать backend-код во frontend через workspace.
 
 ## 20. Принятые архитектурные решения
@@ -1150,44 +1127,31 @@ Frontend и backend используют единый release/version identifier
 
 Выбрано для повторного использования доменной логики при независимом runtime-масштабировании.
 
-### ADR-004: MongoDB job queue на MVP
+### ADR-004: Persistent job queue в основном хранилище
 
-Выбрана для уменьшения числа инфраструктурных компонентов. Скрывается за интерфейсом и может быть заменена Redis-backed queue.
+Выбрана для уменьшения числа инфраструктурных компонентов. Скрывается за интерфейсом и может быть заменена внешней очередью.
 
 ### ADR-005: API contracts отдельно от DB models
 
-Выбрано для безопасной эволюции MongoDB-схемы и предотвращения утечки внутренних полей.
-
-### ADR-006: SCSS Modules
-
-Выбраны для локальной области стилей, предсказуемой сборки Next.js и отсутствия runtime CSS-in-JS.
-
-### ADR-007: npm workspaces без дополнительного build orchestrator
-
-Выбраны с учётом текущего `package-lock.json`. Turborepo или аналог добавляется только при заметном росте количества пакетов и времени CI.
+Выбрано для безопасной эволюции схемы хранилища и предотвращения утечки внутренних полей.
 
 ## 21. Порядок создания архитектуры в коде
 
-1. Перенести текущий Next.js проект в `apps/web`.
-2. Настроить корневые npm workspaces и общие TypeScript/ESLint configs.
+1. Подготовить frontend workspace в `apps/web`.
+2. Настроить корневые workspaces и общие lint/type configs.
 3. Добавить `packages/contracts`.
-4. Создать Express app factory, health endpoints и error middleware.
-5. Подключить единый MongoClient и repository infrastructure.
+4. Создать backend app factory, health endpoints и error middleware.
+5. Подключить единый storage client и repository infrastructure.
 6. Реализовать auth/session end-to-end.
 7. Реализовать `dashboard_configs` и базовый dashboard.
 8. Добавить routines и timer.
 9. Добавить `scheduled_jobs` и worker.
 10. Подключать внешние интеграции по одной.
-11. Добавить Dockerfiles, reverse proxy и production Compose.
+11. Добавить container builds, reverse proxy и production compose.
 12. Настроить CI/CD, мониторинг и backup-проверки.
 
 ## 22. Источники
 
-- [Next.js: Self-Hosting](https://nextjs.org/docs/app/guides/self-hosting)
-- [Next.js: Sass](https://nextjs.org/docs/app/guides/sass)
-- [Express: Production Best Practices](https://expressjs.com/en/advanced/best-practice-performance.html)
-- [Express: Behind Proxies](https://expressjs.com/en/guide/behind-proxies.html)
-- [MongoDB: Data Modeling](https://www.mongodb.com/docs/manual/data-modeling/)
-- [MongoDB: Production Notes](https://www.mongodb.com/docs/manual/administration/production-notes/)
+- [Технологии проекта](./TECHNOLOGIES.md)
 - [Google Calendar API: Synchronize resources](https://developers.google.com/workspace/calendar/api/guides/sync)
 
