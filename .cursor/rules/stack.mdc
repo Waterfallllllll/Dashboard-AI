@@ -1,0 +1,17 @@
+---
+description: Обязательный стек и запрещённые технологии. Импортируй при добавлении зависимостей, выборе библиотеки, настройке tooling, обновлении версий или предложении альтернативы стеку.
+alwaysApply: false
+globs: "**/package.json, **/package-lock.json, **/docs/TECHNOLOGIES.md"
+---
+
+# Стек — не заменять молча
+
+Обязательный стек зафиксирован в `@docs/TECHNOLOGIES.md`. Не предлагай и не подключай альтернативы без явного запроса пользователя и обновления этого документа.
+
+Используем: React 19, Next.js App Router, TypeScript strict, SCSS Modules, Express 5, MongoDB, Zod, Vitest, Playwright.
+
+Не используем: Tailwind, CSS-in-JS, PostgreSQL/Prisma/Drizzle, GraphQL, Redis без измеримой необходимости, Kubernetes, микросервисы, отдельный event bus.
+
+TypeScript `any` допустим только с комментарием-обоснованием. Включён `strict` и усиленные флаги (`noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `verbatimModuleSyntax`).
+
+Не меняй стек, версии и границы ответственности без обновления `@docs/TECHNOLOGIES.md`. Не добавляй зависимости «на всякий случай».

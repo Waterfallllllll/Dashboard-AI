@@ -1,0 +1,40 @@
+---
+description: Конвенции frontend Evergreen Dashboard — App Router, features, Server/Client Components, API-клиенты. Импортируй при работе с UI, страницами, виджетами, клиентским состоянием или apps/web.
+alwaysApply: false
+globs: "**/apps/web/**/*.ts,**/apps/web/**/*.tsx"
+---
+
+# Frontend
+
+`app/` содержит только маршруты, layouts, metadata, первичную загрузку данных и composition. Сложная логика — в `features/`.
+
+Группы маршрутов:
+
+- `(public)`: `/login`, `/privacy`, `/terms`
+- `(protected)`: `/dashboard`, `/settings/widgets`, `/settings/routines`, `/settings/integrations`, `/settings/profile`
+
+Protected layout проверяет сессию на сервере через `GET /api/v1/auth/session` и при отсутствии сессии делает server-side redirect на `/login`.
+
+Feature-first:
+
+```text
+features/<domain>/
+  api/  components/  hooks/  model/  styles/  index.ts
+```
+
+Feature экспортирует только публичный API через `index.ts`. Циклические импорты между features запрещены. `components/ui` не знает о routines, timer или calendar.
+
+`'use client'` ставится как можно ниже по дереву. Server Components — layouts, страницы, первичная загрузка dashboard. Client Components — состояние, события, dnd-kit, геолокация, Notifications, анимация погоды, optimistic UI.
+
+API-клиенты:
+
+- `src/lib/api/server-api-client.ts` — server-side, `INTERNAL_API_URL`, пересылка cookie
+- `src/lib/api/browser-api-client.ts` — относительные `/api/v1/*`
+
+Оба добавляют `requestId`, валидируют ответ схемой из `@dashboard/contracts`, поддерживают `AbortSignal`/timeout и не ретраят мутации без idempotency key.
+
+Формы — `react-hook-form` + resolvers из contracts. Иконки — `lucide-react`.
+
+После UI-изменений проверяй поведение в браузере, а не только скриншот: основной сценарий, связанные маршруты и состояния ошибки/пусто.
+
+Пример колокации виджета: `apps/web/src/features/weather/`.

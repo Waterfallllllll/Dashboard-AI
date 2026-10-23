@@ -1,0 +1,27 @@
+---
+description: Конвенции backend — модульный монолит Express, слои, формат /api/v1, worker и JobQueue. Импортируй при работе с apps/api, эндпоинтами, worker, очередью задач или интеграциями.
+alwaysApply: false
+globs: "**/apps/api/**/*.ts"
+---
+
+# Backend
+
+Модульный монолит. Слойность:
+
+```text
+route → controller → service → repository → MongoDB
+                      ↘ integration → внешний API
+                      ↘ JobQueue → persistent queue
+```
+
+Обратные импорты запрещены. Модуль не ходит в repository другого модуля — только через публичный service.
+
+Одинаковая форма модуля: `*.routes.ts`, `*.controller.ts`, `*.service.ts`, `*.repository.ts`, ошибки и тесты рядом. Не плоди слои ради слоёв.
+
+Формат API `/api/v1`: JSON `camelCase`; успех `{ data, meta.requestId }`; ошибка `{ error: { code, message, fieldErrors }, meta }`. Даты — ISO 8601 UTC, локальная дата — `YYYY-MM-DD`. `PATCH` для частичных обновлений. Повторяемые POST принимают `Idempotency-Key`.
+
+Dashboard-агрегат собирает секции через `Promise.allSettled`: падение календаря не должно давать 500 на весь дашборд.
+
+Очередь задач на MVP — MongoDB за интерфейсом `JobQueue` (lease, idempotency key, TTL). Worker захватывает задачу атомарно.
+
+Пример модуля: `apps/api/src/modules/routines/`.

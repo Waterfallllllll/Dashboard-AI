@@ -1,0 +1,23 @@
+---
+description: Команды разработки, проверки и тесты Evergreen Dashboard. Импортируй перед запуском, сборкой, lint/typecheck, unit/e2e тестами или настройкой локального окружения.
+alwaysApply: false
+---
+
+# Команды
+
+Запускать из корня `my-app`. Node 24, npm 11.
+
+```bash
+npm ci
+npm run infra:up          # локальная MongoDB replica set
+npm run dev               # web + api + worker
+npm run lint
+npm run typecheck
+npm run test
+npm run test:e2e
+npm run build
+```
+
+Локальный `.env` создаётся из `@.env.example`. Секреты в `.env` не коммить.
+
+Integration-тесты хранилища — только против реального MongoDB replica set, не против несовместимого in-memory API.

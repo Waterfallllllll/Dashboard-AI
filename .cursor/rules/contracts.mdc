@@ -1,0 +1,15 @@
+---
+description: Общие API-контракты packages/contracts — Zod-схемы и сериализуемые DTO. Импортируй при новом или изменённом эндпоинте, DTO, ошибке API или расхождении типов frontend/backend.
+alwaysApply: false
+globs: "**/packages/contracts/**/*.ts"
+---
+
+# Контракты
+
+`packages/contracts` — единственный общий контракт frontend и backend. Только сериализуемые DTO и Zod-схемы.
+
+Пакет не зависит от React, Express, MongoDB и не экспортирует модели БД.
+
+Новый эндпоинт: сначала схема в contracts, затем backend и frontend.
+
+JSON-поля API — `camelCase`. В контракт не попадают `ObjectId`, внутренние документы хранилища и секретные поля интеграций.

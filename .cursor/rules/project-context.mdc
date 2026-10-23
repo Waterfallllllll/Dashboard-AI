@@ -1,0 +1,42 @@
+---
+description: Контекст продукта Evergreen Dashboard, карта monorepo и канонические документы. Импортируй при старте задачи, исследовании репозитория, онбординге или если неясно, куда класть код.
+alwaysApply: false
+---
+
+# Контекст проекта
+
+Ты работаешь в monorepo персонального дашборда Evergreen Dashboard. Корень приложения — `my-app`. npm workspaces, один `package-lock.json`.
+
+Подробности не копируй в код: читай канонические документы.
+
+- `@docs/TECHNICAL_SPECIFICATION.md` — продукт, MVP, сценарии, UX
+- `@docs/architecture.md` — процессы, модули, API, данные, запреты
+- `@docs/TECHNOLOGIES.md` — стек, версии, границы frontend/backend
+- `@Design.md` — визуальный язык, токены, темы, доступность
+- `@.env.example` — имена переменных окружения
+
+Для библиотек и API сверяйся с актуальной документацией (Context7), а не с памятью модели.
+
+## Продукт
+
+Дашборд собирает дату и время, погоду, Google Calendar, AI-новости, рутины и рабочий таймер. Пользователь настраивает виджеты и получает уведомления в браузере и Telegram.
+
+В MVP одна роль — авторизованный пользователь и только свои данные. Гость открывает `/login`, `/privacy`, `/terms`.
+
+Не входит в MVP: командная работа, редактирование событий календаря, нативные приложения, офлайн-синхронизация с конфликтами, сложная AI-персонализация.
+
+Репозиторий сейчас — каркас каталогов, конфиги и документация. Порядок внедрения — раздел 21 в `@docs/architecture.md`.
+
+## Карта репозитория
+
+| Путь | Ответственность |
+| --- | --- |
+| `apps/web` | Next.js App Router: UI, SSR, PWA, вызовы API |
+| `apps/api` | Express REST `/api/v1`, OAuth, webhook; тот же пакет запускает worker |
+| `packages/contracts` | Zod-схемы и сериализуемые API DTO |
+| `packages/config` | общие TypeScript и ESLint конфиги |
+| `infra` | Docker, Compose, reverse proxy |
+
+Worker не выделяется в отдельный app: `node dist/main.js` и `node dist/worker-main.js`.
+
+Alias frontend: `@/*` → `apps/web/src/*`.

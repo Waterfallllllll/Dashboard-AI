@@ -1,0 +1,17 @@
+---
+description: Секреты, сессии, OAuth, пользовательский ввод и чувствительные данные. Импортируй при авторизации, cookie, webhook, шифровании, env, Geolocation, Notifications или любом пользовательском вводе.
+alwaysApply: false
+globs: "**/.env.example,**/apps/api/src/modules/auth/**,**/apps/web/src/features/auth/**,**/apps/api/src/modules/integrations/**"
+---
+
+# Безопасность
+
+Перед работой прочитай `@.agents/skills/security-review/SKILL.md`.
+
+- Секреты не имеют префикса `NEXT_PUBLIC_` и не кладутся в git / image / `localStorage`.
+- OAuth, session и refresh tokens хранятся только на сервере (cookie `HttpOnly` + hash в БД).
+- Геолокация и Notifications запрашиваются только после явного действия пользователя.
+- RSS/HTML сторонних источников не вставляется в DOM.
+- Не храни секреты в коде, клиентском бандле или `localStorage`.
+
+Имена переменных — в `@.env.example`. Не коммить `.env`.
