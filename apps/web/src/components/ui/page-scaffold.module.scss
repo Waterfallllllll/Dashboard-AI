@@ -1,0 +1,48 @@
+.page {
+  container: page / inline-size;
+  display: grid;
+  gap: var(--space-2xl);
+}
+
+.header {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.eyebrow {
+  color: var(--color-link);
+  font: var(--text-label-md);
+  letter-spacing: 0.04em;
+}
+
+.title {
+  max-inline-size: 48rem;
+  color: var(--color-text);
+  font: var(--text-headline-md);
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+.description {
+  max-inline-size: 44rem;
+  color: var(--color-text-muted);
+  font: var(--text-body-lg);
+  text-wrap: pretty;
+}
+
+.content {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  background: var(--color-card);
+}
+
+@container page (inline-size >= 48rem) {
+  .title {
+    font: var(--text-headline-lg);
+  }
+
+  .content {
+    padding: var(--space-2xl);
+  }
+}

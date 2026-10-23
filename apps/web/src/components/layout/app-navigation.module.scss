@@ -1,0 +1,99 @@
+.sidebar {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.bottom {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  inline-size: 100%;
+}
+
+.link {
+  position: relative;
+  display: flex;
+  min-block-size: var(--size-touch);
+  align-items: center;
+  gap: var(--space-md);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font: var(--text-label-lg);
+  text-decoration: none;
+  transition:
+    background-color var(--duration-fast) var(--ease-enter),
+    color var(--duration-fast) var(--ease-enter);
+
+  .sidebar & {
+    padding-inline: var(--space-md);
+  }
+
+  .bottom & {
+    min-block-size: calc(var(--size-bottom-nav) + env(safe-area-inset-bottom));
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--space-2xs);
+    border-radius: 0;
+    padding-block-end: env(safe-area-inset-bottom);
+    font: var(--text-caption);
+  }
+
+  &[data-active] {
+    background: var(--color-surface-selected);
+    color: var(--color-link);
+  }
+
+  &[data-active]::before {
+    position: absolute;
+    background: var(--color-primary);
+    content: "";
+
+    .sidebar & {
+      inset-block: var(--space-md);
+      inset-inline-start: 0;
+      inline-size: 0.1875rem;
+      border-radius: var(--radius-full);
+    }
+
+    .bottom & {
+      inset-block-start: 0;
+      inset-inline: 30%;
+      block-size: 0.1875rem;
+      border-radius: 0 0 var(--radius-full) var(--radius-full);
+    }
+  }
+}
+
+.icon {
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+  flex: none;
+}
+
+@media (hover: hover) {
+  .link:hover {
+    background: var(--color-surface-muted);
+    color: var(--color-text);
+  }
+}
+
+@media (min-width: 48rem) and (max-width: 74.9375rem) {
+  .sidebar .link {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .sidebar .label {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: clip;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link {
+    transition-duration: 0.01ms;
+  }
+}

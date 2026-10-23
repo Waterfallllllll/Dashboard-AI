@@ -1,0 +1,30 @@
+.field {
+  display: grid;
+  gap: var(--space-sm);
+  inline-size: min(100%, 24rem);
+}
+
+.label {
+  color: var(--color-text);
+  font: var(--text-label-lg);
+}
+
+.select {
+  min-block-size: var(--size-touch);
+  inline-size: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding-inline: var(--space-md) 2.5rem;
+  background: var(--color-card);
+  color: var(--color-text);
+  font: var(--text-body-md);
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-border-strong);
+  }
+}
+
+.hint {
+  color: var(--color-text-muted);
+  font: var(--text-body-sm);
+}

@@ -1,7 +1,6 @@
 {
   "extends": "@dashboard/config/typescript/next",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
