@@ -1,0 +1,131 @@
+.wrapper {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.privacyNote {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-md);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  background: var(--color-surface-subtle);
+
+  svg {
+    inline-size: 1.5rem;
+    block-size: 1.5rem;
+    color: var(--color-link);
+  }
+
+  strong {
+    font: var(--text-label-lg);
+  }
+
+  p {
+    margin-block-start: var(--space-xs);
+    color: var(--color-text-muted);
+    font: var(--text-body-sm);
+  }
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-lg);
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: grid;
+  gap: var(--space-lg);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  background: var(--color-card);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.icon {
+  inline-size: var(--size-touch);
+  block-size: var(--size-touch);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-link);
+
+  svg {
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+  }
+}
+
+.cardCopy {
+  display: grid;
+  gap: var(--space-sm);
+
+  h2 {
+    font: var(--text-title-md);
+  }
+
+  p {
+    color: var(--color-text-muted);
+    font: var(--text-body-md);
+  }
+}
+
+.detail {
+  border-inline-start: 0.1875rem solid var(--color-border-strong);
+  padding-inline-start: var(--space-md);
+  color: var(--color-text-muted);
+  font: var(--text-body-sm);
+}
+
+.cardFooter {
+  display: grid;
+  gap: var(--space-sm);
+  align-self: end;
+  border-block-start: 1px solid var(--color-border-subtle);
+  padding-block-start: var(--space-lg);
+
+  button {
+    min-block-size: var(--size-touch);
+    justify-self: start;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    padding-inline: var(--space-lg);
+    background: var(--color-card);
+    color: var(--color-text);
+    font: var(--text-label-lg);
+
+    &:disabled {
+      opacity: 0.58;
+    }
+  }
+
+  span {
+    color: var(--color-text-muted);
+    font: var(--text-caption);
+  }
+}
+
+@media (min-width: 48rem) {
+  .privacyNote {
+    padding: var(--space-xl);
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .card {
+    padding: var(--space-2xl);
+  }
+}

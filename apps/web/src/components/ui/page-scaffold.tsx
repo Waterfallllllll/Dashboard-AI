@@ -7,10 +7,12 @@ type PageScaffoldProps = Readonly<{
   description: string;
   eyebrow?: string;
   children?: ReactNode;
+  contentVariant?: "card" | "plain";
 }>;
 
 export function PageScaffold({
   children,
+  contentVariant = "card",
   description,
   eyebrow = "Evergreen Dashboard",
   title
@@ -24,7 +26,11 @@ export function PageScaffold({
         </h1>
         <p className={styles.description}>{description}</p>
       </header>
-      {children ? <div className={styles.content}>{children}</div> : null}
+      {children ? (
+        <div className={styles.content} data-variant={contentVariant}>
+          {children}
+        </div>
+      ) : null}
     </section>
   );
 }

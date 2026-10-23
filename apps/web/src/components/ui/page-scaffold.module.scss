@@ -35,6 +35,13 @@
   border-radius: var(--radius-lg);
   padding: var(--space-xl);
   background: var(--color-card);
+
+  &[data-variant="plain"] {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
+  }
 }
 
 @container page (inline-size >= 48rem) {
@@ -42,7 +49,7 @@
     font: var(--text-headline-lg);
   }
 
-  .content {
+  .content:not([data-variant="plain"]) {
     padding: var(--space-2xl);
   }
 }

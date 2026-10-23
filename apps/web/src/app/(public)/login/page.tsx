@@ -1,17 +1,24 @@
 import type { Metadata } from "next";
 
-import { PageScaffold } from "@/components/ui/page-scaffold";
+import { LoginScreen } from "@/features/auth";
 
 export const metadata: Metadata = {
   title: "Вход"
 };
 
-export default function LoginPage() {
-  return (
-    <PageScaffold
-      description="Авторизация через Google будет подключена на следующем этапе разработки."
-      eyebrow="Добро пожаловать"
-      title="Соберите важное в одном спокойном пространстве"
-    />
-  );
+type LoginPageProps = Readonly<{
+  searchParams: Promise<{
+    status?: string | string[];
+  }>;
+}>;
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { status: rawStatus } = await searchParams;
+  const statusValue = Array.isArray(rawStatus) ? rawStatus[0] : rawStatus;
+  const status =
+    statusValue === "cancelled" || statusValue === "error" || statusValue === "loading"
+      ? statusValue
+      : null;
+
+  return <LoginScreen status={status} />;
 }

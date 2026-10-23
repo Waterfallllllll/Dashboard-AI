@@ -1,0 +1,263 @@
+.settings {
+  display: grid;
+  gap: var(--space-lg);
+}
+
+.accountCard,
+.section,
+.dangerSection {
+  display: grid;
+  gap: var(--space-xl);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl);
+  background: var(--color-card);
+}
+
+.accountCard {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-md);
+
+  > :last-child {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+.avatar,
+.sectionIcon,
+.dangerIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-link);
+
+  svg {
+    inline-size: 1.375rem;
+    block-size: 1.375rem;
+  }
+}
+
+.avatar {
+  inline-size: 3rem;
+  block-size: 3rem;
+  border-radius: var(--radius-full);
+}
+
+.sectionIcon,
+.dangerIcon {
+  inline-size: var(--size-touch);
+  block-size: var(--size-touch);
+}
+
+.dangerIcon {
+  background: var(--color-error-surface);
+  color: var(--color-error);
+}
+
+.accountCopy,
+.sectionHeading > div:last-child {
+  display: grid;
+  gap: var(--space-xs);
+
+  h2 {
+    font: var(--text-title-sm);
+  }
+
+  p {
+    color: var(--color-text-muted);
+    font: var(--text-body-sm);
+  }
+}
+
+.form {
+  display: contents;
+}
+
+.sectionHeading {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-md);
+}
+
+.fields {
+  display: grid;
+  gap: var(--space-xl);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-sm);
+
+  label {
+    font: var(--text-label-lg);
+  }
+
+  select {
+    box-sizing: border-box;
+    min-block-size: 3rem;
+    inline-size: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding-inline: var(--space-md) 2.5rem;
+    background: var(--color-card);
+    color: var(--color-text);
+    font: var(--text-body-md);
+  }
+
+  p {
+    color: var(--color-text-muted);
+    font: var(--text-body-sm);
+  }
+}
+
+.radioGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  margin: 0;
+  border: 0;
+  padding: 0;
+
+  legend {
+    inline-size: 100%;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-block-end: var(--space-xs);
+    font: var(--text-label-lg);
+
+    svg {
+      inline-size: 1.125rem;
+      block-size: 1.125rem;
+      color: var(--color-text-muted);
+    }
+  }
+
+  label {
+    min-block-size: var(--size-touch);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    padding-inline: var(--space-md);
+    font: var(--text-label-lg);
+    cursor: pointer;
+
+    &:has(input:checked) {
+      border-color: var(--color-primary);
+      background: var(--color-primary-soft);
+      color: var(--color-link);
+    }
+  }
+}
+
+.formFooter {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-md);
+  border-block-start: 1px solid var(--color-border-subtle);
+  padding-block-start: var(--space-lg);
+}
+
+.saveStatus {
+  flex: 1;
+  color: var(--color-text-muted);
+  font: var(--text-body-sm);
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  min-block-size: var(--size-touch);
+  border-radius: var(--radius-full);
+  padding-inline: var(--space-xl);
+  font: var(--text-label-lg);
+}
+
+.primaryButton {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+.secondaryButton {
+  justify-self: start;
+  border: 1px solid var(--color-border);
+  background: var(--color-card);
+}
+
+.dangerSection {
+  border-color: color-mix(in srgb, var(--color-error) 35%, var(--color-border-subtle));
+}
+
+.dangerButton {
+  justify-self: start;
+  border: 1px solid var(--color-error);
+  background: transparent;
+  color: var(--color-error);
+}
+
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  opacity: 0.58;
+}
+
+@media (hover: hover) {
+  .primaryButton:hover {
+    border-color: var(--color-primary-hover);
+    background: var(--color-primary-hover);
+  }
+}
+
+@media (min-width: 48rem) {
+  .accountCard {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+
+    > :last-child {
+      grid-column: auto;
+      justify-self: end;
+    }
+  }
+
+  .section,
+  .dangerSection,
+  .accountCard {
+    padding: var(--space-2xl);
+  }
+
+  .fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .fields > :last-child {
+    grid-column: 1 / -1;
+  }
+
+  .secondaryButton,
+  .dangerButton {
+    justify-self: end;
+  }
+
+  .section:not(:has(.fields)),
+  .dangerSection {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+@media (max-width: 47.9375rem) {
+  .formFooter {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .primaryButton {
+    inline-size: 100%;
+  }
+}
