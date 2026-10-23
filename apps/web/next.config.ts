@@ -6,7 +6,8 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
   transpilePackages: ["@dashboard/contracts"],
   reactStrictMode: true,
-  poweredByHeader: false
+  poweredByHeader: false,
+  agentRules: false
 };
 
 export default nextConfig;
