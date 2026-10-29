@@ -7,63 +7,28 @@ import type { FormEvent } from "react";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ThemeControl } from "@/components/ui/theme-control";
 
+import {
+  PROFILE_PREFERENCES_STORAGE_KEY,
+  isTimezoneValue,
+  parseStoredPreferences
+} from "../model/profile-preferences";
+
 import styles from "./profile-settings.module.scss";
-
-const STORAGE_KEY = "evergreen-profile-preferences";
-
-const timezoneValues = [
-  "auto",
-  "Europe/Kaliningrad",
-  "Europe/Moscow",
-  "Europe/Samara",
-  "Asia/Yekaterinburg",
-  "Asia/Novosibirsk",
-  "Asia/Vladivostok"
-] as const;
-
-type TimezoneValue = (typeof timezoneValues)[number];
-type TimeFormat = "12" | "24";
-
-type StoredPreferences = Readonly<{
-  timezone: TimezoneValue;
-  timeFormat: TimeFormat;
-}>;
-
-function isTimezoneValue(value: unknown): value is TimezoneValue {
-  return typeof value === "string" && timezoneValues.some((timezone) => timezone === value);
-}
-
-function readStoredPreferences(): StoredPreferences | null {
-  try {
-    const rawValue = window.localStorage.getItem(STORAGE_KEY);
-    const parsedValue: unknown = rawValue ? JSON.parse(rawValue) : null;
-
-    if (
-      typeof parsedValue === "object" &&
-      parsedValue !== null &&
-      "timezone" in parsedValue &&
-      "timeFormat" in parsedValue &&
-      isTimezoneValue(parsedValue.timezone) &&
-      (parsedValue.timeFormat === "12" || parsedValue.timeFormat === "24")
-    ) {
-      return {
-        timezone: parsedValue.timezone,
-        timeFormat: parsedValue.timeFormat
-      };
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}
 
 export function ProfileSettings() {
   const formRef = useRef<HTMLFormElement>(null);
   const [saveStatus, setSaveStatus] = useState("");
 
   useEffect(() => {
-    const preferences = readStoredPreferences();
+    let rawValue: string | null;
+
+    try {
+      rawValue = window.localStorage.getItem(PROFILE_PREFERENCES_STORAGE_KEY);
+    } catch {
+      return;
+    }
+
+    const preferences = parseStoredPreferences(rawValue);
 
     if (!preferences || !formRef.current) {
       return;
@@ -96,7 +61,10 @@ export function ProfileSettings() {
     }
 
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ timezone, timeFormat }));
+      window.localStorage.setItem(
+        PROFILE_PREFERENCES_STORAGE_KEY,
+        JSON.stringify({ timezone, timeFormat })
+      );
       setSaveStatus("Предпочтения сохранены в этом браузере.");
     } catch {
       setSaveStatus("Браузер запретил локальное сохранение настроек.");

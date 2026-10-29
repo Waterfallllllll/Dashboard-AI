@@ -27,20 +27,21 @@
 | Команды и тесты | `@commands` | Запуск, сборка, lint, typecheck, unit/e2e, локальное окружение |
 | Безопасность | `@security` | Auth, cookie, OAuth, webhook, секреты, env, ввод пользователя, Geolocation, Notifications |
 | Git workflow | `@git-workflow` | Любая фича, баг, рефакторинг или иное изменение кода |
+| Проверка изменений | `@verification` | После правок исходного кода, конфигурации или зависимостей; перед заявлением об успешной сборке |
 
 ## Наборы по типу задачи
 
 | Задача | Импортировать |
 | --- | --- |
 | Вопрос без правок кода | `@project-context` |
-| Фича / баг / рефакторинг (любые) | `@git-workflow` + `@architecture-boundaries` + `@project-context` |
+| Фича / баг / рефакторинг (любые) | `@git-workflow` + `@architecture-boundaries` + `@project-context` + `@verification` |
 | UI, виджет, страница, стили | набор «фича» + `@frontend` + `@design-accessibility` |
 | REST, worker, MongoDB, интеграции | набор «фича» + `@backend` |
 | Новый или изменённый эндпоинт | набор «фича» + `@contracts` + `@backend` + `@frontend` |
 | Auth, секреты, ввод, webhook | набор задачи + `@security` |
 | Добавить пакет / сменить библиотеку | `@stack` + `@architecture-boundaries` |
-| Запустить, прогнать тесты, починить CI | `@commands` |
-| Сквозная фича (UI + API) | `@git-workflow` `@project-context` `@architecture-boundaries` `@contracts` `@backend` `@frontend` `@design-accessibility` |
+| Запустить, прогнать тесты, починить CI | `@commands` + `@verification` |
+| Сквозная фича (UI + API) | `@git-workflow` `@project-context` `@architecture-boundaries` `@contracts` `@backend` `@frontend` `@design-accessibility` `@verification` |
 | Сомневаешься, какое правило нужно | `@project-context`, затем дочитай канонические документы и добавь узкое правило |
 
 ## Канонические документы
@@ -58,7 +59,13 @@
 
 Когда ты считаешь, что задача полностью выполнена, и код работает, ты ОБЯЗАН выполнить следующие шаги перед тем, как отчитаться мне:
 
-1. Открой файл `/docs/progress.md`.
-2. Запиши в него суть выполненной задачи, какие файлы были изменены и какие новые переменные окружения (.env) были добавлены (если были).
-3. Если мы изменили структуру базы данных, актуализируй схему в `/docs/architecture.md`.
-4. Воспользуйся навыком security-review из [.agents/skills/security-review/SKILL.md](.agents/skills/security-review/SKILL.md) для проверки на безопасность
+1. Следуй `@verification` (`.cursor/rules/verification.mdc`): выполни применимые проверки (`npm run lint`, `npm run build`). Не заявляй об успешной сборке, если команда не была выполнена или завершилась с ошибкой.
+2. Открой файл `/docs/progress.md`.
+3. Запиши в него суть выполненной задачи, какие файлы были изменены и какие новые переменные окружения (.env) были добавлены (если были).
+4. Если мы изменили структуру базы данных, актуализируй схему в `/docs/architecture.md`.
+5. Воспользуйся навыком security-review из [.agents/skills/security-review/SKILL.md](.agents/skills/security-review/SKILL.md) для проверки на безопасность
+
+# Тестирование 
+
+При создании нового функционала создавай только самые важные unit, integration и component тесты.
+При редактировании уже существующего функционала, тесты редактировать нельзя. 

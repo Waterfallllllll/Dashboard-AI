@@ -2,6 +2,7 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import baseConfig from "@dashboard/config/eslint/base";
 import nextConfig from "@dashboard/config/eslint/next";
 import nodeConfig from "@dashboard/config/eslint/node";
+import boundariesConfig from "@dashboard/config/eslint/boundaries";
 
 export default defineConfig([
   globalIgnores([
@@ -15,5 +16,6 @@ export default defineConfig([
   ]),
   ...baseConfig,
   ...nextConfig,
-  ...nodeConfig
+  ...nodeConfig,
+  ...boundariesConfig
 ]);

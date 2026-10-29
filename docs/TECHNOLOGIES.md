@@ -164,14 +164,26 @@ Turborepo или аналог допускается только при зам�
 
 ### Тестирование
 
-- Vitest 5.0.5 — unit и integration tests.
-- `@vitest/coverage-v8` — покрытие.
-- Testing Library — тесты React-компонентов и пользовательских действий.
-- jsdom — DOM-окружение unit tests.
-- Supertest — HTTP integration tests Express-приложения.
+- Vitest 5.0.5 — unit, component и integration tests. Проекты: `unit`, `component`, `integration`, `api`, `contracts`.
+- `@vitejs/plugin-react` 5.2.0 — JSX/TSX-трансформация тестов React-компонентов.
+- `@vitest/coverage-v8` 5.0.5 — покрытие.
+- `@testing-library/react` 16.3.3 — component-тесты React-компонентов.
+- `@testing-library/user-event` 14.6.8 — пользовательские действия в component и integration тестах.
+- `@testing-library/dom` 10.4.2 — DOM-утилиты Testing Library.
+- `@testing-library/jest-dom` 7.0.1 — DOM-матчеры для Vitest (`toBeInTheDocument`, `toBeDisabled`).
+- jsdom 30.1.3 — DOM-окружение component и integration tests.
+- Supertest 7.3.1 — HTTP integration tests Express-приложения.
 - Playwright 1.64.1 — end-to-end тесты desktop и mobile сценариев.
 
-Integration tests хранилища выполняются с реальным MongoDB replica set, а не с несовместимым in-memory API.
+Имена файлов:
+
+- `*.unit.test.ts` — чистая логика без DOM;
+- `*.component.test.tsx` — изолированный компонент;
+- `*.integration.test.tsx` — сборка нескольких компонентов существующего экрана.
+
+Команды из корня `my-app`: `npm test`, `npm run test:unit`, `npm run test:component`, `npm run test:integration`, `npm run test:coverage`, `npm run test:e2e`.
+
+Integration tests хранилища выполняются с реальным MongoDB replica set, а не с несовместимым in-memory API. HTTP-тесты API на Supertest добавляются вместе с backend-модулями.
 
 ## 10. Сборка и запуск
 

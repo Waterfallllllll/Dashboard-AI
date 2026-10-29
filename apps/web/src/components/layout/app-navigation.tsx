@@ -12,6 +12,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 
+import { isExactPath, isMobileSettingsPath, isPathPrefix } from "./navigation-model";
 import styles from "./app-navigation.module.scss";
 
 type NavigationVariant = "sidebar" | "bottom";
@@ -27,14 +28,14 @@ const dashboardItem: NavigationItem = {
   href: "/dashboard",
   icon: LayoutDashboard,
   label: "Главная",
-  isActive: (pathname) => pathname === "/dashboard"
+  isActive: (pathname) => isExactPath(pathname, "/dashboard")
 };
 
 const routinesItem: NavigationItem = {
   href: "/settings/routines",
   icon: CalendarCheck2,
   label: "Рутины",
-  isActive: (pathname) => pathname.startsWith("/settings/routines")
+  isActive: (pathname) => isPathPrefix(pathname, "/settings/routines")
 };
 
 const sidebarItems: readonly NavigationItem[] = [
@@ -43,20 +44,20 @@ const sidebarItems: readonly NavigationItem[] = [
     href: "/settings/widgets",
     icon: Blocks,
     label: "Виджеты",
-    isActive: (pathname) => pathname.startsWith("/settings/widgets")
+    isActive: (pathname) => isPathPrefix(pathname, "/settings/widgets")
   },
   routinesItem,
   {
     href: "/settings/integrations",
     icon: PlugZap,
     label: "Интеграции",
-    isActive: (pathname) => pathname.startsWith("/settings/integrations")
+    isActive: (pathname) => isPathPrefix(pathname, "/settings/integrations")
   },
   {
     href: "/settings/profile",
     icon: UserRound,
     label: "Профиль",
-    isActive: (pathname) => pathname.startsWith("/settings/profile")
+    isActive: (pathname) => isPathPrefix(pathname, "/settings/profile")
   }
 ];
 
@@ -67,8 +68,7 @@ const bottomItems: readonly NavigationItem[] = [
     href: "/settings/widgets",
     icon: Settings2,
     label: "Настройки",
-    isActive: (pathname) =>
-      pathname.startsWith("/settings/") && !pathname.startsWith("/settings/routines")
+    isActive: (pathname) => isMobileSettingsPath(pathname)
   }
 ];
 

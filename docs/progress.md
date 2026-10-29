@@ -13,3 +13,22 @@
 - Состояния OAuth, выход и удаление аккаунта, подключение интеграций и создание рутин показаны как недоступные до backend.
 - Проверки: ESLint, TypeScript, Prettier и production build пройдены; UI проверен в браузере на desktop и 320 px; Lighthouse Accessibility/Best Practices/SEO — 100.
 - Новые переменные окружения не добавлялись.
+
+## 2026-10-26 — ESLint-правила архитектурных границ
+
+- Добавлен `@dashboard/config/eslint/boundaries`: запрет импортов web↔api, MongoDB/Express во frontend и contracts, UI-пакетов в api/contracts, внутренностей features не через `index.ts`, Next.js Route Handlers как доменного backend, browser storage в `features/auth`, обратных импортов слоёв api.
+- В `eslint/base` включены `consistent-type-imports` и `no-import-type-side-effects` под `verbatimModuleSyntax`.
+- Запрещённый стек (Tailwind, CSS-in-JS, Prisma/Drizzle, GraphQL, PostgreSQL) закрыт через `no-restricted-imports` без новых пакетов.
+- Изменены: `packages/config/eslint/boundaries.mjs`, `packages/config/eslint/base.mjs`, `packages/config/package.json`, `eslint.config.mjs`.
+- Проверки: `npm run lint` проходит; `npm run build --workspace @dashboard/web` проходит. Корневой `npm run build` падает на пустом `@dashboard/contracts` (`tsc`: нет `src/**/*.ts`) — состояние до этой задачи.
+- Новые переменные окружения не добавлялись.
+
+## 2026-10-28 — Unit, component и integration тесты существующего frontend
+
+- Добавлены тесты для навигации, темы, входа, профиля, интеграций, рутин, юридических документов и оболочек layout.
+- Чистая логика вынесена в model-модули: `parseLoginStatus`, `filterRoutines`, `parseStoredPreferences`, theme preference, navigation paths.
+- Установлены `@testing-library/jest-dom` 7.0.1, `@vitejs/plugin-react` 5.2.0; jsdom вынесен в корневые devDependencies для Vitest.
+- Команды: `npm test`, `npm run test:unit`, `npm run test:component`, `npm run test:integration`.
+- Обновлён `@docs/TECHNOLOGIES.md`.
+- Проверки: 33 теста зелёные; `npm run lint` и typecheck web проходят; `npm run build --workspace @dashboard/web` проходит. Корневой `npm run build` по-прежнему падает на пустом `@dashboard/contracts`.
+- Новые переменные окружения не добавлялись.

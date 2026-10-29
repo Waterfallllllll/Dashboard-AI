@@ -9,9 +9,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import styles from "./login-screen.module.scss";
+import type { LoginStatus } from "../model/login-status";
 
-type LoginStatus = "cancelled" | "error" | "loading" | null;
+import styles from "./login-screen.module.scss";
 
 type LoginScreenProps = Readonly<{
   status?: LoginStatus;

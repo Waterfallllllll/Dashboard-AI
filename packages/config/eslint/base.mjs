@@ -16,6 +16,17 @@ export default [
     files: sourceFiles,
     linterOptions: {
       reportUnusedDisableDirectives: "error"
+    },
+    rules: {
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        {
+          prefer: "type-imports",
+          fixStyle: "separate-type-imports",
+          disallowTypeAnnotations: false
+        }
+      ],
+      "@typescript-eslint/no-import-type-side-effects": "error"
     }
   }
 ];

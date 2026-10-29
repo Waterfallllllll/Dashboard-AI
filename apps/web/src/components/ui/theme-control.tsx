@@ -2,46 +2,14 @@
 
 import { useEffect, useRef } from "react";
 
+import {
+  applyThemePreference,
+  persistThemePreference,
+  readThemePreference
+} from "@/lib/theme/theme-preference";
+import type { ThemePreference } from "@/lib/theme/theme-preference";
+
 import styles from "./theme-control.module.scss";
-
-type ThemePreference = "system" | "light" | "dark";
-
-const STORAGE_KEY = "evergreen-theme";
-
-function readThemePreference(): ThemePreference {
-  try {
-    const storedTheme = window.localStorage.getItem(STORAGE_KEY);
-
-    return storedTheme === "light" || storedTheme === "dark" ? storedTheme : "system";
-  } catch {
-    return "system";
-  }
-}
-
-function applyThemePreference(theme: ThemePreference) {
-  const root = document.documentElement;
-
-  if (theme === "system") {
-    root.removeAttribute("data-theme");
-    root.style.colorScheme = "light dark";
-    return;
-  }
-
-  root.dataset.theme = theme;
-  root.style.colorScheme = theme;
-}
-
-function persistThemePreference(theme: ThemePreference) {
-  try {
-    if (theme === "system") {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } else {
-      window.localStorage.setItem(STORAGE_KEY, theme);
-    }
-  } catch {
-    // The selected theme still applies for the current tab when storage is unavailable.
-  }
-}
 
 export function ThemeControl() {
   const selectRef = useRef<HTMLSelectElement>(null);

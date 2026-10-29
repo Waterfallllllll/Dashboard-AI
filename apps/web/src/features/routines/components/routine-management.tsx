@@ -5,9 +5,10 @@ import { useState } from "react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 
-import styles from "./routine-management.module.scss";
+import { filterRoutines } from "../model/filter-routines";
+import type { RoutineStatus } from "../model/filter-routines";
 
-type RoutineStatus = "active" | "paused" | "completed";
+import styles from "./routine-management.module.scss";
 
 type RoutinePreview = Readonly<{
   id: string;
@@ -60,13 +61,7 @@ const statusTone: Readonly<Record<RoutineStatus, "success" | "warning" | "neutra
 export function RoutineManagement() {
   const [filter, setFilter] = useState<RoutineStatus>("active");
   const [query, setQuery] = useState("");
-  const normalizedQuery = query.trim().toLocaleLowerCase("ru");
-  const filteredRoutines = routines.filter(
-    (routine) =>
-      routine.status === filter &&
-      (normalizedQuery.length === 0 ||
-        routine.title.toLocaleLowerCase("ru").includes(normalizedQuery))
-  );
+  const filteredRoutines = filterRoutines(routines, filter, query);
 
   return (
     <div className={styles.management}>
