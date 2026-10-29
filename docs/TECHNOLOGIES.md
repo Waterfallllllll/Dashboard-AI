@@ -173,15 +173,18 @@ Turborepo или аналог допускается только при зам�
 - `@testing-library/jest-dom` 7.0.1 — DOM-матчеры для Vitest (`toBeInTheDocument`, `toBeDisabled`).
 - jsdom 30.1.3 — DOM-окружение component и integration tests.
 - Supertest 7.3.1 — HTTP integration tests Express-приложения.
-- Playwright 1.64.1 — end-to-end тесты desktop и mobile сценариев.
+- Playwright 1.64.1 и `@playwright/test` 1.64.1 — end-to-end тесты критичных пользовательских сценариев.
+- Браузер: Chromium. Проекты Playwright: `chromium` (Desktop Chrome) и `mobile-chromium` (Pixel 7).
+- Спеки лежат в `apps/web/e2e/*.spec.ts` и проверяют вход, юридические страницы, навигацию desktop/mobile, профиль (тема и часовой пояс), рутины и интеграции.
 
 Имена файлов:
 
 - `*.unit.test.ts` — чистая логика без DOM;
 - `*.component.test.tsx` — изолированный компонент;
-- `*.integration.test.tsx` — сборка нескольких компонентов существующего экрана.
+- `*.integration.test.tsx` — сборка нескольких компонентов существующего экрана;
+- `apps/web/e2e/*.spec.ts` — Playwright E2E.
 
-Команды из корня `my-app`: `npm test`, `npm run test:unit`, `npm run test:component`, `npm run test:integration`, `npm run test:coverage`, `npm run test:e2e`.
+Команды из корня `my-app`: `npm test`, `npm run test:unit`, `npm run test:component`, `npm run test:integration`, `npm run test:coverage`, `npm run test:e2e`, `npm run test:e2e:install`.
 
 Integration tests хранилища выполняются с реальным MongoDB replica set, а не с несовместимым in-memory API. HTTP-тесты API на Supertest добавляются вместе с backend-модулями.
 

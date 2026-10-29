@@ -32,3 +32,11 @@
 - Обновлён `@docs/TECHNOLOGIES.md`.
 - Проверки: 33 теста зелёные; `npm run lint` и typecheck web проходят; `npm run build --workspace @dashboard/web` проходит. Корневой `npm run build` по-прежнему падает на пустом `@dashboard/contracts`.
 - Новые переменные окружения не добавлялись.
+
+## 2026-10-29 — Playwright E2E критичных сценариев
+
+- Добавлены E2E в `apps/web/e2e`: публичный вход и юридические страницы, редирект на дашборд, desktop/mobile навигация, сохранение темы и часового пояса, фильтр рутин, блокировка интеграций до API.
+- Пакеты: `@playwright/test` 1.64.1, `playwright` 1.64.1; браузер Chromium. Команды: `npm run test:e2e`, `npm run test:e2e:install`.
+- Обновлены `@docs/TECHNOLOGIES.md` и `.cursor/rules/verification.mdc`.
+- Проверки: Playwright 18 passed / 2 skipped; Vitest 33 passed; `npm run lint` проходит; `npm run build --workspace @dashboard/web` проходит.
+- Новые переменные окружения не добавлялись.
