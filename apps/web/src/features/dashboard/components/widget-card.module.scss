@@ -27,7 +27,7 @@
 
 .header {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   min-block-size: var(--size-touch);
   display: flex;
   align-items: center;
@@ -94,19 +94,27 @@
 .menu {
   position: absolute;
   z-index: 3;
+  box-sizing: border-box;
   inset-block-start: calc(100% + var(--space-xs));
   inset-inline-end: 0;
   min-inline-size: 13.5rem;
   margin: 0;
+  overflow: clip;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md);
   padding: var(--space-xs);
   background: var(--color-card);
+  color: var(--color-text);
   box-shadow: var(--shadow-floating);
   list-style: none;
+
+  > li {
+    display: block;
+  }
 }
 
 .menuItem {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   inline-size: 100%;
@@ -119,6 +127,10 @@
   font: var(--text-label-lg);
   text-align: start;
   text-decoration: none;
+
+  &:focus-visible {
+    outline-offset: 0;
+  }
 }
 
 .body {
@@ -234,7 +246,7 @@
   background: transparent;
 
   .icon {
-    background: rgb(255 255 255 / 16%);
+    background: color-mix(in srgb, var(--widget-on-surface) 14%, transparent);
     color: inherit;
   }
 
@@ -249,19 +261,21 @@
 
   &[data-surface="clear"],
   &[data-surface="cloudy"],
+  &[data-surface="snow"],
+  &[data-surface="fog"] {
+    --widget-on-surface: #151a17;
+    --widget-on-surface-muted: rgb(21 26 23 / 78%);
+    --weather-panel: rgb(247 251 255 / 78%);
+    border-color: rgb(21 26 23 / 16%);
+  }
+
   &[data-surface="rain"],
   &[data-surface="storm"],
   &[data-surface="night"] {
     --widget-on-surface: #f7fbff;
     --widget-on-surface-muted: rgb(247 251 255 / 84%);
+    --weather-panel: rgb(17 21 18 / 52%);
     border-color: rgb(247 251 255 / 22%);
-  }
-
-  &[data-surface="snow"],
-  &[data-surface="fog"] {
-    --widget-on-surface: #151a17;
-    --widget-on-surface-muted: rgb(21 26 23 / 78%);
-    border-color: rgb(21 26 23 / 16%);
   }
 }
 
