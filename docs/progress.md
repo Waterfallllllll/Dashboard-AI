@@ -40,3 +40,12 @@
 - Обновлены `@docs/TECHNOLOGIES.md` и `.cursor/rules/verification.mdc`.
 - Проверки: Playwright 18 passed / 2 skipped; Vitest 33 passed; `npm run lint` проходит; `npm run build --workspace @dashboard/web` проходит.
 - Новые переменные окружения не добавлялись.
+
+## 2026-10-31 — Адаптивная сетка дашборда и независимые состояния виджетов
+
+- Собрана Bento-сетка на `/dashboard`: 1 / 6 / 12 колонок по ширине контейнера, размеры compact / standard / wide / full, container queries внутри карточки.
+- Добавлен `features/dashboard`: оболочка виджета с заголовком, меню, обновлением внешних источников и локальной error boundary.
+- Независимые состояния: loading (skeleton), success, empty, permission-required, disconnected, stale с сохранёнными данными, error с «Повторить». Пустой дашборд ведёт на `/settings/widgets`.
+- Содержимое виджетов остаётся каркасом до следующего этапа; демо-состояния не блокируют соседние карточки.
+- Проверки: Vitest 51 passed; Playwright 23 passed / 3 skipped; `npm run lint` проходит; `npm run build --workspace @dashboard/web` проходит. UI проверен в браузере на desktop и 320 px.
+- Новые переменные окружения не добавлялись.

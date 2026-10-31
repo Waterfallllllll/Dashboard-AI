@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { PageScaffold } from "@/components/ui/page-scaffold";
+import { DashboardBoard } from "@/features/dashboard";
 
 export const metadata: Metadata = {
   title: "Главная"
@@ -9,9 +10,12 @@ export const metadata: Metadata = {
 export default function DashboardPage() {
   return (
     <PageScaffold
-      description="Здесь появятся время, погода, календарь, рутины, таймер и новости."
+      contentVariant="plain"
+      description="Время, погода, календарь, рутины, таймер и новости собираются в одной сетке и обновляются независимо."
       eyebrow="Сегодня"
       title="Ваш день в одном месте"
-    />
+    >
+      <DashboardBoard />
+    </PageScaffold>
   );
 }
