@@ -1,0 +1,85 @@
+.widget {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-sm);
+  text-align: center;
+}
+
+.phase {
+  font: var(--text-label-lg);
+}
+
+.time {
+  font: var(--text-metric-md);
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+}
+
+.next,
+.goal {
+  color: var(--color-text-muted);
+  font: var(--text-caption);
+}
+
+.widget[data-timer-active="true"] .next,
+.widget[data-timer-active="true"] .goal {
+  color: rgb(242 245 243 / 78%);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-xs);
+}
+
+.primary {
+  min-block-size: var(--size-touch);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  border: 0;
+  border-radius: var(--radius-full);
+  padding-inline: var(--space-lg);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font: var(--text-label-lg);
+
+  svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+}
+
+.iconButton {
+  inline-size: var(--size-touch);
+  block-size: var(--size-touch);
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+
+  svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+  }
+}
+
+.widget[data-timer-active="true"] .primary {
+  background: #f2f5f3;
+  color: #123c35;
+}
+
+.widget[data-timer-active="true"] .iconButton {
+  background: rgb(255 255 255 / 12%);
+  color: #f2f5f3;
+}
+
+@container widget (inline-size >= 17.5rem) {
+  .time {
+    font: var(--text-timer);
+  }
+}

@@ -1,0 +1,230 @@
+.scene {
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  pointer-events: none;
+}
+
+.sky,
+.glow,
+.cloud,
+.precip,
+.stars,
+.flash {
+  position: absolute;
+  inset: 0;
+}
+
+.sky {
+  background: #8fa6ad;
+}
+
+.scene[data-scene="clear"] .sky {
+  background: linear-gradient(180deg, #7ec3ef 0%, #5b9fcf 55%, #3e86b8 100%);
+}
+
+.scene[data-scene="cloudy"] .sky {
+  background: linear-gradient(180deg, #b7c6cc 0%, #8fa6ad 100%);
+}
+
+.scene[data-scene="rain"] .sky {
+  background: linear-gradient(180deg, #5d8498 0%, #476d82 100%);
+}
+
+.scene[data-scene="storm"] .sky {
+  background: linear-gradient(180deg, #3a5360 0%, #293f4a 100%);
+}
+
+.scene[data-scene="snow"] .sky {
+  background: linear-gradient(180deg, #f7fbfd 0%, #e8f2f5 100%);
+}
+
+.scene[data-scene="fog"] .sky {
+  background: linear-gradient(180deg, #c5cecb 0%, #a8b5b1 100%);
+}
+
+.scene[data-scene="night"] .sky,
+.scene[data-day="night"] .sky {
+  background: linear-gradient(180deg, #1a564c 0%, #123c35 100%);
+}
+
+.glow {
+  background: radial-gradient(circle at 78% 18%, rgb(255 244 214 / 42%), transparent 42%);
+  opacity: 0;
+}
+
+.scene[data-scene="clear"] .glow,
+.scene[data-scene="night"] .glow {
+  opacity: 1;
+}
+
+.cloud {
+  border-radius: 50%;
+  background: rgb(255 255 255 / 28%);
+  filter: blur(1.25rem);
+  opacity: 0;
+}
+
+.cloud[data-layer="back"] {
+  inset: 8% -10% auto auto;
+  inline-size: 58%;
+  block-size: 42%;
+}
+
+.cloud[data-layer="front"] {
+  inset: auto auto 18% -12%;
+  inline-size: 64%;
+  block-size: 36%;
+  background: rgb(255 255 255 / 22%);
+}
+
+.scene[data-scene="cloudy"] .cloud,
+.scene[data-scene="rain"] .cloud,
+.scene[data-scene="storm"] .cloud,
+.scene[data-scene="fog"] .cloud {
+  opacity: 1;
+}
+
+.precip {
+  opacity: 0;
+  background-image: repeating-linear-gradient(
+    -22deg,
+    transparent 0 14px,
+    rgb(255 255 255 / 38%) 14px 15px
+  );
+  background-size: 28px 52px;
+}
+
+.scene[data-scene="rain"] .precip,
+.scene[data-scene="storm"] .precip {
+  opacity: 0.55;
+}
+
+.scene[data-scene="snow"] .precip {
+  opacity: 0.9;
+  background-image: radial-gradient(circle, rgb(21 26 23 / 28%) 1px, transparent 1.25px);
+  background-size: 18px 22px;
+}
+
+.stars {
+  opacity: 0;
+  background-image:
+    radial-gradient(circle, #fff 1px, transparent 1.5px),
+    radial-gradient(circle, rgb(255 255 255 / 70%) 1px, transparent 1.5px);
+  background-position: 12% 18%, 80% 28%;
+  background-size: 120px 80px, 90px 70px;
+}
+
+.scene[data-scene="night"] .stars,
+.scene[data-day="night"] .stars {
+  opacity: 0.8;
+}
+
+.flash {
+  opacity: 0;
+  background: rgb(236 246 255 / 28%);
+}
+
+.scene[data-scene="fog"] .glow {
+  opacity: 0.7;
+  background: linear-gradient(90deg, rgb(255 255 255 / 18%), rgb(255 255 255 / 4%), rgb(255 255 255 / 22%));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .scene[data-scene="clear"] .glow {
+    animation: pulse 8s var(--ease-enter) infinite alternate;
+  }
+
+  .scene[data-scene="cloudy"] .cloud[data-layer="back"],
+  .scene[data-scene="rain"] .cloud[data-layer="back"],
+  .scene[data-scene="storm"] .cloud[data-layer="back"] {
+    animation: drift 32s linear infinite;
+  }
+
+  .scene[data-scene="cloudy"] .cloud[data-layer="front"],
+  .scene[data-scene="rain"] .cloud[data-layer="front"],
+  .scene[data-scene="storm"] .cloud[data-layer="front"] {
+    animation: drift 22s linear infinite reverse;
+  }
+
+  .scene[data-scene="rain"] .precip,
+  .scene[data-scene="storm"] .precip {
+    animation: rain 0.8s linear infinite;
+  }
+
+  .scene[data-scene="snow"] .precip {
+    animation: snow 7s linear infinite;
+  }
+
+  .scene[data-scene="fog"] .glow {
+    animation: fog 12s linear infinite;
+  }
+
+  .scene[data-scene="storm"] .flash {
+    animation: flash 7s linear infinite;
+  }
+}
+
+.reduced .cloud,
+.reduced .precip,
+.reduced .flash {
+  animation: none;
+}
+
+@keyframes drift {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(8%);
+  }
+}
+
+@keyframes rain {
+  to {
+    transform: translateY(52px);
+  }
+}
+
+@keyframes snow {
+  to {
+    transform: translate3d(6px, 22px, 0);
+  }
+}
+
+@keyframes pulse {
+  from {
+    opacity: 0.72;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fog {
+  from {
+    transform: translateX(-6%);
+  }
+
+  to {
+    transform: translateX(6%);
+  }
+}
+
+@keyframes flash {
+  0%,
+  92%,
+  100% {
+    opacity: 0;
+  }
+
+  94% {
+    opacity: 0.55;
+  }
+
+  96% {
+    opacity: 0;
+  }
+}

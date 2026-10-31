@@ -1,0 +1,87 @@
+.widget {
+  min-inline-size: 0;
+}
+
+.panel {
+  display: grid;
+  gap: var(--space-sm);
+  border-radius: var(--radius-lg);
+  padding: var(--space-md);
+  background: rgb(17 21 18 / 28%);
+  color: inherit;
+  backdrop-filter: blur(10px);
+}
+
+.location,
+.description {
+  font: var(--text-body-md);
+}
+
+.temperature {
+  font: var(--text-metric-md);
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm) var(--space-md);
+  margin: 0;
+
+  dt {
+    color: var(--widget-on-surface-muted, var(--color-text-muted));
+    font: var(--text-caption);
+  }
+
+  dd {
+    margin: 0;
+    font: var(--text-label-lg);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.forecastToggle {
+  min-block-size: var(--size-touch);
+  justify-self: start;
+  border: 0;
+  border-radius: var(--radius-full);
+  padding-inline: var(--space-md);
+  background: rgb(255 255 255 / 16%);
+  color: inherit;
+  font: var(--text-label-lg);
+}
+
+.hourly {
+  display: grid;
+  gap: var(--space-xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+    gap: var(--space-sm);
+    align-items: center;
+    min-block-size: 2.25rem;
+    font: var(--text-body-sm);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@container widget (inline-size >= 22rem) {
+  .temperature {
+    font: var(--text-metric-lg);
+  }
+
+  .stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (hover: hover) {
+  .forecastToggle:hover {
+    background: rgb(255 255 255 / 24%);
+  }
+}

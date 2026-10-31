@@ -8,7 +8,7 @@ import { DashboardBoard } from "./components/dashboard-board";
 import { DEFAULT_WIDGET_LAYOUT } from "./model/widget-catalog";
 
 describe("страница дашборда", () => {
-  it("показывает независимые состояния виджетов в одной сетке", () => {
+  it("показывает содержимое виджетов в одной сетке", () => {
     renderWithUser(
       <PageScaffold
         contentVariant="plain"
@@ -27,20 +27,15 @@ describe("страница дашборда", () => {
       "data-status",
       "success"
     );
-    expect(screen.getByRole("article", { name: "Погода" })).toHaveAttribute(
-      "data-status",
-      "loading"
-    );
-    expect(screen.getByRole("article", { name: "Календарь" })).toHaveAttribute(
-      "data-status",
-      "disconnected"
-    );
-    expect(screen.getByRole("article", { name: "Рутины" })).toHaveAttribute("data-status", "empty");
-    expect(screen.getByRole("article", { name: "Таймер" })).toHaveAttribute("data-status", "error");
-    expect(screen.getByRole("article", { name: "Новости" })).toHaveAttribute(
-      "data-status",
-      "stale"
-    );
+    expect(screen.getByText("Москва")).toBeInTheDocument();
+    expect(screen.getByText("Стендап команды")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Погладить кота" })).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Таймер" })).toHaveTextContent("Работа");
+    expect(
+      screen.getByRole("link", {
+        name: /OpenAI расширила инструменты для агентных рабочих процессов/
+      })
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Настроить виджеты" })).toHaveAttribute(
       "href",
       "/settings/widgets"
@@ -48,7 +43,18 @@ describe("страница дашборда", () => {
   });
 
   it("повторяет загрузку одного виджета, не меняя остальные", async () => {
-    const { user } = renderWithUser(<DashboardBoard />);
+    const { user } = renderWithUser(
+      <DashboardBoard
+        states={{
+          datetime: "success",
+          weather: "success",
+          calendar: "success",
+          routines: "success",
+          timer: "error",
+          news: "success"
+        }}
+      />
+    );
 
     await user.click(screen.getByRole("button", { name: "Повторить" }));
 
@@ -58,16 +64,10 @@ describe("страница дашборда", () => {
     );
     expect(screen.getByRole("article", { name: "Погода" })).toHaveAttribute(
       "data-status",
-      "loading"
+      "success"
     );
-    expect(screen.getByRole("article", { name: "Календарь" })).toHaveAttribute(
-      "data-status",
-      "disconnected"
-    );
-    expect(screen.getByRole("article", { name: "Новости" })).toHaveAttribute(
-      "data-status",
-      "stale"
-    );
+    expect(screen.getByText("Москва")).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Таймер" })).toHaveTextContent("Работа");
   });
 
   it("показывает пустое состояние, если все виджеты выключены", () => {

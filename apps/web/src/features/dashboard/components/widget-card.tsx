@@ -55,16 +55,22 @@ type WidgetCardProps = Readonly<{
   widget: WidgetPlacement;
   status: WidgetStatus;
   children?: ReactNode;
+  background?: ReactNode;
+  tone?: "default" | "weather";
+  surface?: string;
   updatedAtLabel?: string;
   onRetry?: () => void;
   onRefresh?: () => void;
 }>;
 
 export function WidgetCard({
+  background,
   children,
   onRefresh,
   onRetry,
   status,
+  surface,
+  tone = "default",
   updatedAtLabel,
   widget
 }: WidgetCardProps) {
@@ -111,8 +117,15 @@ export function WidgetCard({
       className={styles.card}
       data-size={widget.size}
       data-status={status}
+      data-surface={surface}
+      data-tone={tone}
       data-widget={widget.type}
     >
+      {background ? (
+        <div aria-hidden="true" className={styles.background}>
+          {background}
+        </div>
+      ) : null}
       <header className={styles.header}>
         <div className={styles.identity}>
           <span aria-hidden="true" className={styles.icon}>
@@ -189,7 +202,7 @@ export function WidgetCard({
           {getWidgetStatusLabel(status)}
         </p>
         {busy ? <WidgetSkeleton title={title} /> : null}
-        {showsWidgetContent(status) ? <div className={styles.preview}>{children}</div> : null}
+        {showsWidgetContent(status) ? <div className={styles.content}>{children}</div> : null}
         {statusCopy ? (
           <WidgetStatusPanel
             copy={statusCopy}
@@ -206,7 +219,7 @@ export function WidgetCard({
           {showsStaleNotice(status) ? (
             <StatusBadge tone="warning">{STALE_DATA_NOTICE}</StatusBadge>
           ) : null}
-          {updatedAtLabel ? <span>Обновлено {updatedAtLabel}</span> : null}
+          {updatedAtLabel ? <span suppressHydrationWarning>Обновлено {updatedAtLabel}</span> : null}
         </footer>
       ) : null}
     </article>

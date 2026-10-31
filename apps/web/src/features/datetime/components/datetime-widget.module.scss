@@ -1,0 +1,35 @@
+.widget {
+  display: grid;
+  align-content: center;
+  gap: var(--space-sm);
+  min-block-size: 100%;
+}
+
+.time {
+  color: var(--color-text);
+  font: var(--text-metric-md);
+  letter-spacing: -0.05em;
+  font-variant-numeric: tabular-nums;
+}
+
+.date {
+  color: var(--color-text);
+  font: var(--text-body-md);
+  text-wrap: pretty;
+}
+
+.zone {
+  color: var(--color-text-muted);
+  font: var(--text-caption);
+}
+
+.skew {
+  color: var(--color-warning);
+  font: var(--text-body-sm);
+}
+
+@container widget (inline-size >= 17.5rem) {
+  .time {
+    font: var(--text-metric-lg);
+  }
+}

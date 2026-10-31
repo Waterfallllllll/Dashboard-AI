@@ -14,11 +14,11 @@ export type WidgetStatus = (typeof WIDGET_STATUSES)[number];
 
 export const DEMO_WIDGET_STATES: Readonly<Record<WidgetType, WidgetStatus>> = {
   datetime: "success",
-  weather: "loading",
-  calendar: "disconnected",
-  routines: "empty",
-  timer: "error",
-  news: "stale"
+  weather: "success",
+  calendar: "success",
+  routines: "success",
+  timer: "success",
+  news: "success"
 };
 
 export const STALE_DATA_NOTICE = "Данные могут быть устаревшими";
@@ -123,19 +123,3 @@ export function getWidgetStatusCopy(
   };
 }
 
-export function getWidgetPreviewCopy(type: WidgetType): string {
-  switch (type) {
-    case "datetime":
-      return "Каркас готов. Точные часы и дата появятся вместе с виджетом времени.";
-    case "weather":
-      return "Прогноз и сцена погоды подключатся отдельно, без блокировки соседних карточек.";
-    case "calendar":
-      return "События дня появятся после подключения календаря.";
-    case "routines":
-      return "Список дел на выбранную дату появится вместе с API рутин.";
-    case "timer":
-      return "Рабочий интервал и абсолютное время завершения подключатся отдельно.";
-    case "news":
-      return "Последний сохранённый обзор: короткие AI-заголовки остаются на экране.";
-  }
-}

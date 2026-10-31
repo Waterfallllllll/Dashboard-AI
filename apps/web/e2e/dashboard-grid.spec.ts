@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 import { isMobileProject } from "./support/app";
 
 test.describe("сетка дашборда", () => {
-  test("показывает независимые состояния виджетов", async ({ page }) => {
+  test("показывает виджеты на мок-данных", async ({ page }) => {
     await page.goto("/dashboard");
 
     await expect(
@@ -13,51 +13,23 @@ test.describe("сетка дашборда", () => {
       "data-status",
       "success"
     );
-    await expect(page.getByRole("article", { name: "Погода" })).toHaveAttribute(
-      "data-status",
-      "loading"
+    await expect(page.getByRole("article", { name: "Погода" })).toContainText("Москва");
+    await expect(page.getByRole("article", { name: "Календарь" })).toContainText(
+      "Стендап команды"
     );
-    await expect(page.getByRole("article", { name: "Календарь" })).toHaveAttribute(
-      "data-status",
-      "disconnected"
-    );
-    await expect(page.getByRole("article", { name: "Рутины" })).toHaveAttribute(
-      "data-status",
-      "empty"
-    );
-    await expect(page.getByRole("article", { name: "Таймер" })).toHaveAttribute(
-      "data-status",
-      "error"
-    );
-    await expect(page.getByRole("article", { name: "Новости" })).toHaveAttribute(
-      "data-status",
-      "stale"
-    );
-    await expect(
-      page
-        .getByRole("article", { name: "Новости" })
-        .locator("footer")
-        .getByText("Данные могут быть устаревшими")
-    ).toBeVisible();
+    await expect(page.getByRole("article", { name: "Рутины" })).toContainText("Погладить кота");
+    await expect(page.getByRole("article", { name: "Таймер" })).toContainText("Работа");
+    await expect(page.getByRole("article", { name: "Новости" })).toContainText("OpenAI");
   });
 
-  test("повтор таймера не блокирует остальные виджеты", async ({ page }) => {
+  test("действие в одном виджете не блокирует остальные", async ({ page }) => {
     await page.goto("/dashboard");
 
-    await page.getByRole("button", { name: "Повторить" }).click();
+    await page.getByRole("checkbox", { name: "Погладить кота" }).click();
 
-    await expect(page.getByRole("article", { name: "Таймер" })).toHaveAttribute(
-      "data-status",
-      "success"
-    );
-    await expect(page.getByRole("article", { name: "Погода" })).toHaveAttribute(
-      "data-status",
-      "loading"
-    );
-    await expect(page.getByRole("article", { name: "Новости" })).toHaveAttribute(
-      "data-status",
-      "stale"
-    );
+    await expect(page.getByRole("article", { name: "Рутины" })).toContainText("2 / 3");
+    await expect(page.getByRole("article", { name: "Погода" })).toContainText("Москва");
+    await expect(page.getByRole("article", { name: "Новости" })).toContainText("OpenAI");
   });
 
   test("на mobile карточки складываются без горизонтального скролла", async ({
