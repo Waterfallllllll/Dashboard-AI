@@ -17,10 +17,19 @@ export function getVisibleEvents(
     });
 }
 
-export function getNextEvent(
+export function presentCalendarEvents(
   events: readonly CalendarEvent[],
-  now: number
-): CalendarEvent | null {
+  options: Readonly<{ itemLimit?: number; calendarScope?: "all" | "work" }> = {}
+): CalendarEvent[] {
+  const scoped =
+    options.calendarScope === "work"
+      ? events.filter((event) => event.calendar.name === "Работа")
+      : [...events];
+
+  return typeof options.itemLimit === "number" ? scoped.slice(0, options.itemLimit) : scoped;
+}
+
+export function getNextEvent(events: readonly CalendarEvent[], now: number): CalendarEvent | null {
   return (
     getVisibleEvents(events, now).find((event) => !event.allDay && event.startAt >= now) ??
     getVisibleEvents(events, now).find((event) => !event.allDay && event.endAt > now) ??

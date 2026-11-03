@@ -22,17 +22,20 @@ const UNDO_WINDOW_MS = 5_000;
 
 type RoutinesWidgetProps = Readonly<{
   initialItems?: readonly RoutineOccurrence[];
+  itemLimit?: number;
 }>;
 
 export function RoutinesWidget({
-  initialItems = MOCK_ROUTINE_OCCURRENCES
+  initialItems = MOCK_ROUTINE_OCCURRENCES,
+  itemLimit
 }: RoutinesWidgetProps) {
   const formId = useId();
   const [dayOffset, setDayOffset] = useState<RoutineDayOffset>(0);
   const [items, setItems] = useState<RoutineOccurrence[]>(() => [...initialItems]);
   const [draft, setDraft] = useState("");
   const [undo, setUndo] = useState<RoutineOccurrence | null>(null);
-  const occurrences = getDayOccurrences(items, dayOffset);
+  const dayOccurrences = getDayOccurrences(items, dayOffset);
+  const occurrences = itemLimit === undefined ? dayOccurrences : dayOccurrences.slice(0, itemLimit);
   const progress = getDayProgress(items, dayOffset);
 
   useEffect(() => {

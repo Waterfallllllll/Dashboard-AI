@@ -49,7 +49,7 @@ export function createMockNews(now = Date.now()): readonly NewsItem[] {
       title: "Meta AI прокомментировала правила прозрачности моделей в ЕС",
       excerpt: "Компания описала, какие карточки моделей появятся в открытом доступе.",
       source: "Meta AI",
-      official: true,
+      official: false,
       topic: "Бизнес",
       publishedAt: now - 22 * 60 * 60 * 1000,
       url: "https://ai.meta.com/blog"

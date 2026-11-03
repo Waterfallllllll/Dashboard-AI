@@ -9,6 +9,7 @@ import {
   getNewsRecency,
   getNewsRecencyLabel,
   hideNewsItem,
+  selectVisibleNews,
   visibleNewsItems
 } from "../model/news-freshness";
 import { createMockNews } from "../model/mock-news";
@@ -16,15 +17,20 @@ import { createMockNews } from "../model/mock-news";
 import styles from "./news-widget.module.scss";
 
 type NewsWidgetProps = Readonly<{
+  itemLimit?: number;
   now?: number;
+  sourceMode?: "all" | "official";
   timeZone: string;
 }>;
 
-export function NewsWidget({ now: nowProp, timeZone }: NewsWidgetProps) {
+export function NewsWidget({ itemLimit, now: nowProp, sourceMode, timeZone }: NewsWidgetProps) {
   const [capturedNow] = useState(() => nowProp ?? Date.now());
   const now = nowProp ?? capturedNow;
   const [hiddenIds, setHiddenIds] = useState<readonly string[]>([]);
-  const items = visibleNewsItems(createMockNews(now), hiddenIds);
+  const items = selectVisibleNews(visibleNewsItems(createMockNews(now), hiddenIds), {
+    ...(itemLimit !== undefined ? { itemLimit } : {}),
+    ...(sourceMode !== undefined ? { sourceMode } : {})
+  });
 
   if (items.length === 0) {
     return <p className={styles.empty}>Скрытые материалы можно вернуть в настройках виджета.</p>;
@@ -39,18 +45,11 @@ export function NewsWidget({ now: nowProp, timeZone }: NewsWidgetProps) {
           <li className={styles.item} data-lead={index === 0 ? "true" : "false"} key={item.id}>
             <div className={styles.meta}>
               <span>{item.source}</span>
-              <span>
-                {formatDistance(item.publishedAt, now, { addSuffix: true, locale: ru })}
-              </span>
+              <span>{formatDistance(item.publishedAt, now, { addSuffix: true, locale: ru })}</span>
               {recencyLabel ? <span className={styles.badge}>{recencyLabel}</span> : null}
               <span className={styles.topic}>{item.topic}</span>
             </div>
-            <a
-              className={styles.title}
-              href={item.url}
-              rel="noreferrer noopener"
-              target="_blank"
-            >
+            <a className={styles.title} href={item.url} rel="noreferrer noopener" target="_blank">
               <span>{item.title}</span>
               <ExternalLink aria-hidden="true" strokeWidth={1.8} />
               <span className={styles.liveRegion}>Открыть оригинал</span>

@@ -39,11 +39,18 @@
   }
 }
 
+.toolbarActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
 .settingsLink {
   min-block-size: var(--size-touch);
   display: inline-flex;
   align-items: center;
   gap: var(--space-sm);
+  border: 0;
   border-radius: var(--radius-full);
   padding-inline: var(--space-lg);
   background: var(--color-card);
@@ -51,6 +58,7 @@
   font: var(--text-label-lg);
   text-decoration: none;
   box-shadow: inset 0 0 0 1px var(--color-border);
+  cursor: pointer;
 
   svg {
     inline-size: 1.25rem;

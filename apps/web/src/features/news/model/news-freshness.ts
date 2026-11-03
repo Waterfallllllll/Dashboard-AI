@@ -6,11 +6,7 @@ import type { NewsItem } from "./news-types";
 
 export type NewsRecency = "today" | "last-24h";
 
-export function getNewsRecency(
-  publishedAt: number,
-  now: number,
-  timeZone: string
-): NewsRecency {
+export function getNewsRecency(publishedAt: number, now: number, timeZone: string): NewsRecency {
   if (isSameDay(toZonedDate(publishedAt, timeZone), toZonedDate(now, timeZone))) {
     return "today";
   }
@@ -31,4 +27,14 @@ export function visibleNewsItems(
   hiddenIds: readonly string[]
 ): NewsItem[] {
   return items.filter((item) => !hiddenIds.includes(item.id));
+}
+
+export function selectVisibleNews(
+  items: readonly NewsItem[],
+  options: Readonly<{ itemLimit?: number; sourceMode?: "all" | "official" }> = {}
+): NewsItem[] {
+  const filtered =
+    options.sourceMode === "official" ? items.filter((item) => item.official) : [...items];
+
+  return typeof options.itemLimit === "number" ? filtered.slice(0, options.itemLimit) : filtered;
 }

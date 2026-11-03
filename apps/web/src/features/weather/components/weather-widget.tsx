@@ -8,22 +8,28 @@ import type { WeatherSnapshot } from "../model/weather-types";
 import styles from "./weather-widget.module.scss";
 
 type WeatherWidgetProps = Readonly<{
+  temperatureUnit?: "celsius" | "fahrenheit";
   weather?: WeatherSnapshot;
 }>;
 
-export function WeatherWidget({ weather = MOCK_WEATHER }: WeatherWidgetProps) {
+export function WeatherWidget({
+  temperatureUnit = "celsius",
+  weather = MOCK_WEATHER
+}: WeatherWidgetProps) {
   const [forecastOpen, setForecastOpen] = useState(false);
 
   return (
     <div className={styles.widget}>
       <div className={styles.panel}>
         <p className={styles.location}>{weather.locationLabel}</p>
-        <p className={styles.temperature}>{formatTemperature(weather.temperatureC)}</p>
+        <p className={styles.temperature}>
+          {formatTemperature(weather.temperatureC, temperatureUnit)}
+        </p>
         <p className={styles.description}>{weather.description}</p>
         <dl className={styles.stats}>
           <div>
             <dt>Ощущается</dt>
-            <dd>{formatTemperature(weather.apparentTemperatureC)}</dd>
+            <dd>{formatTemperature(weather.apparentTemperatureC, temperatureUnit)}</dd>
           </div>
           <div>
             <dt>Осадки</dt>
@@ -36,7 +42,8 @@ export function WeatherWidget({ weather = MOCK_WEATHER }: WeatherWidgetProps) {
           <div>
             <dt>День</dt>
             <dd>
-              {formatTemperature(weather.minC)} / {formatTemperature(weather.maxC)}
+              {formatTemperature(weather.minC, temperatureUnit)} /{" "}
+              {formatTemperature(weather.maxC, temperatureUnit)}
             </dd>
           </div>
         </dl>
@@ -55,7 +62,7 @@ export function WeatherWidget({ weather = MOCK_WEATHER }: WeatherWidgetProps) {
             {weather.hourly.map((hour) => (
               <li key={hour.hourLabel}>
                 <span>{hour.hourLabel}</span>
-                <strong>{formatTemperature(hour.temperatureC)}</strong>
+                <strong>{formatTemperature(hour.temperatureC, temperatureUnit)}</strong>
                 <span>{hour.precipitationProbability}%</span>
               </li>
             ))}

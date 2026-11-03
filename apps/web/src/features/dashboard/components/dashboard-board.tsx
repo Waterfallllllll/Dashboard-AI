@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutGrid, Settings2 } from "lucide-react";
+import { LayoutGrid, PanelRight, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useState, useSyncExternalStore } from "react";
 
@@ -24,20 +24,22 @@ import {
   subscribeClockPreferences
 } from "../model/clock-preferences";
 import {
-  DEFAULT_WIDGET_LAYOUT,
   getVisibleWidgets,
   WIDGET_TITLES,
   type WidgetPlacement,
   type WidgetType
 } from "../model/widget-layout";
+import { toWidgetPlacements, type WidgetPreference } from "../model/widget-preferences";
 import {
-  DEMO_WIDGET_STATES,
-  showsWidgetContent,
-  type WidgetStatus
-} from "../model/widget-status";
+  getWidgetPreferencesServerSnapshot,
+  getWidgetPreferencesSnapshot,
+  subscribeWidgetPreferences
+} from "../model/widget-preferences-store";
+import { DEMO_WIDGET_STATES, showsWidgetContent, type WidgetStatus } from "../model/widget-status";
 
 import boardStyles from "./dashboard-board.module.scss";
 import { WidgetCard } from "./widget-card";
+import { WidgetEditorDrawer } from "./widget-editor";
 import { WidgetErrorBoundary } from "./widget-error-boundary";
 
 type DashboardBoardProps = Readonly<{
@@ -46,69 +48,99 @@ type DashboardBoardProps = Readonly<{
 }>;
 
 export function DashboardBoard({
-  layout = DEFAULT_WIDGET_LAYOUT,
+  layout: layoutProp,
   states = DEMO_WIDGET_STATES
 }: DashboardBoardProps) {
+  const [editorOpen, setEditorOpen] = useState(false);
+  const storedPreferences = useSyncExternalStore(
+    subscribeWidgetPreferences,
+    getWidgetPreferencesSnapshot,
+    getWidgetPreferencesServerSnapshot
+  );
+  const widgetPreferences = layoutProp ? null : storedPreferences.preferences;
+  const layout = layoutProp ?? toWidgetPlacements(storedPreferences.preferences);
   const widgets = getVisibleWidgets(layout);
   const [now] = useState(() => Date.now());
   const [systemTimeZone] = useState(() => getSystemTimeZone());
-  const preferences = useSyncExternalStore(
+  const clockPreferences = useSyncExternalStore(
     subscribeClockPreferences,
     getClockPreferencesSnapshot,
     getClockPreferencesServerSnapshot
   );
-  const timeZone = resolveTimeZone(preferences.timezone);
-
-  if (widgets.length === 0) {
-    return (
-      <div className={boardStyles.empty}>
-        <LayoutGrid aria-hidden="true" strokeWidth={1.75} />
-        <h2>Нет виджетов на экране</h2>
-        <p>Включите карточки в настройках, чтобы снова собрать день в одном месте.</p>
-        <Link className={boardStyles.emptyAction} href="/settings/widgets">
-          Добавить виджеты
-        </Link>
-      </div>
-    );
-  }
+  const timeZone = resolveTimeZone(clockPreferences.timezone);
 
   return (
     <div className={boardStyles.board}>
-      <div className={boardStyles.toolbar}>
-        <aside className={boardStyles.previewNotice}>
-          <LayoutGrid aria-hidden="true" />
-          <div>
-            <strong>Мок-данные</strong>
-            <p>
-              Карточки показывают дату, погоду, календарь, рутины, таймер и новости. Обновление
-              одной не блокирует остальные; API подключится позже.
-            </p>
+      <WidgetEditorDrawer
+        onClose={() => {
+          setEditorOpen(false);
+        }}
+        open={editorOpen}
+      />
+      {widgets.length === 0 ? (
+        <div className={boardStyles.empty}>
+          <LayoutGrid aria-hidden="true" strokeWidth={1.75} />
+          <h2>Нет виджетов на экране</h2>
+          <p>Включите карточки в настройках, чтобы снова собрать день в одном месте.</p>
+          <Link className={boardStyles.emptyAction} href="/settings/widgets">
+            Добавить виджеты
+          </Link>
+        </div>
+      ) : null}
+      {widgets.length > 0 ? (
+        <>
+          <div className={boardStyles.toolbar}>
+            <aside className={boardStyles.previewNotice}>
+              <LayoutGrid aria-hidden="true" />
+              <div>
+                <strong>Мок-данные</strong>
+                <p>
+                  Карточки показывают дату, погоду, календарь, рутины, таймер и новости. Обновление
+                  одной не блокирует остальные; API подключится позже.
+                </p>
+              </div>
+            </aside>
+            <div className={boardStyles.toolbarActions}>
+              <button
+                className={boardStyles.settingsLink}
+                onClick={() => {
+                  setEditorOpen(true);
+                }}
+                type="button"
+              >
+                <PanelRight aria-hidden="true" strokeWidth={1.8} />
+                Быстрая настройка
+              </button>
+              <Link className={boardStyles.settingsLink} href="/settings/widgets">
+                <Settings2 aria-hidden="true" strokeWidth={1.8} />
+                Настроить виджеты
+              </Link>
+            </div>
           </div>
-        </aside>
-        <Link className={boardStyles.settingsLink} href="/settings/widgets">
-          <Settings2 aria-hidden="true" strokeWidth={1.8} />
-          Настроить виджеты
-        </Link>
-      </div>
 
-      <div className={boardStyles.viewport}>
-        <ul aria-label="Виджеты дня" className={boardStyles.grid} role="list">
-          {widgets.map((widget) => (
-            <li className={boardStyles.item} data-size={widget.size} key={widget.type}>
-              <WidgetErrorBoundary title={WIDGET_TITLES[widget.type]}>
-                <IndependentWidget
-                  initialStatus={states[widget.type] ?? "success"}
-                  now={now}
-                  systemTimeZone={systemTimeZone}
-                  timeFormat={preferences.timeFormat}
-                  timeZone={timeZone}
-                  widget={widget}
-                />
-              </WidgetErrorBoundary>
-            </li>
-          ))}
-        </ul>
-      </div>
+          <div className={boardStyles.viewport}>
+            <ul aria-label="Виджеты дня" className={boardStyles.grid} role="list">
+              {widgets.map((widget) => (
+                <li className={boardStyles.item} data-size={widget.size} key={widget.type}>
+                  <WidgetErrorBoundary title={WIDGET_TITLES[widget.type]}>
+                    <IndependentWidget
+                      initialStatus={states[widget.type] ?? "success"}
+                      now={now}
+                      preference={
+                        widgetPreferences?.find((item) => item.type === widget.type) ?? null
+                      }
+                      systemTimeZone={systemTimeZone}
+                      timeFormat={clockPreferences.timeFormat}
+                      timeZone={timeZone}
+                      widget={widget}
+                    />
+                  </WidgetErrorBoundary>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -116,6 +148,7 @@ export function DashboardBoard({
 function IndependentWidget({
   initialStatus,
   now,
+  preference,
   systemTimeZone,
   timeFormat,
   timeZone,
@@ -123,6 +156,7 @@ function IndependentWidget({
 }: Readonly<{
   initialStatus: WidgetStatus;
   now: number;
+  preference: WidgetPreference | null;
   systemTimeZone: string;
   timeFormat: "12" | "24";
   timeZone: string;
@@ -155,6 +189,7 @@ function IndependentWidget({
     >
       <WidgetBody
         now={now}
+        preference={preference}
         systemTimeZone={systemTimeZone}
         timeFormat={timeFormat}
         timeZone={timeZone}
@@ -167,6 +202,7 @@ function IndependentWidget({
 
 function WidgetBody({
   now,
+  preference,
   systemTimeZone,
   timeFormat,
   timeZone,
@@ -174,6 +210,7 @@ function WidgetBody({
   widget
 }: Readonly<{
   now: number;
+  preference: WidgetPreference | null;
   systemTimeZone: string;
   timeFormat: "12" | "24";
   timeZone: string;
@@ -190,20 +227,40 @@ function WidgetBody({
         />
       );
     case "weather":
-      return <WeatherWidget weather={weather} />;
+      return (
+        <WeatherWidget
+          temperatureUnit={preference?.temperatureUnit ?? "celsius"}
+          weather={weather}
+        />
+      );
     case "calendar":
-      return <CalendarWidget now={now} timeZone={timeZone} />;
+      return (
+        <CalendarWidget
+          now={now}
+          timeZone={timeZone}
+          {...(preference
+            ? { calendarScope: preference.calendarScope, itemLimit: preference.itemLimit }
+            : {})}
+        />
+      );
     case "routines":
-      return <RoutinesWidget />;
+      return <RoutinesWidget {...(preference ? { itemLimit: preference.itemLimit } : {})} />;
     case "timer":
       return <TimerWidget persist={false} />;
     case "news":
-      return <NewsWidget now={now} timeZone={timeZone} />;
+      return (
+        <NewsWidget
+          now={now}
+          timeZone={timeZone}
+          {...(preference
+            ? { itemLimit: preference.itemLimit, sourceMode: preference.newsSourceMode }
+            : {})}
+        />
+      );
   }
 }
 
 function getUpdatedAtLabel(type: WidgetType, timeZone: string, now: number): string | undefined {
-
   switch (type) {
     case "weather":
       return formatUpdatedAt(now - 8 * 60 * 1000, now, timeZone);

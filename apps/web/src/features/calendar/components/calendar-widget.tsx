@@ -6,19 +6,32 @@ import { useState } from "react";
 import { formatInZone } from "@/lib/format/date-time";
 
 import { createMockCalendarEvents } from "../model/mock-events";
-import { getNextEvent, getVisibleEvents } from "../model/visible-events";
+import { getNextEvent, getVisibleEvents, presentCalendarEvents } from "../model/visible-events";
 
 import styles from "./calendar-widget.module.scss";
 
 type CalendarWidgetProps = Readonly<{
+  calendarScope?: "all" | "work";
+  itemLimit?: number;
   now?: number;
   timeZone: string;
 }>;
 
-export function CalendarWidget({ now: nowProp, timeZone }: CalendarWidgetProps) {
+export function CalendarWidget({
+  calendarScope,
+  itemLimit,
+  now: nowProp,
+  timeZone
+}: CalendarWidgetProps) {
   const [capturedNow] = useState(() => nowProp ?? Date.now());
   const now = nowProp ?? capturedNow;
-  const events = getVisibleEvents(createMockCalendarEvents(now, timeZone), now);
+  const events = presentCalendarEvents(
+    getVisibleEvents(createMockCalendarEvents(now, timeZone), now),
+    {
+      ...(calendarScope !== undefined ? { calendarScope } : {}),
+      ...(itemLimit !== undefined ? { itemLimit } : {})
+    }
+  );
   const nextEvent = getNextEvent(events, now);
 
   if (events.length === 0) {
@@ -31,12 +44,12 @@ export function CalendarWidget({ now: nowProp, timeZone }: CalendarWidgetProps) 
         const isNext = nextEvent?.id === event.id;
 
         return (
-          <li
-            className={styles.item}
-            data-next={isNext ? "true" : "false"}
-            key={event.id}
-          >
-            <span aria-hidden="true" className={styles.marker} style={{ background: event.calendar.color }} />
+          <li className={styles.item} data-next={isNext ? "true" : "false"} key={event.id}>
+            <span
+              aria-hidden="true"
+              className={styles.marker}
+              style={{ background: event.calendar.color }}
+            />
             <div className={styles.time}>
               {event.allDay ? "Весь день" : formatInZone(event.startAt, timeZone, "HH:mm")}
             </div>

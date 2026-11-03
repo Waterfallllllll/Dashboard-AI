@@ -3,10 +3,7 @@ import { toZonedDate } from "@/lib/format/date-time";
 import { getWeatherScene } from "./weather-scene";
 import type { HourlyForecast, WeatherSnapshot } from "./weather-types";
 
-export function createMockWeather(
-  now = Date.now(),
-  timeZone = "Europe/Moscow"
-): WeatherSnapshot {
+export function createMockWeather(now = Date.now(), timeZone = "Europe/Moscow"): WeatherSnapshot {
   const zoned = toZonedDate(now, timeZone);
   const currentHour = zoned.getHours();
   const hourly: HourlyForecast[] = Array.from({ length: 6 }, (_, index) => {
@@ -42,8 +39,14 @@ export function createMockWeather(
 
 export const MOCK_WEATHER = createMockWeather();
 
-export function formatTemperature(value: number): string {
-  return `${value > 0 ? "+" : ""}${Math.round(value)}°`;
+export function formatTemperature(
+  value: number,
+  unit: "celsius" | "fahrenheit" = "celsius"
+): string {
+  const resolved = unit === "fahrenheit" ? (value * 9) / 5 + 32 : value;
+  const rounded = Math.round(resolved);
+
+  return `${rounded > 0 ? "+" : ""}${rounded}°`;
 }
 
 export function formatWind(value: number): string {
