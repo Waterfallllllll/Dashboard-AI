@@ -23,20 +23,28 @@ const UNDO_WINDOW_MS = 5_000;
 type RoutinesWidgetProps = Readonly<{
   initialItems?: readonly RoutineOccurrence[];
   itemLimit?: number;
+  occurrences?: readonly RoutineOccurrence[];
+  onToggle?: (id: string) => void;
+  onAdd?: (title: string, dayOffset: RoutineDayOffset) => void;
 }>;
 
 export function RoutinesWidget({
   initialItems = MOCK_ROUTINE_OCCURRENCES,
-  itemLimit
+  itemLimit,
+  occurrences,
+  onAdd,
+  onToggle
 }: RoutinesWidgetProps) {
   const formId = useId();
   const [dayOffset, setDayOffset] = useState<RoutineDayOffset>(0);
   const [items, setItems] = useState<RoutineOccurrence[]>(() => [...initialItems]);
+  const visibleItems = occurrences ?? items;
   const [draft, setDraft] = useState("");
   const [undo, setUndo] = useState<RoutineOccurrence | null>(null);
-  const dayOccurrences = getDayOccurrences(items, dayOffset);
-  const occurrences = itemLimit === undefined ? dayOccurrences : dayOccurrences.slice(0, itemLimit);
-  const progress = getDayProgress(items, dayOffset);
+  const dayOccurrences = getDayOccurrences(visibleItems, dayOffset);
+  const visibleOccurrences =
+    itemLimit === undefined ? dayOccurrences : dayOccurrences.slice(0, itemLimit);
+  const progress = getDayProgress(visibleItems, dayOffset);
 
   useEffect(() => {
     if (!undo) {
@@ -53,7 +61,17 @@ export function RoutinesWidget({
   }, [undo]);
 
   function handleToggle(id: string) {
-    const result = toggleOccurrence(items, id);
+    const result = toggleOccurrence(visibleItems, id);
+
+    if (onToggle) {
+      const previous = result.previous;
+      onToggle(id);
+      queueMicrotask(() => {
+        setUndo(previous);
+      });
+      return;
+    }
+
     setItems(result.items);
     setUndo(result.previous);
   }
@@ -63,13 +81,23 @@ export function RoutinesWidget({
       return;
     }
 
-    setItems((current) => restoreOccurrence(current, undo));
+    if (onToggle) {
+      onToggle(undo.id);
+    } else {
+      setItems((current) => restoreOccurrence(current, undo));
+    }
+
     setUndo(null);
   }
 
   function handleAdd(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setItems((current) => addOccurrence(current, draft, dayOffset));
+    if (onAdd) {
+      onAdd(draft, dayOffset);
+    } else {
+      setItems((current) => addOccurrence(current, draft, dayOffset));
+    }
+
     setDraft("");
   }
 
@@ -99,13 +127,13 @@ export function RoutinesWidget({
         <progress max={Math.max(progress.total, 1)} value={progress.done} />
       </div>
 
-      {occurrences.length === 0 ? (
+      {visibleOccurrences.length === 0 ? (
         <p className={styles.empty}>
           На эту дату дел нет. Создайте рутину, чтобы она появилась здесь.
         </p>
       ) : (
         <ul className={styles.list}>
-          {occurrences.map((item) => {
+          {visibleOccurrences.map((item) => {
             const missed = isMissedOccurrence(item, dayOffset);
 
             return (

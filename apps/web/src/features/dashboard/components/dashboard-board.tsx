@@ -7,15 +7,32 @@ import { useState, useSyncExternalStore } from "react";
 import { CalendarWidget, MOCK_CALENDAR_UPDATED_AT_OFFSET_MS } from "@/features/calendar";
 import { DateTimeWidget } from "@/features/datetime";
 import { MOCK_NEWS_UPDATED_AT_OFFSET_MS, NewsWidget } from "@/features/news";
-import { RoutinesWidget } from "@/features/routines";
+import {
+  addDays,
+  addOneOff,
+  getRoutineLibraryServerSnapshot,
+  getRoutineLibrarySnapshot,
+  RoutinesWidget,
+  subscribeRoutineLibrary,
+  toggleOccurrenceDone,
+  toWidgetOccurrences,
+  updateRoutineLibrary,
+  type RoutineDayOffset
+} from "@/features/routines";
 import { TimerWidget } from "@/features/timer";
+import {
+  locationLabel,
+  getDeviceLocationServerSnapshot,
+  getDeviceLocationSnapshot,
+  subscribeDeviceLocation
+} from "@/features/location";
 import {
   createMockWeather,
   WeatherScene,
   WeatherWidget,
   type WeatherSnapshot
 } from "@/features/weather";
-import { formatUpdatedAt, getSystemTimeZone } from "@/lib/format/date-time";
+import { formatInZone, formatUpdatedAt, getSystemTimeZone } from "@/lib/format/date-time";
 
 import {
   getClockPreferencesServerSnapshot,
@@ -164,7 +181,20 @@ function IndependentWidget({
 }>) {
   const [status, setStatus] = useState(initialStatus);
   const showContent = showsWidgetContent(status);
-  const weather = createMockWeather(now, timeZone);
+  const routineLibrary = useSyncExternalStore(
+    subscribeRoutineLibrary,
+    getRoutineLibrarySnapshot,
+    getRoutineLibraryServerSnapshot
+  );
+  const deviceLocation = useSyncExternalStore(
+    subscribeDeviceLocation,
+    getDeviceLocationSnapshot,
+    getDeviceLocationServerSnapshot
+  );
+  const weatherBase = createMockWeather(now, timeZone);
+  const place = locationLabel(deviceLocation);
+  const weather = place ? { ...weatherBase, locationLabel: place } : weatherBase;
+  const today = formatInZone(now, timeZone, "yyyy-MM-dd");
   const weatherSurface = widget.type === "weather" && showContent;
   const updatedAtLabel = showContent ? getUpdatedAtLabel(widget.type, timeZone, now) : undefined;
 
@@ -192,7 +222,9 @@ function IndependentWidget({
         preference={preference}
         systemTimeZone={systemTimeZone}
         timeFormat={timeFormat}
+        routineLibrary={routineLibrary.library}
         timeZone={timeZone}
+        today={today}
         weather={weather}
         widget={widget}
       />
@@ -203,17 +235,21 @@ function IndependentWidget({
 function WidgetBody({
   now,
   preference,
+  routineLibrary,
   systemTimeZone,
   timeFormat,
   timeZone,
+  today,
   weather,
   widget
 }: Readonly<{
   now: number;
   preference: WidgetPreference | null;
+  routineLibrary: ReturnType<typeof getRoutineLibrarySnapshot>["library"];
   systemTimeZone: string;
   timeFormat: "12" | "24";
   timeZone: string;
+  today: string;
   weather: WeatherSnapshot;
   widget: WidgetPlacement;
 }>) {
@@ -244,9 +280,26 @@ function WidgetBody({
         />
       );
     case "routines":
-      return <RoutinesWidget {...(preference ? { itemLimit: preference.itemLimit } : {})} />;
+      return (
+        <RoutinesWidget
+          {...(preference ? { itemLimit: preference.itemLimit } : {})}
+          {...(routineLibrary.customized
+            ? {
+                occurrences: toWidgetOccurrences(routineLibrary, today),
+                onAdd: (title: string, offset: RoutineDayOffset) => {
+                  updateRoutineLibrary((current) =>
+                    addOneOff(current, title, addDays(today, offset))
+                  );
+                },
+                onToggle: (id: string) => {
+                  updateRoutineLibrary((current) => toggleOccurrenceDone(current, id));
+                }
+              }
+            : {})}
+        />
+      );
     case "timer":
-      return <TimerWidget persist={false} />;
+      return <TimerWidget configurable persist />;
     case "news":
       return (
         <NewsWidget

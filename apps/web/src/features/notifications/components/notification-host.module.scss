@@ -1,0 +1,27 @@
+.host {
+  position: fixed;
+  inset-block-end: var(--space-lg);
+  inset-inline: var(--space-md);
+  z-index: 20;
+  display: grid;
+  justify-content: center;
+  pointer-events: none;
+
+  p {
+    max-inline-size: 28rem;
+    margin: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-md);
+    background: var(--color-card);
+    color: var(--color-text);
+    font: var(--text-body-sm);
+    box-shadow: var(--shadow-md, none);
+  }
+}
+
+@media (max-width: 47.99rem) {
+  .host {
+    inset-block-end: 5rem;
+  }
+}

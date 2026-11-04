@@ -1,0 +1,119 @@
+.editor {
+  display: grid;
+  gap: var(--space-lg);
+  margin-block-start: var(--space-xl);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  background: var(--color-card);
+
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+
+  > header p {
+    margin-block-start: var(--space-xs);
+    color: var(--color-text-muted);
+    font: var(--text-body-sm);
+  }
+}
+
+.form,
+.toolbar,
+.list,
+.actions {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.form label,
+.toolbar label,
+.actions label {
+  display: grid;
+  gap: var(--space-xs);
+  font: var(--text-label-lg);
+}
+
+.form input,
+.form textarea,
+.form select,
+.toolbar input,
+.actions input {
+  box-sizing: border-box;
+  min-block-size: var(--size-touch);
+  inline-size: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding-inline: var(--space-md);
+  background: var(--color-card);
+  color: var(--color-text);
+  font: var(--text-body-md);
+}
+
+.form textarea {
+  min-block-size: 6rem;
+  padding-block: var(--space-sm);
+}
+
+.form fieldset,
+.toolbar fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.actions button,
+.form button {
+  min-block-size: var(--size-touch);
+  inline-size: fit-content;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding-inline: var(--space-lg);
+  background: var(--color-card);
+  color: var(--color-text);
+  font: var(--text-label-lg);
+  cursor: pointer;
+}
+
+.form button[type="submit"] {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    gap: var(--space-sm);
+    border-block-start: 1px solid var(--color-border-subtle);
+    padding-block-start: var(--space-md);
+  }
+}
+
+.dialog {
+  inline-size: min(28rem, calc(100% - 2rem));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  background: var(--color-card);
+  color: var(--color-text);
+
+  &::backdrop {
+    background: rgb(0 0 0 / 45%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog {
+    transition: none;
+  }
+}

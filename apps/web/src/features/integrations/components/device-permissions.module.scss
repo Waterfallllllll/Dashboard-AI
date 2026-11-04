@@ -1,0 +1,74 @@
+.section {
+  display: grid;
+  gap: var(--space-lg);
+  margin-block-start: var(--space-xl);
+
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+
+  > header p,
+  .card p {
+    color: var(--color-text-muted);
+    font: var(--text-body-sm);
+  }
+}
+
+.card {
+  display: grid;
+  gap: var(--space-md);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  background: var(--color-card);
+}
+
+.actions,
+.quiet,
+.card fieldset {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.card fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.card label {
+  display: grid;
+  gap: var(--space-xs);
+  font: var(--text-label-lg);
+}
+
+.card input[type="text"],
+.card input:not([type="checkbox"]),
+.card button {
+  box-sizing: border-box;
+  min-block-size: var(--size-touch);
+}
+
+.card input:not([type="checkbox"]) {
+  inline-size: min(100%, 20rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding-inline: var(--space-md);
+  background: var(--color-card);
+  color: var(--color-text);
+  font: var(--text-body-md);
+}
+
+.card button {
+  inline-size: fit-content;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding-inline: var(--space-lg);
+  background: var(--color-card);
+  color: var(--color-text);
+  font: var(--text-label-lg);
+  cursor: pointer;
+}

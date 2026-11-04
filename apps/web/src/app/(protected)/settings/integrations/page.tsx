@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 import { PageScaffold } from "@/components/ui/page-scaffold";
-import { IntegrationList } from "@/features/integrations";
+import { DevicePermissions, IntegrationList } from "@/features/integrations";
 
 export const metadata: Metadata = {
   title: "Интеграции"
@@ -16,6 +16,7 @@ export default function IntegrationsPage() {
       title="Интеграции"
     >
       <IntegrationList />
+      <DevicePermissions />
     </PageScaffold>
   );
 }

@@ -2,6 +2,11 @@ import { createIdleTimer, type TimerSession } from "./timer-state";
 
 export const TIMER_STORAGE_KEY = "evergreen-timer-mock";
 
+const SERVER_TIMER = createIdleTimer();
+let sessionSnapshot: TimerSession = SERVER_TIMER;
+let sessionLoaded = false;
+const sessionListeners = new Set<() => void>();
+
 export function parseTimerSession(rawValue: string | null): TimerSession | null {
   if (!rawValue) {
     return null;
@@ -55,6 +60,27 @@ export function parseTimerSession(rawValue: string | null): TimerSession | null 
   return null;
 }
 
+export function getTimerSessionSnapshot(): TimerSession {
+  if (!sessionLoaded && typeof window !== "undefined") {
+    sessionLoaded = true;
+    sessionSnapshot = readTimerSession();
+  }
+
+  return sessionSnapshot;
+}
+
+export function getTimerSessionServerSnapshot(): TimerSession {
+  return SERVER_TIMER;
+}
+
+export function subscribeTimerSession(onStoreChange: () => void): () => void {
+  sessionListeners.add(onStoreChange);
+
+  return () => {
+    sessionListeners.delete(onStoreChange);
+  };
+}
+
 export function readTimerSession(): TimerSession {
   if (typeof window === "undefined") {
     return createIdleTimer();
@@ -68,9 +94,16 @@ export function readTimerSession(): TimerSession {
 }
 
 export function writeTimerSession(session: TimerSession): void {
+  sessionSnapshot = session;
+  sessionLoaded = true;
+
   try {
     window.localStorage.setItem(TIMER_STORAGE_KEY, JSON.stringify(session));
   } catch {
     // Локальное сохранение мок-сессии не должно ломать виджет.
+  }
+
+  for (const listener of sessionListeners) {
+    listener();
   }
 }

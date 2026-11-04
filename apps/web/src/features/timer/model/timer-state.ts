@@ -1,3 +1,6 @@
+import type { TimerSettings } from "./timer-settings";
+import { phaseDurationMs } from "./timer-settings";
+
 export const WORK_DURATION_MS = 25 * 60 * 1000;
 export const SHORT_BREAK_MS = 5 * 60 * 1000;
 export const LONG_BREAK_MS = 15 * 60 * 1000;
@@ -77,9 +80,15 @@ export function getNextPhase(session: TimerSession): TimerPhase {
   return "work";
 }
 
-export function getNextPhaseLabel(session: TimerSession): string {
+export function getNextPhaseLabel(session: TimerSession, settings?: TimerSettings): string {
+  if (settings?.mode === "manual") {
+    return "Один интервал, без перерыва";
+  }
+
   const next = getNextPhase(session);
-  const minutes = Math.round(getPhaseDuration(next) / 60_000);
+  const minutes = Math.round(
+    (settings ? phaseDurationMs(next, settings) : getPhaseDuration(next)) / 60_000
+  );
   return `Далее: ${getPhaseLabel(next).toLocaleLowerCase("ru")} ${minutes} мин`;
 }
 
@@ -111,10 +120,28 @@ export function resetTimer(): TimerSession {
   };
 }
 
-export function completeCurrentPhase(session: TimerSession): TimerSession {
+export function completeCurrentPhase(
+  session: TimerSession,
+  settings?: TimerSettings
+): TimerSession {
   const finishedWork = session.phase === "work";
+
+  if (settings?.mode === "manual") {
+    const durationMs = phaseDurationMs("work", settings);
+
+    return {
+      ...session,
+      phase: "work",
+      runStatus: "idle",
+      durationMs,
+      remainingMs: durationMs,
+      endsAt: null,
+      completedWorkToday: finishedWork ? session.completedWorkToday + 1 : session.completedWorkToday
+    };
+  }
+
   const nextPhase = getNextPhase(session);
-  const durationMs = getPhaseDuration(nextPhase);
+  const durationMs = settings ? phaseDurationMs(nextPhase, settings) : getPhaseDuration(nextPhase);
   let completedWorkInCycle = session.completedWorkInCycle;
 
   if (finishedWork) {
@@ -137,16 +164,20 @@ export function completeCurrentPhase(session: TimerSession): TimerSession {
   };
 }
 
-export function skipPhase(session: TimerSession): TimerSession {
-  return completeCurrentPhase(session);
+export function skipPhase(session: TimerSession, settings?: TimerSettings): TimerSession {
+  return completeCurrentPhase(session, settings);
 }
 
-export function completePhaseIfDue(session: TimerSession, now: number): TimerSession {
+export function completePhaseIfDue(
+  session: TimerSession,
+  now: number,
+  settings?: TimerSettings
+): TimerSession {
   if (session.runStatus !== "running" || getDisplayedRemainingMs(session, now) > 0) {
     return session;
   }
 
-  return completeCurrentPhase(session);
+  return completeCurrentPhase(session, settings);
 }
 
 export function isTimerActive(session: TimerSession): boolean {
