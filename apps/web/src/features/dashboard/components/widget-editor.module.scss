@@ -158,6 +158,7 @@
   block-size: 1.5rem;
   border-radius: var(--radius-full);
   background: var(--color-border-strong);
+  pointer-events: none;
 
   &::after {
     content: "";

@@ -17,6 +17,7 @@ import {
   requestBrowserNotifications,
   saveNotificationPreferences,
   subscribeNotifications,
+  WebPushControls,
   type BrowserPermission
 } from "@/features/notifications";
 
@@ -149,12 +150,13 @@ export function DevicePermissions() {
         <h3>Уведомления на этом устройстве</h3>
         <p>
           Разрешение браузера запрашивается только кнопкой ниже. Если браузер откажет, сообщения
-          останутся в интерфейсе. Доставка при закрытой вкладке появится вместе с service worker.
+          останутся в интерфейсе.
         </p>
         <button onClick={() => void enableNotifications()} type="button">
           Разрешить уведомления
         </button>
         <p role="status">{permissionMessage(permission)}</p>
+        <WebPushControls />
         <fieldset>
           <legend>Какие события показывать</legend>
           <EventToggle

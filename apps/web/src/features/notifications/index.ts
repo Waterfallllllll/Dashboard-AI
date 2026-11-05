@@ -1,4 +1,6 @@
 export { NotificationHost } from "./components/notification-host";
+export { ServiceWorkerRegistrar } from "./components/service-worker-registrar";
+export { WebPushControls } from "./components/web-push-controls";
 export {
   publishProductNotice,
   readBrowserPermission,

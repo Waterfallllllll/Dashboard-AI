@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { ServiceWorkerRegistrar } from "@/features/notifications";
+
 import "@/styles/globals.scss";
 
 const geistSans = Geist({
@@ -25,11 +27,21 @@ const themeInitializationScript = `
 `;
 
 export const metadata: Metadata = {
+  applicationName: "Evergreen",
   title: {
     default: "Evergreen Dashboard",
     template: "%s — Evergreen Dashboard"
   },
-  description: "Персональное рабочее пространство для важных дел и актуальной информации."
+  description: "Персональное рабочее пространство для важных дел и актуальной информации.",
+  appleWebApp: {
+    capable: true,
+    title: "Evergreen",
+    statusBarStyle: "default"
+  },
+  icons: {
+    icon: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]
+  }
 };
 
 export const viewport: Viewport = {
@@ -54,7 +66,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitializationScript }} />
       </head>
-      <body>{children}</body>
+      <body>
+        <ServiceWorkerRegistrar />
+        {children}
+      </body>
     </html>
   );
 }

@@ -2,6 +2,7 @@
   position: absolute;
   inset: 0;
   overflow: clip;
+  contain: paint;
   pointer-events: none;
 }
 
@@ -111,8 +112,12 @@
   background-image:
     radial-gradient(circle, #fff 1px, transparent 1.5px),
     radial-gradient(circle, rgb(255 255 255 / 70%) 1px, transparent 1.5px);
-  background-position: 12% 18%, 80% 28%;
-  background-size: 120px 80px, 90px 70px;
+  background-position:
+    12% 18%,
+    80% 28%;
+  background-size:
+    120px 80px,
+    90px 70px;
 }
 
 .scene[data-scene="night"] .stars,
@@ -127,7 +132,25 @@
 
 .scene[data-scene="fog"] .glow {
   opacity: 0.7;
-  background: linear-gradient(90deg, rgb(255 255 255 / 18%), rgb(255 255 255 / 4%), rgb(255 255 255 / 22%));
+  background: linear-gradient(
+    90deg,
+    rgb(255 255 255 / 18%),
+    rgb(255 255 255 / 4%),
+    rgb(255 255 255 / 22%)
+  );
+}
+
+@media (max-width: 47.99rem) {
+  .cloud {
+    filter: none;
+  }
+
+  .glow,
+  .cloud,
+  .precip,
+  .flash {
+    animation: none;
+  }
 }
 
 @media (prefers-reduced-motion: no-preference) {
