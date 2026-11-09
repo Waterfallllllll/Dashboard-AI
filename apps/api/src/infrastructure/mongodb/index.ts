@@ -33,7 +33,24 @@ export {
   runMigrations,
   type MigrateResult
 } from "./migrations/runner.js";
-export { DEFAULT_NOTIFICATION_RETENTION_DAYS, notificationDeleteAt } from "./retention.js";
+export { AccountStillActiveError, purgeAccount } from "./account-purge.js";
+export { checkDatabase, formatDatabaseCheck } from "./check-database.js";
+export {
+  INDEX_USED_REASON,
+  PLANNER_SAMPLE_MIN_DOCUMENTS,
+  SMALL_COLLECTION_REASON,
+  explainMainQueries
+} from "./explain-query.js";
+export { checkDataIntegrity } from "./integrity.js";
+export { assertQueryCatalog, buildMainQueries, createQuerySample } from "./query-catalog.js";
+export {
+  DEFAULT_NOTIFICATION_RETENTION_DAYS,
+  HISTORY_POLICIES,
+  assertHistoryRetention,
+  deliveryRetentionViolation,
+  notificationDeleteAt
+} from "./retention.js";
+export { GLOBAL_COLLECTIONS, USER_OWNED_COLLECTIONS, assertUserDataCoverage } from "./user-data.js";
 export {
   activeDocumentFilter,
   restoreFields,
