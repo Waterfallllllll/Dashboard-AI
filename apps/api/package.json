@@ -10,6 +10,7 @@
     "start": "node dist/main.js",
     "start:worker": "node dist/worker-main.js",
     "typecheck": "tsc --noEmit",
+    "db:ensure": "tsx src/infrastructure/mongodb/ensure-cli.ts",
     "test": "vitest run",
     "clean": "rimraf dist"
   },
