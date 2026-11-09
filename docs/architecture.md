@@ -566,20 +566,21 @@ modules/routines/
 
 - hash session token, `userId`, `expiresAt`;
 - unique по hash;
-- TTL index только по `expiresAt`.
+- TTL index только по `expiresAt` с `expireAfterSeconds: 0`.
 
 `dashboard_configs`:
 
 - один документ на пользователя;
 - небольшой ограниченный массив настроек виджетов;
 - unique `{ userId: 1 }`;
+- уникальность `{ userId, widgetType }` из спецификации держится одним документом и проверкой массива в приложении, отдельный индекс коллекции не создаётся;
 - порядок и видимость обновляются атомарно одним документом.
 
 `routine_rules`:
 
 - шаблоны повторений;
-- индекс `{ userId: 1, status: 1 }`;
-- индекс `{ userId: 1, startDate: 1 }`.
+- индекс `{ userId: 1, status: 1 }` по живым документам (`deletedAt: null`);
+- индекс `{ userId: 1, startDate: 1 }` по живым документам (`deletedAt: null`).
 
 `routine_occurrences`:
 
@@ -591,13 +592,13 @@ modules/routines/
 
 - история и текущая сессия;
 - индекс `{ userId: 1, startedAt: -1 }`;
-- partial unique index, не допускающий более одной активной сессии пользователя.
+- partial unique `{ userId: 1 }` при `completedAt: null`: не больше одной незавершённой сессии.
 
 `integrations`:
 
 - Google Calendar и Telegram;
 - credentials шифруются на уровне приложения;
-- unique `{ userId: 1, type: 1 }`.
+- unique `{ userId: 1, type: 1 }` по живым документам (`deletedAt: null`).
 
 `calendar_events`:
 
@@ -630,7 +631,7 @@ modules/routines/
 - канал, status, attempts, provider message ID;
 - unique `idempotencyKey`;
 - индекс `{ userId: 1, createdAt: -1 }`;
-- TTL index по `deleteAt` согласно политике хранения.
+- TTL index по `deleteAt` с `expireAfterSeconds: 0`: документ удаляется в записанный момент. Срок журнала доставки по умолчанию — 30 дней от `createdAt`. Срок истории таймеров и рутин этой схемой не задаётся.
 
 `audit_events`:
 
@@ -668,6 +669,24 @@ modules/routines/
 - удаление интеграции + отмена связанных задач.
 
 Обычные обновления одного документа используют атомарные операции хранилища без транзакции.
+
+### 8.5. Шифрование credentials
+
+Access token, refresh token, credentials интеграций и ключи Web Push шифруются в приложении до записи. Алгоритм — AES-256-GCM. Ключ — `DATA_ENCRYPTION_KEY`, 32 байта в base64 или hex, отдельно от MongoDB.
+
+В поле хранится строка `enc:v1:<iv>.<tag>.<ciphertext>` в base64url. Дополнительные аутентифицированные данные привязаны к назначению поля: `auth_accounts.access_token`, `auth_accounts.refresh_token`, `integrations.credentials`, `push_subscriptions.keys`. Ciphertext одного поля нельзя подставить в другое. Открытый секрет в базу и логи не попадает.
+
+### 8.6. Мягкое удаление
+
+`users`, `routine_rules` и `integrations` при пользовательском удалении не стираются физически. Операция ставит `deletedAt` и `updatedAt`. Повтор идемпотентен. Undo снова записывает `deletedAt: null`, пока живой документ с тем же уникальным ключом не занял место.
+
+Выборки живых документов фильтруют `deletedAt: null`. Физическая очистка аккаунта остаётся отдельным этапом.
+
+### 8.7. Версионированные миграции
+
+Миграции лежат в `apps/api/src/infrastructure/mongodb/migrations`. Номера сплошные, начиная с 1. `up` идемпотентен. Команда `npm run db:migrate --workspace @dashboard/api` применяет только ещё не записанные версии и фиксирует их в `schema_migrations` (`version`, `name`, `appliedAt`). Уникальный индекс по `version` не даёт применить одну версию дважды.
+
+Первая миграция создаёт коллекции с валидаторами и индексы каталога. Новая миграция не удаляет поля в том же выпуске, где код перестаёт их читать. `calendar_events`, `scheduled_jobs`, `audit_events` и одноразовые токены в эту миграцию не входят: коллекций ещё нет, их TTL добавляется вместе с ними.
 
 ## 9. Фоновые задачи
 

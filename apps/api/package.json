@@ -11,6 +11,7 @@
     "start:worker": "node dist/worker-main.js",
     "typecheck": "tsc --noEmit",
     "db:ensure": "tsx src/infrastructure/mongodb/ensure-cli.ts",
+    "db:migrate": "tsx src/infrastructure/mongodb/migrate-cli.ts",
     "test": "vitest run",
     "clean": "rimraf dist"
   },

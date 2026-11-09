@@ -87,3 +87,11 @@
 - Команда создания: `npm run db:ensure --workspace @dashboard/api`. Локальный MongoDB на порту 27017 в момент проверки не отвечал, поэтому integration-тест пропущен.
 - Проверки: typecheck API, Vitest каталога, ESLint. Новые переменные окружения не добавлялись.
 
+## 2026-11-09 — Индексы, шифрование, мягкое удаление и миграции
+
+- Для существующих коллекций добавлены unique, TTL и query-индексы. TTL стоит на `sessions.expiresAt` и `notification_deliveries.deleteAt`. У пользователя нет вторичного индекса по внешним идентификаторам. Живые рутины и интеграции индексируются при `deletedAt: null`, незавершённый таймер — один на пользователя.
+- Credentials шифруются AES-256-GCM ключом `DATA_ENCRYPTION_KEY` до записи. Мягкое удаление ставит `deletedAt` и умеет вернуть документ для undo. Миграции нумеруются с 1, пишутся в `schema_migrations` и запускаются командой `npm run db:migrate --workspace @dashboard/api`.
+- Коллекции календаря, очереди, аудита и одноразовых токенов не создавались. Новые переменные окружения не добавлялись: используется уже описанный `DATA_ENCRYPTION_KEY`.
+- Изменены `apps/api/src/infrastructure/crypto`, `apps/api/src/infrastructure/mongodb`, `apps/api/package.json`, `docs/architecture.md`, `.env.example`.
+- Проверки: `npm run lint` проходит; Vitest 122 passed / 3 skipped. Integration-тесты коллекций и миграций пропущены: MongoDB на порту 27017 не отвечал. `npm run build --workspace @dashboard/api` проходит. Корневой `npm run build` по-прежнему падает на пустом `@dashboard/contracts`. E2E не запускался: интерфейс не менялся.
+
