@@ -11,7 +11,8 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": webSrc
+      "@": webSrc,
+      "@dashboard/contracts": path.join(workspaceRoot, "packages/contracts/src/index.ts")
     }
   },
   test: {
