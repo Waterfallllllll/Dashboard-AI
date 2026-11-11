@@ -18,8 +18,17 @@ export type UserOwnedCollection = (typeof USER_OWNED_COLLECTIONS)[number];
 
 export const GLOBAL_COLLECTIONS = ["news_items"] as const satisfies readonly CollectionName[];
 
+export const TRANSIENT_COLLECTIONS = [
+  "one_time_tokens"
+] as const satisfies readonly CollectionName[];
+
 export function assertUserDataCoverage(collections: readonly string[] = COLLECTION_NAMES): void {
-  const covered = new Set<string>(["users", ...USER_OWNED_COLLECTIONS, ...GLOBAL_COLLECTIONS]);
+  const covered = new Set<string>([
+    "users",
+    ...USER_OWNED_COLLECTIONS,
+    ...GLOBAL_COLLECTIONS,
+    ...TRANSIENT_COLLECTIONS
+  ]);
   const actual = new Set(collections);
 
   if (actual.size !== collections.length) {

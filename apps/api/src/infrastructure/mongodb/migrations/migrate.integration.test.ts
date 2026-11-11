@@ -40,13 +40,20 @@ describe.skipIf(mongoUri === "")("миграции MongoDB", () => {
     const repeated = await runMigrations(database);
 
     expect(repeated.applied).toEqual([]);
-    expect(repeated.skipped).toEqual([1]);
+    expect(repeated.skipped).toEqual([1, 2]);
     expect(
-      await database.collection(SCHEMA_MIGRATIONS_COLLECTION).find().project({ _id: 0 }).toArray()
+      (await database.collection(SCHEMA_MIGRATIONS_COLLECTION).find().project({ _id: 0 }).toArray())
+        .slice()
+        .sort((left, right) => Number(left.version) - Number(right.version))
     ).toEqual([
       expect.objectContaining({
         version: 1,
         name: "initial-indexes",
+        appliedAt: expect.any(Date)
+      }),
+      expect.objectContaining({
+        version: 2,
+        name: "one-time-tokens",
         appliedAt: expect.any(Date)
       })
     ]);

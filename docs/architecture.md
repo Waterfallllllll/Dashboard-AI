@@ -568,6 +568,13 @@ modules/routines/
 - unique по hash;
 - TTL index только по `expiresAt` с `expireAfterSeconds: 0`.
 
+`one_time_tokens`:
+
+- одноразовый OAuth state: hash, назначение `oauth_state`, зашифрованный payload, `expiresAt`, `consumedAt`;
+- пользователя в документе нет: state создаётся до входа;
+- unique по hash;
+- TTL index по `expiresAt` с `expireAfterSeconds: 0`.
+
 `dashboard_configs`:
 
 - один документ на пользователя;
@@ -674,7 +681,7 @@ modules/routines/
 
 Access token, refresh token, credentials интеграций и ключи Web Push шифруются в приложении до записи. Алгоритм — AES-256-GCM. Ключ — `DATA_ENCRYPTION_KEY`, 32 байта в base64 или hex, отдельно от MongoDB.
 
-В поле хранится строка `enc:v1:<iv>.<tag>.<ciphertext>` в base64url. Дополнительные аутентифицированные данные привязаны к назначению поля: `auth_accounts.access_token`, `auth_accounts.refresh_token`, `integrations.credentials`, `push_subscriptions.keys`. Ciphertext одного поля нельзя подставить в другое. Открытый секрет в базу и логи не попадает.
+В поле хранится строка `enc:v1:<iv>.<tag>.<ciphertext>` в base64url. Дополнительные аутентифицированные данные привязаны к назначению поля: `auth_accounts.access_token`, `auth_accounts.refresh_token`, `integrations.credentials`, `push_subscriptions.keys`, `one_time_tokens.payload`. Ciphertext одного поля нельзя подставить в другое. Открытый секрет в базу и логи не попадает.
 
 ### 8.6. Мягкое удаление
 
@@ -686,7 +693,7 @@ Access token, refresh token, credentials интеграций и ключи Web 
 
 Миграции лежат в `apps/api/src/infrastructure/mongodb/migrations`. Номера сплошные, начиная с 1. `up` идемпотентен. Команда `npm run db:migrate --workspace @dashboard/api` применяет только ещё не записанные версии и фиксирует их в `schema_migrations` (`version`, `name`, `appliedAt`). Уникальный индекс по `version` не даёт применить одну версию дважды.
 
-Первая миграция создаёт коллекции с валидаторами и индексы каталога. Новая миграция не удаляет поля в том же выпуске, где код перестаёт их читать. `calendar_events`, `scheduled_jobs`, `audit_events` и одноразовые токены в эту миграцию не входят: коллекций ещё нет, их TTL добавляется вместе с ними.
+Первая миграция создаёт коллекции с валидаторами и индексы каталога на момент запуска. Вторая миграция `one-time-tokens` идемпотентно добавляет `one_time_tokens` для баз, которые уже применили версию 1. Новая миграция не удаляет поля в том же выпуске, где код перестаёт их читать. `calendar_events`, `scheduled_jobs` и `audit_events` по-прежнему не создаются.
 
 ### 8.8. Проверка запросов
 
@@ -710,12 +717,13 @@ Access token, refresh token, credentials интеграций и ключи Web 
 Сроки:
 
 - `sessions` удаляет TTL по `expiresAt`;
+- `one_time_tokens` удаляет TTL по `expiresAt` и не принадлежит пользователю;
 - журнал доставки живёт 30 дней;
 - `timer_sessions`, `routine_rules` и `routine_occurrences` живут до очистки аккаунта. TTL на них не ставится.
 
-`purgeAccount` в одной транзакции удаляет пользователя и документы с его `userId` из `auth_accounts`, `sessions`, `dashboard_configs`, `routine_rules`, `routine_occurrences`, `timer_sessions`, `integrations`, `push_subscriptions`, `notification_deliveries`. `news_items` — общий кэш, он не удаляется. Живой аккаунт (`deletedAt: null`) не удаляется. Повтор после очистки ничего не стирает. Коллекций `calendar_events`, `scheduled_jobs` и `audit_events` ещё нет, поэтому очистка их не затрагивает.
+`purgeAccount` в одной транзакции удаляет пользователя и документы с его `userId` из `auth_accounts`, `sessions`, `dashboard_configs`, `routine_rules`, `routine_occurrences`, `timer_sessions`, `integrations`, `push_subscriptions`, `notification_deliveries`. `news_items` — общий кэш, он не удаляется. `one_time_tokens` тоже не удаляется: срок жизни задаёт TTL. Живой аккаунт (`deletedAt: null`) не удаляется. Повтор после очистки ничего не стирает. Коллекций `calendar_events`, `scheduled_jobs` и `audit_events` ещё нет, поэтому очистка их не затрагивает.
 
-Будущий HTTP-обработчик удаления аккаунта вызывает очистку только для пользователя текущей сессии и только после мягкого удаления. Отдельной команды очистки в CLI нет.
+`DELETE /api/v1/account` вызывает очистку только для пользователя текущей сессии и только после мягкого удаления. Если очистка не удалась, мягкое удаление возвращается, а клиент получает 503. Отдельной команды очистки в CLI нет.
 
 ## 9. Фоновые задачи
 
@@ -847,23 +855,35 @@ Backend полностью владеет авторизацией.
 
 Cookie:
 
-- имя с префиксом `__Host-`;
+- имя `__Host-session`;
 - `HttpOnly`;
-- `Secure` в production;
+- `Secure` всегда, включая localhost;
 - `SameSite=Lax`;
 - `Path=/`;
 - без `Domain`.
 
-В cookie хранится случайный session token. Постоянное хранилище содержит только его hash.
+В cookie хранится случайный session token. Постоянное хранилище содержит только его SHA-256 hash. Срок сессии — 14 суток и не продлевается при запросах. Выход отзывает только текущую сессию.
 
-OAuth state, Telegram link token и recovery token:
+Google OAuth использует scopes `openid email profile`, PKCE, `state` и `nonce`. `state` живёт 10 минут, расходуется один раз, а payload шифруется. Callback принимает только `code`, `state`, `error`, `error_description`, `iss` и `scope` и всегда перенаправляет на фиксированный путь приложения.
 
-- одноразовые;
+OAuth state хранится в `one_time_tokens`. Telegram link token и recovery token остаются целевыми и в этой коллекции пока не создаются. Одноразовые токены:
+
 - короткоживущие;
 - хранятся в виде hash;
 - автоматически удаляются TTL index.
 
-Для мутаций backend проверяет `Origin`, CSRF token и session. OAuth callback и внешние webhook имеют отдельные правила.
+Для мутаций с cookie backend проверяет, что `Origin` равен `APP_ORIGIN`, и заголовок `X-CSRF-Token`. Токен — HMAC сырого session token на `SESSION_SECRET`. `GET /api/v1/auth/google` и `GET /api/v1/auth/google/callback` CSRF не требуют: это переход браузера, а адрес возврата не берётся из запроса. Внешние webhook имеют отдельные правила.
+
+Эндпоинты входа и профиля:
+
+- `GET /health/live`, `GET /health/ready`;
+- `GET /api/v1/auth/google`, `GET /api/v1/auth/google/callback`;
+- `GET /api/v1/auth/session`;
+- `POST /api/v1/auth/logout`;
+- `GET /api/v1/profile`, `PATCH /api/v1/profile`;
+- `DELETE /api/v1/account`.
+
+Профиль не содержит идентификатор пользователя в пути. Каждое чтение и изменение фильтруется идентификатором текущей сессии.
 
 ## 12. Развёртывание
 

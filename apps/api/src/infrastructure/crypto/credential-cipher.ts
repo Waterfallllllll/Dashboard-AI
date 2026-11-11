@@ -12,7 +12,8 @@ export const CREDENTIAL_PURPOSES = {
   accessToken: "auth_accounts.access_token",
   refreshToken: "auth_accounts.refresh_token",
   integrationCredentials: "integrations.credentials",
-  pushKeys: "push_subscriptions.keys"
+  pushKeys: "push_subscriptions.keys",
+  oauthTransaction: "one_time_tokens.payload"
 } as const;
 
 export type CredentialPurpose = (typeof CREDENTIAL_PURPOSES)[keyof typeof CREDENTIAL_PURPOSES];

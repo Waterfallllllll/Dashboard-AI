@@ -1,7 +1,8 @@
 import { initialIndexesMigration } from "./0001-initial-indexes.js";
+import { oneTimeTokensMigration } from "./0002-one-time-tokens.js";
 import type { Migration, MigrationPlan } from "./types.js";
 
-export const MIGRATIONS: readonly Migration[] = [initialIndexesMigration];
+export const MIGRATIONS: readonly Migration[] = [initialIndexesMigration, oneTimeTokensMigration];
 
 const MIGRATION_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 

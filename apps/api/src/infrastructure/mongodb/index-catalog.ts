@@ -77,6 +77,8 @@ export const INDEX_DEFINITIONS: readonly IndexDefinition[] = [
   uniqueIndex("auth_accounts", "auth_accounts_user_provider", { userId: 1, provider: 1 }),
   uniqueIndex("sessions", "sessions_token_hash", { tokenHash: 1 }),
   ttlIndex("sessions", "sessions_expires_at", "expiresAt"),
+  uniqueIndex("one_time_tokens", "one_time_tokens_token_hash", { tokenHash: 1 }),
+  ttlIndex("one_time_tokens", "one_time_tokens_expires_at", "expiresAt"),
   uniqueIndex("dashboard_configs", "dashboard_configs_user", { userId: 1 }),
   queryIndex("routine_rules", "routine_rules_user_status", { userId: 1, status: 1 }, ACTIVE),
   queryIndex("routine_rules", "routine_rules_user_start_date", { userId: 1, startDate: 1 }, ACTIVE),
@@ -108,6 +110,7 @@ export const INDEX_DEFINITIONS: readonly IndexDefinition[] = [
 
 const TTL_FIELDS: Readonly<Record<string, string>> = {
   sessions: "expiresAt",
+  one_time_tokens: "expiresAt",
   notification_deliveries: "deleteAt"
 };
 

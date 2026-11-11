@@ -52,3 +52,23 @@ export {
   utcDateTimeSchema
 } from "./common/primitives.js";
 export type { EntityId, LocalDate, PageQuery, UtcDateTime } from "./common/primitives.js";
+export {
+  CSRF_HEADER,
+  sessionResponseSchema,
+  sessionSchema,
+  signOutResponseSchema,
+  signOutSchema
+} from "./auth/session.js";
+export type { Session } from "./auth/session.js";
+export {
+  accountDeletionResponseSchema,
+  accountDeletionSchema,
+  avatarUrlSchema,
+  displayNameSchema,
+  profilePatchSchema,
+  profileResponseSchema,
+  profileSchema,
+  themeSchema,
+  timeFormatSchema
+} from "./auth/profile.js";
+export type { Profile, ProfilePatch, ThemePreference, TimeFormat } from "./auth/profile.js";

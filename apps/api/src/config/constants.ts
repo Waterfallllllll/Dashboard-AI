@@ -1,0 +1,13 @@
+export const API_PREFIX = "/api/v1";
+export const SESSION_COOKIE = "__Host-session";
+export const GOOGLE_CALLBACK_PATH = "/api/v1/auth/google/callback";
+export const GOOGLE_AUTHORIZATION_HOST = "accounts.google.com";
+export const GOOGLE_SCOPES = "openid email profile";
+export const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+export const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+export const JSON_BODY_LIMIT = "16kb";
+export const DEFAULT_LOCALE = "ru";
+export const DEFAULT_TIME_ZONE = "Europe/Moscow";
+export const DEFAULT_TIME_FORMAT = "24" as const;
+export const DEFAULT_THEME = "system" as const;
+export const DEFAULT_DISPLAY_NAME = "Пользователь";

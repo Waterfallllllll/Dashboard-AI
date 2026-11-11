@@ -12,6 +12,7 @@ export {
   type PushSubscriptionDocument,
   type RoutineOccurrenceDocument,
   type RoutineRuleDocument,
+  type OneTimeTokenDocument,
   type SessionDocument,
   type TimerSessionDocument,
   type UserDocument
@@ -50,7 +51,12 @@ export {
   deliveryRetentionViolation,
   notificationDeleteAt
 } from "./retention.js";
-export { GLOBAL_COLLECTIONS, USER_OWNED_COLLECTIONS, assertUserDataCoverage } from "./user-data.js";
+export {
+  GLOBAL_COLLECTIONS,
+  TRANSIENT_COLLECTIONS,
+  USER_OWNED_COLLECTIONS,
+  assertUserDataCoverage
+} from "./user-data.js";
 export {
   activeDocumentFilter,
   restoreFields,

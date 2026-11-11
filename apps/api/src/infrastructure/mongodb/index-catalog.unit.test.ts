@@ -16,6 +16,8 @@ describe("каталог индексов", () => {
       "auth_accounts_user_provider",
       "sessions_token_hash",
       "sessions_expires_at",
+      "one_time_tokens_token_hash",
+      "one_time_tokens_expires_at",
       "dashboard_configs_user",
       "routine_rules_user_status",
       "routine_rules_user_start_date",
@@ -37,8 +39,13 @@ describe("каталог индексов", () => {
     );
   });
 
-  it("оставляет TTL только у сессий и журнала доставки, а мягкое удаление — в partial-индексах", () => {
+  it("оставляет TTL у сессий, одноразовых токенов и журнала доставки", () => {
     expect(indexByName("sessions_expires_at")).toMatchObject({
+      kind: "ttl",
+      key: { expiresAt: 1 },
+      expireAfterSeconds: 0
+    });
+    expect(indexByName("one_time_tokens_expires_at")).toMatchObject({
       kind: "ttl",
       key: { expiresAt: 1 },
       expireAfterSeconds: 0
@@ -48,7 +55,7 @@ describe("каталог индексов", () => {
       key: { deleteAt: 1 },
       expireAfterSeconds: 0
     });
-    expect(INDEX_DEFINITIONS.filter((index) => index.kind === "ttl")).toHaveLength(2);
+    expect(INDEX_DEFINITIONS.filter((index) => index.kind === "ttl")).toHaveLength(3);
     expect(partialFilter("integrations_user_type")).toEqual({ deletedAt: null });
     expect(partialFilter("routine_rules_user_status")).toEqual({ deletedAt: null });
     expect(indexByName("timer_sessions_one_active_user")).toMatchObject({

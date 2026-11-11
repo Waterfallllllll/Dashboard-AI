@@ -26,6 +26,7 @@ export type DeliveryRetentionCode = "DELIVERY_WITHOUT_EXPIRY" | "DELIVERY_EXPIRY
 
 export const HISTORY_POLICIES = [
   { collection: "sessions", mode: "ttl-field", field: "expiresAt" },
+  { collection: "one_time_tokens", mode: "ttl-field", field: "expiresAt" },
   {
     collection: "notification_deliveries",
     mode: "ttl-days",

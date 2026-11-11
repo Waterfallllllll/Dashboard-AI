@@ -68,6 +68,13 @@ export function buildMainQueries(sample: QuerySample): readonly MainQuery[] {
       indexProvidesOrder: false
     },
     {
+      name: "oauth-state-by-hash",
+      collection: "one_time_tokens",
+      indexName: "one_time_tokens_token_hash",
+      filter: { tokenHash: sample.tokenHash },
+      indexProvidesOrder: false
+    },
+    {
       name: "dashboard-by-user",
       collection: "dashboard_configs",
       indexName: "dashboard_configs_user",

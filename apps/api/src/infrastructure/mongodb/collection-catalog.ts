@@ -17,6 +17,7 @@ export const COLLECTION_NAMES = [
   "users",
   "auth_accounts",
   "sessions",
+  "one_time_tokens",
   "dashboard_configs",
   "routine_rules",
   "routine_occurrences",
@@ -99,6 +100,17 @@ export type SessionDocument = {
   expiresAt: Date;
   createdAt: Date;
   revokedAt: Date | null;
+};
+
+export type OneTimeTokenDocument = {
+  _id: ObjectId;
+  schemaVersion: 1;
+  tokenHash: string;
+  purpose: "oauth_state";
+  encryptedPayload: string;
+  expiresAt: Date;
+  createdAt: Date;
+  consumedAt: Date | null;
 };
 
 export type WidgetPreferenceDocument = {
@@ -334,6 +346,25 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
       createdAt: date,
       revokedAt: dateOrNull
     })
+  },
+  {
+    name: "one_time_tokens",
+    schema: documentSchema(
+      ["tokenHash", "purpose", "encryptedPayload", "expiresAt", "createdAt", "consumedAt"],
+      {
+        tokenHash: {
+          bsonType: "string",
+          minLength: 64,
+          maxLength: 64,
+          pattern: "^[a-f0-9]{64}$"
+        },
+        purpose: { bsonType: "string", enum: ["oauth_state"] },
+        encryptedPayload: text(1, 8192),
+        expiresAt: date,
+        createdAt: date,
+        consumedAt: dateOrNull
+      }
+    )
   },
   {
     name: "dashboard_configs",

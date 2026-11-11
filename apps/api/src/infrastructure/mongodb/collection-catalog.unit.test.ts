@@ -12,6 +12,7 @@ import {
   type PushSubscriptionDocument,
   type RoutineOccurrenceDocument,
   type RoutineRuleDocument,
+  type OneTimeTokenDocument,
   type SessionDocument,
   type TimerSessionDocument,
   type UserDocument,
@@ -35,6 +36,7 @@ describe("каталог коллекций", () => {
       "users",
       "auth_accounts",
       "sessions",
+      "one_time_tokens",
       "dashboard_configs",
       "routine_rules",
       "routine_occurrences",
@@ -108,6 +110,16 @@ describe("каталог коллекций", () => {
       "expiresAt",
       "createdAt",
       "revokedAt"
+    ]);
+    expectFields<OneTimeTokenDocument>()("one_time_tokens", [
+      "_id",
+      "schemaVersion",
+      "tokenHash",
+      "purpose",
+      "encryptedPayload",
+      "expiresAt",
+      "createdAt",
+      "consumedAt"
     ]);
     expectFields<DashboardConfigDocument>()("dashboard_configs", [
       "_id",
