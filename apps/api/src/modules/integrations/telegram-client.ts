@@ -1,6 +1,7 @@
 import {
   CircuitBreaker,
   ProviderUnavailableError,
+  assertAllowedUrl,
   fetchAllowlisted,
   type FetchLike
 } from "../../infrastructure/http/provider-guard.js";
@@ -44,6 +45,53 @@ export class TelegramClient {
 
     this.checkedAt = this.now();
   }
+
+  async sendMessage(chatId: string, text: string): Promise<{ messageId: string | null }> {
+    if (!/^\d{1,20}$/.test(chatId) || text.length === 0 || text.length > 240) {
+      throw new ProviderUnavailableError("telegram", true);
+    }
+
+    const url = new URL(`https://api.telegram.org/bot${this.token}/sendMessage`);
+    assertAllowedUrl(url, ["api.telegram.org"], "telegram");
+    this.breaker.assertClosed("telegram");
+    let response: Response;
+
+    try {
+      response = await this.fetchImpl(url.toString(), {
+        method: "POST",
+        redirect: "manual",
+        signal: AbortSignal.timeout(3000),
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "user-agent": "EvergreenDashboard/0.1"
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text,
+          disable_web_page_preview: true
+        })
+      });
+    } catch {
+      this.breaker.fail();
+      throw new ProviderUnavailableError("telegram");
+    }
+
+    if (response.status === 429 || response.status >= 500) {
+      await response.body?.cancel();
+      this.breaker.fail();
+      throw new ProviderUnavailableError("telegram");
+    }
+
+    if (!response.ok) {
+      await response.body?.cancel();
+      throw new ProviderUnavailableError("telegram", true);
+    }
+
+    const messageId = messageIdOf(await response.text());
+    this.breaker.succeed();
+    return { messageId };
+  }
 }
 
 function botMatches(value: unknown, username: string): boolean {
@@ -68,4 +116,14 @@ function parseJson(body: string): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function messageIdOf(body: string): string | null {
+  const parsed = parseJson(body);
+
+  if (!isRecord(parsed) || parsed.ok !== true || !isRecord(parsed.result)) {
+    return null;
+  }
+
+  return typeof parsed.result.message_id === "number" ? String(parsed.result.message_id) : null;
 }

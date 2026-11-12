@@ -1,12 +1,14 @@
 import { initialIndexesMigration } from "./0001-initial-indexes.js";
 import { oneTimeTokensMigration } from "./0002-one-time-tokens.js";
 import { externalAdaptersMigration } from "./0003-external-adapters.js";
+import { backgroundJobsMigration } from "./0004-background-jobs.js";
 import type { Migration, MigrationPlan } from "./types.js";
 
 export const MIGRATIONS: readonly Migration[] = [
   initialIndexesMigration,
   oneTimeTokensMigration,
-  externalAdaptersMigration
+  externalAdaptersMigration,
+  backgroundJobsMigration
 ];
 
 const MIGRATION_NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;

@@ -22,6 +22,11 @@ import type { DashboardService } from "../modules/dashboard/dashboard.service.js
 import { createDashboardRouter } from "../modules/dashboard/dashboard.routes.js";
 import type { IntegrationsService } from "../modules/integrations/integrations.service.js";
 import { createIntegrationsRouter } from "../modules/integrations/integrations.routes.js";
+import type { MetricsSource } from "../infrastructure/metrics/app-metrics.js";
+import type { NotificationsService } from "../modules/notifications/notifications.service.js";
+import { createNotificationsRouter } from "../modules/notifications/notifications.routes.js";
+import type { WebhookService } from "../modules/notifications/webhook.service.js";
+import { createWebhookRouter } from "../modules/notifications/webhook.routes.js";
 import type { NewsService } from "../modules/news/news.service.js";
 import { createNewsRouter } from "../modules/news/news.routes.js";
 import type { RoutinesService } from "../modules/routines/routines.service.js";
@@ -52,6 +57,9 @@ export type AppDependencies = {
   readonly newsService: NewsService;
   readonly calendarService: CalendarService;
   readonly integrationsService: IntegrationsService;
+  readonly notificationsService?: NotificationsService;
+  readonly webhookService?: WebhookService;
+  readonly metrics?: MetricsSource;
 };
 
 export function createApp(deps: AppDependencies): Express {
@@ -85,6 +93,22 @@ export function createApp(deps: AppDependencies): Express {
       });
     })
   );
+  if (deps.metrics) {
+    app.get(
+      "/metrics",
+      asyncHandler(async (_req, res) => {
+        res.setHeader("Content-Type", deps.metrics?.contentType ?? "text/plain; charset=utf-8");
+        res.status(200).send(await deps.metrics?.text());
+      })
+    );
+  }
+  if (deps.webhookService) {
+    app.use(
+      "/api/v1/webhooks",
+      createRateLimiter(deps.config.webhookRateLimit),
+      createWebhookRouter(deps.webhookService)
+    );
+  }
   app.use("/api/v1", loadSession(deps.authService));
   app.use("/api/v1", requireCsrf(deps.config));
   app.use("/api/v1", createRateLimiter(deps.config.apiRateLimit));
@@ -101,6 +125,9 @@ export function createApp(deps: AppDependencies): Express {
     "/api/v1",
     createIntegrationsRouter(deps.integrationsService, deps.calendarService, deps.config)
   );
+  if (deps.notificationsService) {
+    app.use("/api/v1", createNotificationsRouter(deps.notificationsService));
+  }
   app.use(notFound);
   app.use(errorHandler);
   return app;

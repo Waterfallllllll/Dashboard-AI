@@ -119,7 +119,8 @@ describe.skipIf(mongoUri === "")("проверка запросов, целос�
       integrations: 1,
       calendar_events: 1,
       push_subscriptions: 1,
-      notification_deliveries: 1
+      notification_deliveries: 1,
+      scheduled_jobs: 1
     });
     expect(await database.collection("users").countDocuments({ _id: current.userB })).toBe(0);
     expect(await database.collection("sessions").countDocuments({ userId: current.userB })).toBe(0);
@@ -129,7 +130,7 @@ describe.skipIf(mongoUri === "")("проверка запросов, целос�
     const repeated = await purgeAccount(database, current.userB);
     expect(repeated.user).toBe("missing");
     expect(Object.values(repeated.deleted).reduce((sum, count) => sum + count, 0)).toBe(0);
-    expect(await database.collection("schema_migrations").countDocuments()).toBe(3);
+    expect(await database.collection("schema_migrations").countDocuments()).toBe(4);
   });
 });
 
@@ -274,6 +275,24 @@ async function insertOwned(
     .insertOne(
       delivery(userId, `timer:${suffix}:work-completed:telegram`, notificationDeleteAt(now))
     );
+  await database.collection("scheduled_jobs").insertOne({
+    schemaVersion: 1,
+    type: "timer-due",
+    payload: { sessionId: "a".repeat(24) },
+    runAt: now,
+    status: "pending",
+    attempts: 0,
+    maxAttempts: 5,
+    idempotencyKey: `timer:${suffix}:due:1`,
+    lockedBy: null,
+    lockedAt: null,
+    lockExpiresAt: null,
+    lastError: null,
+    userId,
+    createdAt: now,
+    updatedAt: now,
+    deleteAt: null
+  });
 }
 
 async function insertVolume(database: Db): Promise<{

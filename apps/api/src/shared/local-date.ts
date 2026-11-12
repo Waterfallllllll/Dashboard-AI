@@ -84,6 +84,15 @@ function zonedParts(
   return { year, month, day, hour, minute, second };
 }
 
+export function localClockMinutes(now: Date, timeZone: string): number {
+  const parts = zonedParts(now, timeZone);
+  return Number(parts.hour) * 60 + Number(parts.minute);
+}
+
+export function zonedLocalDateTime(isoDate: string, time: string, timeZone: string): Date {
+  return zonedDateTimeToUtc(isoDate, `${time}:00`, timeZone);
+}
+
 function readIsoDate(isoDate: string): { year: number; month: number; day: number } {
   const match = ISO_DATE.exec(isoDate);
 

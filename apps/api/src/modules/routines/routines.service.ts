@@ -15,6 +15,8 @@ import { idempotencyObjectId } from "../../shared/idempotency-id.js";
 import type { Actor } from "../auth/auth.types.js";
 import { isEditProblem, planRuleEdit, type RuleDraft } from "./routine-edit.js";
 import { listFilterStatus, occursOn } from "./routine-schedule.js";
+import { localDateInTimeZone, zonedLocalDateTime } from "../../shared/local-date.js";
+import type { JobScheduler } from "../timers/timer-jobs.js";
 import type { RoutinesRepository } from "./routines.repository.js";
 import type {
   OccurrenceWrite,
@@ -304,6 +306,47 @@ export class RoutinesService {
     }
 
     return toOccurrenceDto(current, current.titleOverride ?? rule.title);
+  }
+
+  async enqueueDueReminders(jobs: JobScheduler, maxAttempts: number): Promise<void> {
+    const rules = await this.routines.listActiveReminders(100);
+    const now = this.now();
+
+    for (const rule of rules) {
+      if (!rule.reminderLocalTime) {
+        continue;
+      }
+
+      const today = localDateInTimeZone(now, rule.timezone);
+
+      if (!occursOn(rule, today)) {
+        continue;
+      }
+
+      const dueAt = zonedLocalDateTime(today, rule.reminderLocalTime, rule.timezone);
+      const late = now.getTime() - dueAt.getTime();
+
+      if (late < 0 || late > 2 * 60_000) {
+        continue;
+      }
+
+      for (const channel of ["browser", "telegram", "in_app"] as const) {
+        await jobs.schedule({
+          type: "deliver-notification",
+          payload: {
+            eventType: "routine",
+            channel,
+            ruleId: rule.id,
+            localDate: today,
+            title: rule.title.slice(0, 120)
+          },
+          runAt: now,
+          idempotencyKey: `routine:${rule.id}:${today}:reminder:${channel}`,
+          userId: rule.userId,
+          maxAttempts
+        });
+      }
+    }
   }
 
   private async ownedRule(

@@ -10,6 +10,7 @@ import {
   type NewsItemDocument,
   type NotificationDeliveryDocument,
   type PushSubscriptionDocument,
+  type ScheduledJobDocument,
   type RoutineOccurrenceDocument,
   type RoutineRuleDocument,
   type OneTimeTokenDocument,
@@ -46,7 +47,8 @@ describe("каталог коллекций", () => {
       "calendar_events",
       "news_items",
       "push_subscriptions",
-      "notification_deliveries"
+      "notification_deliveries",
+      "scheduled_jobs"
     ]);
     expect(COLLECTION_DEFINITIONS).toHaveLength(COLLECTION_NAMES.length);
   });
@@ -88,6 +90,7 @@ describe("каталог коллекций", () => {
       "timeFormat",
       "theme",
       "weatherLocation",
+      "notificationSettings",
       "createdAt",
       "updatedAt",
       "deletedAt"
@@ -200,6 +203,9 @@ describe("каталог коллекций", () => {
       "externalUserId",
       "lastSyncAt",
       "syncCursor",
+      "watchChannelId",
+      "watchResourceId",
+      "watchExpiresAt",
       "createdAt",
       "updatedAt",
       "deletedAt"
@@ -238,6 +244,25 @@ describe("каталог коллекций", () => {
       "status",
       "attempts",
       "providerMessageId",
+      "createdAt",
+      "updatedAt",
+      "deleteAt"
+    ]);
+    expectFields<ScheduledJobDocument>()("scheduled_jobs", [
+      "_id",
+      "schemaVersion",
+      "type",
+      "payload",
+      "runAt",
+      "status",
+      "attempts",
+      "maxAttempts",
+      "idempotencyKey",
+      "lockedBy",
+      "lockedAt",
+      "lockExpiresAt",
+      "lastError",
+      "userId",
       "createdAt",
       "updatedAt",
       "deleteAt"

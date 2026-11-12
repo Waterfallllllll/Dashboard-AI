@@ -2,6 +2,10 @@ import { randomBytes } from "node:crypto";
 
 import { NEW_USER_DEFAULTS, type UserProfile } from "../users/user-profile.js";
 import type { ProfileUpdate } from "../users/user-profile.js";
+import {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  type NotificationPreferences
+} from "@dashboard/contracts";
 import type { StoredWeatherLocation, UsersRepository } from "../users/users.repository.js";
 import { GoogleAccountBlockedError } from "./auth.types.js";
 import type {
@@ -15,6 +19,7 @@ import { planGoogleLogin } from "./google-login.js";
 export type MemoryUser = UserProfile & {
   readonly deletedAt: Date | null;
   readonly weatherLocation?: StoredWeatherLocation | null;
+  readonly notificationSettings?: NotificationPreferences | null;
 };
 
 export type MemoryAccount = {
@@ -296,6 +301,40 @@ export class MemoryUsersRepository implements UsersRepository {
 
     this.database.users.set(userId, { ...user, weatherLocation: location, updatedAt: now });
     return true;
+  }
+
+  async readNotificationSettings(
+    userId: string
+  ): Promise<{ preferences: NotificationPreferences; timezone: string } | null> {
+    const user = this.database.users.get(userId);
+
+    if (!user || user.deletedAt !== null || user.id !== userId) {
+      return null;
+    }
+
+    return {
+      preferences: user.notificationSettings ?? DEFAULT_NOTIFICATION_PREFERENCES,
+      timezone: user.timezone
+    };
+  }
+
+  async writeNotificationSettings(
+    userId: string,
+    preferences: NotificationPreferences,
+    now: Date
+  ): Promise<NotificationPreferences | null> {
+    const user = this.database.users.get(userId);
+
+    if (!user || user.deletedAt !== null || user.id !== userId) {
+      return null;
+    }
+
+    this.database.users.set(userId, {
+      ...user,
+      notificationSettings: preferences,
+      updatedAt: now
+    });
+    return preferences;
   }
 }
 

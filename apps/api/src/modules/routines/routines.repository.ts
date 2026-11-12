@@ -69,6 +69,7 @@ export type RoutinesRepository = {
   splitSeries(
     input: SplitSeriesInput
   ): Promise<{ previous: RoutineRuleRecord; created: RoutineRuleRecord } | "missing">;
+  listActiveReminders(limit: number): Promise<RoutineRuleRecord[]>;
 };
 
 export class MongoRoutinesRepository implements RoutinesRepository {
@@ -388,6 +389,18 @@ export class MongoRoutinesRepository implements RoutinesRepository {
       );
 
       return { previous: toRule(previous), created: toRule(created) };
+    });
+  }
+
+  async listActiveReminders(limit: number): Promise<RoutineRuleRecord[]> {
+    const documents = await this.rules()
+      .find({ status: "active", deletedAt: null, reminderLocalTime: { $gte: "00:00" } })
+      .sort({ reminderLocalTime: 1 })
+      .limit(limit)
+      .toArray();
+    return documents.flatMap((document) => {
+      const rule = toRule(document);
+      return rule.deletedAt || !rule.reminderLocalTime ? [] : [rule];
     });
   }
 

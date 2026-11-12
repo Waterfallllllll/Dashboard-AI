@@ -95,6 +95,7 @@ function emptyDeleted(): PurgeDeletedCounts {
     integrations: 0,
     calendar_events: 0,
     push_subscriptions: 0,
-    notification_deliveries: 0
+    notification_deliveries: 0,
+    scheduled_jobs: 0
   };
 }

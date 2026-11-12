@@ -26,7 +26,8 @@ export const COLLECTION_NAMES = [
   "calendar_events",
   "news_items",
   "push_subscriptions",
-  "notification_deliveries"
+  "notification_deliveries",
+  "scheduled_jobs"
 ] as const;
 
 export type CollectionName = (typeof COLLECTION_NAMES)[number];
@@ -79,6 +80,7 @@ export type UserDocument = {
     longitude: number;
     label: string;
   } | null;
+  notificationSettings?: NotificationSettingsDocument | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
@@ -200,6 +202,9 @@ export type IntegrationDocument = {
   externalUserId: string | null;
   lastSyncAt: Date | null;
   syncCursor: string | null;
+  watchChannelId?: string | null;
+  watchResourceId?: string | null;
+  watchExpiresAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
@@ -249,6 +254,15 @@ export type PushSubscriptionDocument = {
   revokedAt: Date | null;
 };
 
+export type NotificationSettingsDocument = {
+  work: { browser: boolean; telegram: boolean };
+  break: { browser: boolean; telegram: boolean };
+  routine: { browser: boolean; telegram: boolean };
+  calendar: { browser: boolean; telegram: boolean };
+  quietStart: string | null;
+  quietEnd: string | null;
+};
+
 export type NotificationDeliveryDocument = {
   _id: ObjectId;
   schemaVersion: 1;
@@ -259,6 +273,45 @@ export type NotificationDeliveryDocument = {
   status: "pending" | "sent" | "failed" | "skipped";
   attempts: number;
   providerMessageId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  deleteAt: Date | null;
+};
+
+export type ScheduledJobDocument = {
+  _id: ObjectId;
+  schemaVersion: 1;
+  type:
+    | "timer-due"
+    | "deliver-notification"
+    | "refresh-news"
+    | "sync-calendar"
+    | "scan-due-timers"
+    | "scan-routine-reminders"
+    | "purge-revoked-push"
+    | "renew-calendar-watch"
+    | "scheduler-lock"
+    | "worker-heartbeat";
+  payload: {
+    sessionId?: string;
+    eventType?: "work" | "break" | "routine" | "calendar";
+    channel?: "browser" | "telegram" | "in_app";
+    ruleId?: string;
+    localDate?: string;
+    title?: string;
+    channelId?: string;
+    phase?: "work" | "short-break" | "long-break";
+  };
+  runAt: Date;
+  status: "pending" | "processing" | "completed" | "failed";
+  attempts: number;
+  maxAttempts: number;
+  idempotencyKey: string;
+  lockedBy: string | null;
+  lockedAt: Date | null;
+  lockExpiresAt: Date | null;
+  lastError: string | null;
+  userId: ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
   deleteAt: Date | null;
@@ -306,6 +359,30 @@ const widgetPreferenceSchema: JsonSchema = {
   }
 };
 
+const channelPreferenceSchema: JsonSchema = {
+  bsonType: "object",
+  additionalProperties: false,
+  required: ["browser", "telegram"],
+  properties: {
+    browser: { bsonType: "bool" },
+    telegram: { bsonType: "bool" }
+  }
+};
+
+const notificationSettingsSchema: JsonSchema = {
+  bsonType: "object",
+  additionalProperties: false,
+  required: ["work", "break", "routine", "calendar", "quietStart", "quietEnd"],
+  properties: {
+    work: channelPreferenceSchema,
+    break: channelPreferenceSchema,
+    routine: channelPreferenceSchema,
+    calendar: channelPreferenceSchema,
+    quietStart: nullableString(5, "^([01]\\d|2[0-3]):[0-5]\\d$"),
+    quietEnd: nullableString(5, "^([01]\\d|2[0-3]):[0-5]\\d$")
+  }
+};
+
 export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
   {
     name: "users",
@@ -342,6 +419,9 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
               }
             }
           ]
+        },
+        notificationSettings: {
+          anyOf: [{ bsonType: "null" }, notificationSettingsSchema]
         },
         createdAt: date,
         updatedAt: date,
@@ -549,6 +629,9 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
         externalUserId: textOrNull(128),
         lastSyncAt: dateOrNull,
         syncCursor: textOrNull(2048),
+        watchChannelId: textOrNull(64),
+        watchResourceId: textOrNull(256),
+        watchExpiresAt: dateOrNull,
         createdAt: date,
         updatedAt: date,
         deletedAt: dateOrNull
@@ -656,6 +739,83 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
         status: { bsonType: "string", enum: ["pending", "sent", "failed", "skipped"] },
         attempts: { bsonType: "number", minimum: 0, maximum: 20 },
         providerMessageId: textOrNull(256),
+        createdAt: date,
+        updatedAt: date,
+        deleteAt: dateOrNull
+      }
+    )
+  },
+  {
+    name: "scheduled_jobs",
+    schema: documentSchema(
+      [
+        "type",
+        "payload",
+        "runAt",
+        "status",
+        "attempts",
+        "maxAttempts",
+        "idempotencyKey",
+        "lockedBy",
+        "lockedAt",
+        "lockExpiresAt",
+        "lastError",
+        "userId",
+        "createdAt",
+        "updatedAt",
+        "deleteAt"
+      ],
+      {
+        type: {
+          bsonType: "string",
+          enum: [
+            "timer-due",
+            "deliver-notification",
+            "refresh-news",
+            "sync-calendar",
+            "scan-due-timers",
+            "scan-routine-reminders",
+            "purge-revoked-push",
+            "renew-calendar-watch",
+            "scheduler-lock",
+            "worker-heartbeat"
+          ]
+        },
+        payload: {
+          bsonType: "object",
+          additionalProperties: false,
+          maxProperties: 8,
+          properties: {
+            sessionId: text(24, 24),
+            eventType: { bsonType: "string", enum: ["work", "break", "routine", "calendar"] },
+            channel: { bsonType: "string", enum: ["browser", "telegram", "in_app"] },
+            ruleId: text(24, 24),
+            localDate,
+            title: text(1, 120),
+            channelId: text(1, 128),
+            phase: { bsonType: "string", enum: ["work", "short-break", "long-break"] }
+          }
+        },
+        runAt: date,
+        status: { bsonType: "string", enum: ["pending", "processing", "completed", "failed"] },
+        attempts: { bsonType: "number", minimum: 0, maximum: 20 },
+        maxAttempts: { bsonType: "number", minimum: 1, maximum: 10 },
+        idempotencyKey: {
+          bsonType: "string",
+          minLength: 8,
+          maxLength: 200,
+          pattern: "^[A-Za-z0-9:_-]+$"
+        },
+        lockedBy: textOrNull(64),
+        lockedAt: dateOrNull,
+        lockExpiresAt: dateOrNull,
+        lastError: {
+          anyOf: [
+            { bsonType: "null" },
+            { bsonType: "string", minLength: 1, maxLength: 40, pattern: "^[a-z0-9-]+$" }
+          ]
+        },
+        userId: { bsonType: ["objectId", "null"] },
         createdAt: date,
         updatedAt: date,
         deleteAt: dateOrNull

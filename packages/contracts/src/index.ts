@@ -240,3 +240,26 @@ export type {
   WidgetSize,
   WidgetType
 } from "./widgets/preferences.js";
+export {
+  DEFAULT_NOTIFICATION_PREFERENCES,
+  notificationChannelSchema,
+  notificationDeliverySchema,
+  notificationEventSchema,
+  notificationFeedResponseSchema,
+  notificationFeedSchema,
+  notificationPreferencesResponseSchema,
+  notificationPreferencesSchema,
+  notificationStatusSchema,
+  pushSubscriptionCreateSchema,
+  pushSubscriptionResponseSchema,
+  pushSubscriptionSchema
+} from "./notifications/notifications.js";
+export type {
+  NotificationChannel,
+  NotificationDelivery,
+  NotificationEvent,
+  NotificationPreferences,
+  NotificationStatus,
+  PushSubscription,
+  PushSubscriptionCreate
+} from "./notifications/notifications.js";

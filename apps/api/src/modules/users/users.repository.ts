@@ -1,5 +1,6 @@
-import type { MatchKeysAndValues } from "mongodb";
-import type { Db, ObjectId } from "mongodb";
+import type { NotificationPreferences } from "@dashboard/contracts";
+import { DEFAULT_NOTIFICATION_PREFERENCES } from "@dashboard/contracts";
+import type { Db, MatchKeysAndValues, ObjectId } from "mongodb";
 
 import type { UserDocument } from "../../infrastructure/mongodb/collection-catalog.js";
 import {
@@ -25,6 +26,14 @@ export type UsersRepository = {
     location: StoredWeatherLocation | null,
     now: Date
   ): Promise<boolean>;
+  readNotificationSettings(
+    userId: string
+  ): Promise<{ preferences: NotificationPreferences; timezone: string } | null>;
+  writeNotificationSettings(
+    userId: string,
+    preferences: NotificationPreferences,
+    now: Date
+  ): Promise<NotificationPreferences | null>;
   softDelete(userId: string, now: Date): Promise<SoftDeleteResult>;
   restore(userId: string, now: Date): Promise<void>;
 };
@@ -121,6 +130,46 @@ export class MongoUsersRepository implements UsersRepository {
       $set: { weatherLocation: location, updatedAt: now }
     });
     return result.matchedCount === 1;
+  }
+
+  async readNotificationSettings(
+    userId: string
+  ): Promise<{ preferences: NotificationPreferences; timezone: string } | null> {
+    const id = parseObjectId(userId);
+
+    if (!id) {
+      return null;
+    }
+
+    const document = await this.collection().findOne(activeUserFilter(id), {
+      projection: { notificationSettings: 1, timezone: 1 }
+    });
+
+    if (!document) {
+      return null;
+    }
+
+    return {
+      preferences: document.notificationSettings ?? DEFAULT_NOTIFICATION_PREFERENCES,
+      timezone: document.timezone
+    };
+  }
+
+  async writeNotificationSettings(
+    userId: string,
+    preferences: NotificationPreferences,
+    now: Date
+  ): Promise<NotificationPreferences | null> {
+    const id = parseObjectId(userId);
+
+    if (!id) {
+      return null;
+    }
+
+    const result = await this.collection().updateOne(activeUserFilter(id), {
+      $set: { notificationSettings: preferences, updatedAt: now }
+    });
+    return result.matchedCount === 1 ? preferences : null;
   }
 
   private collection() {

@@ -57,6 +57,20 @@ export type IntegrationsRepository = {
     tokenHash: string,
     now: Date
   ): Promise<{ encryptedPayload: string } | null>;
+  listConnectedUserIds(type: IntegrationKind, limit: number): Promise<readonly string[]>;
+  listCalendarWatches(limit: number): Promise<
+    readonly {
+      userId: string;
+      channelId: string | null;
+      resourceId: string | null;
+      expiresAt: Date | null;
+    }[]
+  >;
+  saveCalendarWatch(
+    userId: string,
+    watch: { channelId: string; resourceId: string; expiresAt: Date },
+    now: Date
+  ): Promise<void>;
 };
 
 export class MongoIntegrationsRepository implements IntegrationsRepository {
@@ -224,6 +238,51 @@ export class MongoIntegrationsRepository implements IntegrationsRepository {
     return document ? { encryptedPayload: document.encryptedPayload } : null;
   }
 
+  async listConnectedUserIds(type: IntegrationKind, limit: number): Promise<readonly string[]> {
+    const documents = await this.integrations()
+      .find({ type, status: "connected", deletedAt: null })
+      .limit(limit)
+      .toArray();
+    return documents.map((document) => document.userId.toHexString());
+  }
+
+  async listCalendarWatches(limit: number) {
+    const documents = await this.integrations()
+      .find({ type: "google_calendar", status: "connected", deletedAt: null })
+      .limit(limit)
+      .toArray();
+    return documents.map((document) => ({
+      userId: document.userId.toHexString(),
+      channelId: document.watchChannelId ?? null,
+      resourceId: document.watchResourceId ?? null,
+      expiresAt: document.watchExpiresAt ?? null
+    }));
+  }
+
+  async saveCalendarWatch(
+    userId: string,
+    watch: { channelId: string; resourceId: string; expiresAt: Date },
+    now: Date
+  ) {
+    const id = parseObjectId(userId);
+
+    if (!id) {
+      return;
+    }
+
+    await this.integrations().updateOne(
+      { userId: id, type: "google_calendar", deletedAt: null },
+      {
+        $set: {
+          watchChannelId: watch.channelId,
+          watchResourceId: watch.resourceId,
+          watchExpiresAt: watch.expiresAt,
+          updatedAt: now
+        }
+      }
+    );
+  }
+
   private integrations() {
     return this.db.collection<IntegrationDocument>("integrations");
   }
@@ -235,6 +294,10 @@ export class MongoIntegrationsRepository implements IntegrationsRepository {
 
 export class MemoryIntegrationsRepository implements IntegrationsRepository {
   private readonly integrations: IntegrationRecord[] = [];
+  private readonly watches = new Map<
+    string,
+    { channelId: string; resourceId: string; expiresAt: Date; savedAt: Date }
+  >();
   private readonly tokens: {
     purpose: TokenPurpose;
     tokenHash: string;
@@ -364,6 +427,33 @@ export class MemoryIntegrationsRepository implements IntegrationsRepository {
 
     token.consumedAt = now;
     return { encryptedPayload: token.encryptedPayload };
+  }
+
+  async listConnectedUserIds(type: IntegrationKind, limit: number): Promise<readonly string[]> {
+    return this.integrations
+      .filter((item) => item.type === type && item.status === "connected")
+      .slice(0, limit)
+      .map((item) => item.userId);
+  }
+
+  async listCalendarWatches(limit: number) {
+    return this.integrations
+      .filter((item) => item.type === "google_calendar" && item.status === "connected")
+      .slice(0, limit)
+      .map((item) => ({
+        userId: item.userId,
+        channelId: this.watches.get(item.userId)?.channelId ?? null,
+        resourceId: this.watches.get(item.userId)?.resourceId ?? null,
+        expiresAt: this.watches.get(item.userId)?.expiresAt ?? null
+      }));
+  }
+
+  async saveCalendarWatch(
+    userId: string,
+    watch: { channelId: string; resourceId: string; expiresAt: Date },
+    now: Date
+  ) {
+    this.watches.set(userId, { ...watch, savedAt: now });
   }
 }
 

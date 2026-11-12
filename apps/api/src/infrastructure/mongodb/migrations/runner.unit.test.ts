@@ -13,7 +13,8 @@ describe("план миграций", () => {
     expect(MIGRATIONS.map((migration) => [migration.version, migration.name])).toEqual([
       [1, "initial-indexes"],
       [2, "one-time-tokens"],
-      [3, "external-adapters"]
+      [3, "external-adapters"],
+      [4, "background-jobs"]
     ]);
     expect(planMigrations([], migrations).apply.map((migration) => migration.version)).toEqual([
       1, 2

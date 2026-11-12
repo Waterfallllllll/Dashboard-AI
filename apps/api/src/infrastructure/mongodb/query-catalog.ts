@@ -201,6 +201,79 @@ export function buildMainQueries(sample: QuerySample): readonly MainQuery[] {
       sort: { createdAt: -1 },
       limit: 20,
       indexProvidesOrder: true
+    },
+    {
+      name: "job-by-idempotency-key",
+      collection: "scheduled_jobs",
+      indexName: "scheduled_jobs_idempotency_key",
+      filter: { idempotencyKey: sample.idempotencyKey },
+      indexProvidesOrder: false
+    },
+    {
+      name: "jobs-ready",
+      collection: "scheduled_jobs",
+      indexName: "scheduled_jobs_status_run_at",
+      filter: { status: "pending", runAt: { $lte: sample.publishedBefore } },
+      sort: { runAt: 1 },
+      limit: 1,
+      indexProvidesOrder: true
+    },
+    {
+      name: "jobs-expired-lease",
+      collection: "scheduled_jobs",
+      indexName: "scheduled_jobs_status_lock",
+      filter: { status: "processing", lockExpiresAt: { $lte: sample.publishedBefore } },
+      sort: { lockExpiresAt: 1 },
+      limit: 20,
+      indexProvidesOrder: true
+    },
+    {
+      name: "jobs-by-user",
+      collection: "scheduled_jobs",
+      indexName: "scheduled_jobs_user_status",
+      filter: { userId: sample.userId, status: "pending" },
+      indexProvidesOrder: false
+    },
+    {
+      name: "worker-heartbeat",
+      collection: "scheduled_jobs",
+      indexName: "scheduled_jobs_type_updated",
+      filter: { type: "worker-heartbeat" },
+      sort: { updatedAt: -1 },
+      limit: 1,
+      indexProvidesOrder: true
+    },
+    {
+      name: "timers-due",
+      collection: "timer_sessions",
+      indexName: "timer_sessions_due",
+      filter: { completedAt: null, endsAt: { $lte: sample.publishedBefore } },
+      sort: { endsAt: 1 },
+      limit: 20,
+      indexProvidesOrder: true
+    },
+    {
+      name: "routines-with-reminder",
+      collection: "routine_rules",
+      indexName: "routine_rules_status_reminder",
+      filter: { status: "active", ...ACTIVE, reminderLocalTime: { $gte: "00:00" } },
+      sort: { reminderLocalTime: 1 },
+      limit: 100,
+      indexProvidesOrder: true
+    },
+    {
+      name: "push-revoked",
+      collection: "push_subscriptions",
+      indexName: "push_subscriptions_revoked_at",
+      filter: { revokedAt: { $lte: sample.publishedBefore } },
+      indexProvidesOrder: false
+    },
+    {
+      name: "integrations-by-type",
+      collection: "integrations",
+      indexName: "integrations_type_status",
+      filter: { type: "google_calendar", status: "connected", ...ACTIVE },
+      indexProvidesOrder: false
     }
   ];
 }

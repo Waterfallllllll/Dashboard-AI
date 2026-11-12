@@ -3,11 +3,13 @@ const DEFAULT_MAX_BYTES = 1_000_000;
 
 export class ProviderUnavailableError extends Error {
   readonly provider: string;
+  readonly permanent: boolean;
 
-  constructor(provider: string) {
+  constructor(provider: string, permanent = false) {
     super("Внешний сервис временно недоступен");
     this.name = "ProviderUnavailableError";
     this.provider = provider;
+    this.permanent = permanent;
   }
 }
 
@@ -74,7 +76,9 @@ export async function fetchAllowlisted(input: {
       return body;
     } catch (error) {
       lastError =
-        error instanceof ProviderUnavailableError ? error : new ProviderUnavailableError(input.provider);
+        error instanceof ProviderUnavailableError
+          ? error
+          : new ProviderUnavailableError(input.provider);
       const retry = attempt < attempts && error instanceof TransientProviderError;
 
       if (!retry) {

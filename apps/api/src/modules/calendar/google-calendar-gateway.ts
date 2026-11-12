@@ -31,27 +31,32 @@ export type CalendarGateway = {
   listEvents(credentials: CalendarCredentials, query: CalendarPageQuery): Promise<CalendarPage>;
 };
 
+export type CalendarWatch = {
+  readonly channelId: string;
+  readonly resourceId: string;
+  readonly expiresAt: Date;
+};
+
+export type CalendarWatchGateway = {
+  watch(
+    credentials: CalendarCredentials,
+    input: {
+      readonly channelId: string;
+      readonly address: string;
+      readonly token: string;
+      readonly expiresAt: Date;
+    }
+  ): Promise<CalendarWatch>;
+  stop(credentials: CalendarCredentials, channelId: string, resourceId: string): Promise<void>;
+};
+
 export function createGoogleCalendarGateway(
   clientId: string,
   clientSecret: string
-): CalendarGateway {
+): CalendarGateway & CalendarWatchGateway {
   return {
     async listEvents(credentials, query) {
-      const auth = new google.auth.OAuth2(clientId, clientSecret);
-      const tokens: { access_token: string; refresh_token?: string; expiry_date?: number } = {
-        access_token: credentials.accessToken
-      };
-
-      if (credentials.refreshToken) {
-        tokens.refresh_token = credentials.refreshToken;
-      }
-
-      if (credentials.expiresAt) {
-        tokens.expiry_date = credentials.expiresAt.getTime();
-      }
-
-      auth.setCredentials(tokens);
-      const calendar = google.calendar({ version: "v3", auth });
+      const { calendar, auth } = calendarClient(clientId, clientSecret, credentials);
       const params: calendar_v3.Params$Resource$Events$List = {
         calendarId: "primary",
         maxResults: 50
@@ -103,8 +108,87 @@ export function createGoogleCalendarGateway(
 
         throw new ProviderUnavailableError("google-calendar");
       }
+    },
+    async watch(credentials, input) {
+      const { calendar } = calendarClient(clientId, clientSecret, credentials);
+
+      try {
+        const response = await calendar.events.watch(
+          {
+            calendarId: "primary",
+            requestBody: {
+              id: input.channelId,
+              type: "web_hook",
+              address: input.address,
+              token: input.token,
+              expiration: String(input.expiresAt.getTime())
+            }
+          },
+          { timeout: 3000 }
+        );
+        const resourceId = response.data.resourceId;
+
+        if (!resourceId) {
+          throw new ProviderUnavailableError("google-calendar");
+        }
+
+        const expiration = Number(response.data.expiration ?? input.expiresAt.getTime());
+        return {
+          channelId: input.channelId,
+          resourceId,
+          expiresAt: new Date(Number.isFinite(expiration) ? expiration : input.expiresAt.getTime())
+        };
+      } catch (error) {
+        if (error instanceof ProviderUnavailableError) {
+          throw error;
+        }
+
+        const status = statusOf(error);
+
+        if (status === 401 || status === 403) {
+          throw new CalendarAccessRevokedError();
+        }
+
+        throw new ProviderUnavailableError("google-calendar");
+      }
+    },
+    async stop(credentials, channelId, resourceId) {
+      const { calendar } = calendarClient(clientId, clientSecret, credentials);
+
+      try {
+        await calendar.channels.stop(
+          { requestBody: { id: channelId, resourceId } },
+          { timeout: 3000 }
+        );
+      } catch (error) {
+        const status = statusOf(error);
+
+        if (status === 404) {
+          return;
+        }
+
+        throw new ProviderUnavailableError("google-calendar");
+      }
     }
   };
+}
+
+function calendarClient(clientId: string, clientSecret: string, credentials: CalendarCredentials) {
+  const auth = new google.auth.OAuth2(clientId, clientSecret);
+  const tokens: { access_token: string; refresh_token?: string; expiry_date?: number } = {
+    access_token: credentials.accessToken
+  };
+
+  if (credentials.refreshToken) {
+    tokens.refresh_token = credentials.refreshToken;
+  }
+
+  if (credentials.expiresAt) {
+    tokens.expiry_date = credentials.expiresAt.getTime();
+  }
+
+  auth.setCredentials(tokens);
+  return { auth, calendar: google.calendar({ version: "v3", auth }) };
 }
 
 function toRaw(event: calendar_v3.Schema$Event): RawCalendarEvent {

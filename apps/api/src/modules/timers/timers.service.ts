@@ -8,6 +8,7 @@ import type {
 import { ObjectId } from "mongodb";
 
 import { ApiError } from "../../shared/errors/api-error.js";
+import type { JobSignal } from "../../infrastructure/jobs/job-types.js";
 import { idempotencyObjectId } from "../../shared/idempotency-id.js";
 import { zonedDayBounds } from "../../shared/local-date.js";
 import type { Actor } from "../auth/auth.types.js";
@@ -22,6 +23,7 @@ import {
 } from "./timer-engine.js";
 import type { TimersRepository } from "./timers.repository.js";
 import type { TimerRecord } from "./timers.types.js";
+import { followTimer, timerDueJob, type JobScheduler } from "./timer-jobs.js";
 
 export type DailyGoalSource = {
   dailyGoal(userId: string): Promise<number>;
@@ -31,7 +33,9 @@ export class TimersService {
   constructor(
     private readonly timers: TimersRepository,
     private readonly goals: DailyGoalSource,
-    private readonly now: () => Date = () => new Date()
+    private readonly now: () => Date = () => new Date(),
+    private readonly jobs: JobScheduler | null = null,
+    private readonly maxAttempts = 5
   ) {}
 
   async current(actor: Actor, localDate: string, timeZone: string): Promise<TimerSnapshot> {
@@ -98,6 +102,7 @@ export class TimersService {
 
     if (inserted === "duplicate") {
       const existing = await this.owned(actor, id);
+      await this.follow(existing);
       const open = existing.completedAt ? null : existing;
       return {
         snapshot: await this.snapshot(
@@ -111,6 +116,7 @@ export class TimersService {
       };
     }
 
+    await this.follow(session);
     return {
       snapshot: await this.snapshot(actor, session, null, localDate, timeZone),
       replayed: false
@@ -141,6 +147,7 @@ export class TimersService {
 
     const saved = await this.timers.update(actor.userId, id, current.version, mutation.session);
     const session = this.written(actor, saved);
+    await this.follow(session);
     return this.snapshot(
       actor,
       session.completedAt ? null : session,
@@ -150,7 +157,6 @@ export class TimersService {
     );
   }
 
-  // Очередь уведомлений появится вместе с worker. До этого истёкший интервал закрывается при чтении.
   private async settleOpen(
     actor: Actor
   ): Promise<{ open: TimerRecord | null; settled: TimerRecord | null }> {
@@ -177,6 +183,7 @@ export class TimersService {
       throw new ApiError({ code: API_ERROR_CODES.notFound });
     }
 
+    await this.follow(saved);
     return { open: null, settled: saved };
   }
 
@@ -203,6 +210,68 @@ export class TimersService {
       completedToday,
       dailyGoal
     };
+  }
+
+  async handleDue(userId: string, sessionId: string): Promise<JobSignal> {
+    const session = await this.timers.findById(userId, sessionId);
+
+    if (!session || session.userId !== userId) {
+      return { kind: "done" };
+    }
+
+    if ((session.completedAt && session.endsAt === null) || session.runStatus === "paused") {
+      return { kind: "done" };
+    }
+
+    if (
+      session.runStatus === "running" &&
+      session.endsAt &&
+      session.endsAt.getTime() > this.now().getTime()
+    ) {
+      return { kind: "reschedule", runAt: session.endsAt };
+    }
+
+    if (!session.completedAt) {
+      const settled = settleIfDue(session, this.now());
+
+      if (!settled.completedAt) {
+        return settled.endsAt ? { kind: "reschedule", runAt: settled.endsAt } : { kind: "done" };
+      }
+
+      const saved = await this.timers.update(userId, sessionId, session.version, settled);
+
+      if (saved === "conflict" || saved === "missing" || saved.userId !== userId) {
+        return { kind: "retry", code: "timer-conflict" };
+      }
+
+      await this.follow(saved);
+      return { kind: "done" };
+    }
+
+    await this.follow(session);
+    return { kind: "done" };
+  }
+
+  async scanDue(limit: number): Promise<void> {
+    if (!this.jobs) {
+      return;
+    }
+
+    const due = await this.timers.listDue(this.now(), limit);
+
+    for (const session of due) {
+      if (session.endsAt) {
+        await this.jobs.schedule(timerDueJob(session, session.endsAt, this.maxAttempts));
+      }
+    }
+  }
+
+  private async follow(session: TimerRecord): Promise<void> {
+    if (!this.jobs) {
+      return;
+    }
+
+    await followTimer(this.jobs, session, this.maxAttempts);
   }
 
   private async owned(actor: Actor, id: string): Promise<TimerRecord> {

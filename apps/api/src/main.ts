@@ -1,103 +1,31 @@
 import "dotenv/config";
 import { createServer } from "node:http";
 
-import { parseObjectId } from "./shared/object-id.js";
-
+import { createBackend } from "./app/create-backend.js";
 import { createApp } from "./app/create-app.js";
 import { installShutdown } from "./app/shutdown.js";
-import { readApiEnv } from "./config/env.js";
-import { createCredentialCipher, readDataEncryptionKey } from "./infrastructure/crypto/index.js";
-import { createLogger } from "./infrastructure/logging/logger.js";
-import {
-  closeMongo,
-  connectMongo,
-  purgeAccount,
-  readMongoConfig
-} from "./infrastructure/mongodb/index.js";
-import { MongoAuthRepository } from "./modules/auth/auth.repository.js";
-import { AuthService } from "./modules/auth/auth.service.js";
-import { createGoogleOAuthClient } from "./modules/auth/google-oauth.js";
-import { createExternalServices } from "./modules/external-services.js";
-import { createGoogleCalendarGateway } from "./modules/calendar/google-calendar-gateway.js";
-import { MongoCalendarRepository } from "./modules/calendar/calendar.repository.js";
-import { createCalendarOAuthClient } from "./modules/integrations/google-calendar-oauth.js";
-import { MongoIntegrationsRepository } from "./modules/integrations/integrations.repository.js";
-import { MongoNewsRepository } from "./modules/news/news.repository.js";
-import { createPersonalServices } from "./modules/personal-services.js";
-import { MongoRoutinesRepository } from "./modules/routines/routines.repository.js";
-import { MongoTimersRepository } from "./modules/timers/timers.repository.js";
-import { MongoUsersRepository } from "./modules/users/users.repository.js";
-import { UsersService } from "./modules/users/users.service.js";
-import { MongoWidgetsRepository } from "./modules/widgets/widgets.repository.js";
 
 try {
-  const runtime = readApiEnv(process.env);
-  const logger = createLogger(runtime.config.logLevel);
-  const mongo = readMongoConfig(process.env);
-  const client = await connectMongo(mongo);
-  const db = client.db(mongo.dbName);
-  const cipher = createCredentialCipher(readDataEncryptionKey(process.env));
-  const authService = new AuthService(
-    new MongoAuthRepository(db),
-    createGoogleOAuthClient({
-      clientId: runtime.googleClientId,
-      clientSecret: runtime.googleClientSecret,
-      redirectUri: runtime.config.googleRedirectUri
-    }),
-    cipher,
-    runtime.config.sessionTtlMs,
-    runtime.config.oauthStateTtlMs
-  );
-  const users = new MongoUsersRepository(db);
-  const personal = createPersonalServices({
-    widgets: new MongoWidgetsRepository(db),
-    routines: new MongoRoutinesRepository(db),
-    timers: new MongoTimersRepository(db)
-  });
-  const external = createExternalServices({
-    widgets: personal.widgets,
-    routines: personal.routines,
-    timers: personal.timers,
-    users,
-    integrations: new MongoIntegrationsRepository(db),
-    news: new MongoNewsRepository(db),
-    events: new MongoCalendarRepository(db),
-    cipher,
-    fetchImpl: fetch,
-    oauth: createCalendarOAuthClient({
-      clientId: runtime.googleClientId,
-      clientSecret: runtime.googleClientSecret,
-      redirectUri: runtime.config.googleCalendarRedirectUri
-    }),
-    gateway: createGoogleCalendarGateway(runtime.googleClientId, runtime.googleClientSecret),
-    weatherApiBaseUrl: runtime.weatherApiBaseUrl,
-    telegram: runtime.telegram
-  });
-  const usersService = new UsersService(users, async (userId) => {
-    const id = parseObjectId(userId);
-
-    if (!id) {
-      throw new Error("Некорректный идентификатор пользователя");
-    }
-
-    await purgeAccount(db, id);
-  });
+  const backend = await createBackend();
   const app = createApp({
-    config: runtime.config,
-    logger,
-    authService,
-    usersService,
-    widgetsService: personal.widgets,
-    routinesService: personal.routines,
-    timersService: personal.timers,
-    dashboardService: external.dashboard,
-    weatherService: external.weather,
-    newsService: external.news,
-    calendarService: external.calendar,
-    integrationsService: external.integrations,
+    config: backend.runtime.config,
+    logger: backend.logger,
+    authService: backend.authService,
+    usersService: backend.usersService,
+    widgetsService: backend.personal.widgets,
+    routinesService: backend.personal.routines,
+    timersService: backend.personal.timers,
+    dashboardService: backend.external.dashboard,
+    weatherService: backend.external.weather,
+    newsService: backend.external.news,
+    calendarService: backend.external.calendar,
+    integrationsService: backend.external.integrations,
+    notificationsService: backend.notificationsService,
+    webhookService: backend.webhookService,
+    metrics: backend.metrics,
     readyCheck: async () => {
       try {
-        await db.command({ ping: 1 });
+        await backend.client.db(backend.dbName).command({ ping: 1 });
         return true;
       } catch {
         return false;
@@ -105,13 +33,13 @@ try {
     }
   });
   const server = createServer(app);
-  server.listen(runtime.config.port, () => {
-    logger.info({ port: runtime.config.port }, "API слушает порт");
+  server.listen(backend.runtime.config.port, () => {
+    backend.logger.info({ port: backend.runtime.config.port }, "API слушает порт");
   });
   installShutdown({
     server,
-    logger,
-    closeStorage: () => closeMongo(client)
+    logger: backend.logger,
+    closeStorage: backend.close
   });
 } catch (error) {
   const message = error instanceof Error ? error.message : "API не запустился";

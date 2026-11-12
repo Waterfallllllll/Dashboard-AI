@@ -18,7 +18,8 @@ describe("границы данных пользователя", () => {
     expect(USER_OWNED_COLLECTIONS).not.toContain("one_time_tokens");
     expect(USER_OWNED_COLLECTIONS).not.toContain("users");
     expect(USER_OWNED_COLLECTIONS).toContain("calendar_events");
-    expect(() => assertUserDataCoverage([...COLLECTION_NAMES, "scheduled_jobs"])).toThrow(
+    expect(USER_OWNED_COLLECTIONS).toContain("scheduled_jobs");
+    expect(() => assertUserDataCoverage([...COLLECTION_NAMES, "audit_events"])).toThrow(
       /общему кэшу/
     );
   });

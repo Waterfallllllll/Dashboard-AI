@@ -45,6 +45,12 @@ describe("доступ к профилю", () => {
       },
       async writeWeatherLocation() {
         return true;
+      },
+      async readNotificationSettings() {
+        return null;
+      },
+      async writeNotificationSettings() {
+        return null;
       }
     };
     const service = new UsersService(repository, async () => undefined);

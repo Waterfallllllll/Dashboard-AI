@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { addDays, localDateInTimeZone, weekday, zonedDayBounds } from "./local-date.js";
+import {
+  addDays,
+  localClockMinutes,
+  localDateInTimeZone,
+  weekday,
+  zonedDayBounds,
+  zonedLocalDateTime
+} from "./local-date.js";
 
 describe("локальные даты", () => {
   it("сдвигает календарную дату без перехода на соседний день из-за UTC", () => {
@@ -24,5 +31,9 @@ describe("локальные даты", () => {
       from: new Date("2026-11-11T05:00:00.000Z"),
       to: new Date("2026-11-12T05:00:00.000Z")
     });
+    expect(zonedLocalDateTime("2026-11-11", "09:00", "Europe/Moscow").toISOString()).toBe(
+      "2026-11-11T06:00:00.000Z"
+    );
+    expect(localClockMinutes(new Date("2026-11-10T21:30:00.000Z"), "Europe/Moscow")).toBe(30);
   });
 });

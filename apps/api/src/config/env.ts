@@ -26,11 +26,26 @@ export type AppConfig = {
   readonly logLevel: string;
   readonly authRateLimit: { readonly windowMs: number; readonly limit: number };
   readonly apiRateLimit: { readonly windowMs: number; readonly limit: number };
+  readonly webhookRateLimit: { readonly windowMs: number; readonly limit: number };
 };
 
 export type TelegramBotConfig = {
   readonly token: string;
   readonly username: string;
+};
+
+export type WebPushConfig = {
+  readonly subject: string;
+  readonly publicKey: string;
+  readonly privateKey: string;
+};
+
+export type WorkerSettings = {
+  readonly id: string;
+  readonly pollIntervalMs: number;
+  readonly leaseMs: number;
+  readonly maxAttempts: number;
+  readonly retentionDays: number;
 };
 
 export type ApiRuntime = {
@@ -39,6 +54,11 @@ export type ApiRuntime = {
   readonly googleClientSecret: string;
   readonly weatherApiBaseUrl: string;
   readonly telegram: TelegramBotConfig | null;
+  readonly telegramWebhookSecret: string | null;
+  readonly googleCalendarWebhookToken: string | null;
+  readonly googleCalendarWebhookUrl: string | null;
+  readonly webPush: WebPushConfig | null;
+  readonly worker: WorkerSettings;
 };
 
 export function readApiEnv(source: NodeJS.ProcessEnv): ApiRuntime {
@@ -57,6 +77,17 @@ export function readApiEnv(source: NodeJS.ProcessEnv): ApiRuntime {
     googleClientSecret,
     weatherApiBaseUrl: readWeatherBaseUrl(source.WEATHER_API_BASE_URL),
     telegram: readTelegram(source.TELEGRAM_BOT_TOKEN, source.TELEGRAM_BOT_USERNAME),
+    telegramWebhookSecret: readOptionalSecret(
+      source.TELEGRAM_WEBHOOK_SECRET,
+      "TELEGRAM_WEBHOOK_SECRET"
+    ),
+    googleCalendarWebhookToken: readOptionalSecret(
+      source.GOOGLE_CALENDAR_WEBHOOK_TOKEN,
+      "GOOGLE_CALENDAR_WEBHOOK_TOKEN"
+    ),
+    googleCalendarWebhookUrl: readOptionalHttps(source.GOOGLE_CALENDAR_WEBHOOK_URL),
+    webPush: readWebPush(source),
+    worker: readWorker(source),
     config: {
       nodeEnv,
       port: readPort(source.PORT),
@@ -71,7 +102,8 @@ export function readApiEnv(source: NodeJS.ProcessEnv): ApiRuntime {
       jsonBodyLimit: JSON_BODY_LIMIT,
       logLevel: readLogLevel(source.LOG_LEVEL),
       authRateLimit: { windowMs: 10 * 60 * 1000, limit: 20 },
-      apiRateLimit: { windowMs: 60 * 1000, limit: 300 }
+      apiRateLimit: { windowMs: 60 * 1000, limit: 300 },
+      webhookRateLimit: { windowMs: 60 * 1000, limit: 60 }
     }
   };
 }
@@ -149,6 +181,112 @@ function readWeatherBaseUrl(value: string | undefined): string {
   }
 
   return "https://api.open-meteo.com";
+}
+
+function readOptionalSecret(value: string | undefined, name: string): string | null {
+  const secret = value?.trim() ?? "";
+
+  if (secret === "") {
+    return null;
+  }
+
+  if (secret.length < 16 || secret.length > 128 || /\s/.test(secret)) {
+    throw new Error(`${name} должен быть от 16 до 128 символов без пробелов`);
+  }
+
+  return secret;
+}
+
+function readOptionalHttps(value: string | undefined): string | null {
+  const raw = value?.trim() ?? "";
+
+  if (raw === "") {
+    return null;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("GOOGLE_CALENDAR_WEBHOOK_URL должен быть https-адресом");
+  }
+
+  if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.hash !== "") {
+    throw new Error("GOOGLE_CALENDAR_WEBHOOK_URL должен быть https-адресом");
+  }
+
+  return url.href;
+}
+
+function readWebPush(source: NodeJS.ProcessEnv): WebPushConfig | null {
+  const subject = source.WEB_PUSH_SUBJECT?.trim() ?? "";
+  const publicKey = source.WEB_PUSH_PUBLIC_KEY?.trim() ?? "";
+  const privateKey = source.WEB_PUSH_PRIVATE_KEY?.trim() ?? "";
+
+  if (publicKey === "" && privateKey === "") {
+    return null;
+  }
+
+  if (
+    !/^(mailto:[^\s@]+@[^\s@]+|https:\/\/[^\s]+)$/.test(subject) ||
+    !/^[A-Za-z0-9_-]{40,200}$/.test(publicKey) ||
+    !/^[A-Za-z0-9_-]{20,200}$/.test(privateKey)
+  ) {
+    throw new Error("WEB_PUSH_SUBJECT, WEB_PUSH_PUBLIC_KEY и WEB_PUSH_PRIVATE_KEY задаются вместе");
+  }
+
+  return { subject, publicKey, privateKey };
+}
+
+function readWorker(source: NodeJS.ProcessEnv): WorkerSettings {
+  return {
+    id: readWorkerId(source.WORKER_ID),
+    pollIntervalMs: readBoundedInt(
+      source.JOB_POLL_INTERVAL_MS,
+      1000,
+      100,
+      60_000,
+      "JOB_POLL_INTERVAL_MS"
+    ),
+    leaseMs: readBoundedInt(
+      source.JOB_LEASE_DURATION_MS,
+      30_000,
+      1000,
+      300_000,
+      "JOB_LEASE_DURATION_MS"
+    ),
+    maxAttempts: readBoundedInt(source.JOB_MAX_ATTEMPTS, 5, 1, 10, "JOB_MAX_ATTEMPTS"),
+    retentionDays: readBoundedInt(source.JOB_RETENTION_DAYS, 30, 1, 90, "JOB_RETENTION_DAYS")
+  };
+}
+
+function readWorkerId(value: string | undefined): string {
+  const id = value?.trim() || "worker";
+
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) {
+    throw new Error("WORKER_ID задан неверно");
+  }
+
+  return id;
+}
+
+function readBoundedInt(
+  value: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+  name: string
+): number {
+  if (value === undefined || value.trim() === "") {
+    return fallback;
+  }
+
+  if (!/^\d+$/.test(value) || Number(value) < min || Number(value) > max) {
+    throw new Error(`${name} должен быть целым числом от ${min} до ${max}`);
+  }
+
+  return Number(value);
 }
 
 function readTelegram(

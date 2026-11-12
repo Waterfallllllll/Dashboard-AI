@@ -179,7 +179,8 @@ function testConfig(authLimit: number): AppConfig {
     jsonBodyLimit: "16kb",
     logLevel: "silent",
     authRateLimit: { windowMs: 60_000, limit: authLimit },
-    apiRateLimit: { windowMs: 60_000, limit: 1000 }
+    apiRateLimit: { windowMs: 60_000, limit: 1000 },
+    webhookRateLimit: { windowMs: 60_000, limit: 60 }
   };
 }
 

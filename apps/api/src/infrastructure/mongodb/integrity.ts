@@ -46,7 +46,8 @@ const PROJECTIONS: Readonly<Record<UserOwnedCollection, Document>> = {
   integrations: { userId: 1 },
   calendar_events: { userId: 1, integrationId: 1 },
   push_subscriptions: { userId: 1 },
-  notification_deliveries: { userId: 1, createdAt: 1, deleteAt: 1 }
+  notification_deliveries: { userId: 1, createdAt: 1, deleteAt: 1 },
+  scheduled_jobs: { userId: 1 }
 };
 
 export function widgetShapeViolations(widgets: readonly unknown[]): readonly WidgetViolationCode[] {
@@ -135,6 +136,10 @@ function collectViolations(
   const userId = doc["userId"];
   const documentId = doc["_id"];
 
+  if (name === "scheduled_jobs" && userId === null) {
+    return;
+  }
+
   if (!(userId instanceof ObjectId) || !userIds.has(userId.toHexString())) {
     pushViolation(violations, "ORPHAN_USER", name, documentId, onTruncate);
   }
@@ -149,7 +154,10 @@ function collectViolations(
 
   if (name === "calendar_events") {
     const integrationId = doc["integrationId"];
-    const owner = integrationId instanceof ObjectId ? integrationOwners.get(integrationId.toHexString()) : undefined;
+    const owner =
+      integrationId instanceof ObjectId
+        ? integrationOwners.get(integrationId.toHexString())
+        : undefined;
 
     if (owner === undefined) {
       pushViolation(violations, "CALENDAR_INTEGRATION_MISSING", name, documentId, onTruncate);

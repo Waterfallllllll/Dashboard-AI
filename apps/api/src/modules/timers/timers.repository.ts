@@ -19,6 +19,7 @@ export type TimersRepository = {
   ): Promise<TimerRecord | "conflict" | "missing">;
   countCompletedWork(userId: string, from: Date, to: Date): Promise<number>;
   listCompleted(userId: string, limit: number, before: TimerCursor | null): Promise<TimerRecord[]>;
+  listDue(now: Date, limit: number): Promise<TimerRecord[]>;
 };
 
 export class MongoTimersRepository implements TimersRepository {
@@ -143,6 +144,19 @@ export class MongoTimersRepository implements TimersRepository {
       .toArray();
 
     return documents.map(toSession).filter((session) => session.userId === userId);
+  }
+
+  async listDue(now: Date, limit: number): Promise<TimerRecord[]> {
+    const documents = await this.collection()
+      .find({
+        completedAt: null,
+        runStatus: "running",
+        endsAt: { $lte: now, $type: "date" }
+      })
+      .sort({ endsAt: 1 })
+      .limit(limit)
+      .toArray();
+    return documents.map(toSession);
   }
 
   private collection() {

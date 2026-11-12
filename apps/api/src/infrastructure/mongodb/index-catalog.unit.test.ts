@@ -34,7 +34,17 @@ describe("каталог индексов", () => {
       "push_subscriptions_user_revoked",
       "notification_deliveries_idempotency_key",
       "notification_deliveries_user_created",
-      "notification_deliveries_delete_at"
+      "notification_deliveries_delete_at",
+      "scheduled_jobs_idempotency_key",
+      "scheduled_jobs_status_run_at",
+      "scheduled_jobs_status_lock",
+      "scheduled_jobs_user_status",
+      "scheduled_jobs_type_updated",
+      "scheduled_jobs_delete_at",
+      "timer_sessions_due",
+      "routine_rules_status_reminder",
+      "push_subscriptions_revoked_at",
+      "integrations_type_status"
     ]);
     expect(indexedCollections()).toEqual(
       COLLECTION_NAMES.filter((name) => name !== "users").sort()
@@ -57,7 +67,12 @@ describe("каталог индексов", () => {
       key: { deleteAt: 1 },
       expireAfterSeconds: 0
     });
-    expect(INDEX_DEFINITIONS.filter((index) => index.kind === "ttl")).toHaveLength(3);
+    expect(indexByName("scheduled_jobs_delete_at")).toMatchObject({
+      kind: "ttl",
+      key: { deleteAt: 1 },
+      expireAfterSeconds: 0
+    });
+    expect(INDEX_DEFINITIONS.filter((index) => index.kind === "ttl")).toHaveLength(4);
     expect(partialFilter("integrations_user_type")).toEqual({ deletedAt: null });
     expect(partialFilter("routine_rules_user_status")).toEqual({ deletedAt: null });
     expect(indexByName("timer_sessions_one_active_user")).toMatchObject({

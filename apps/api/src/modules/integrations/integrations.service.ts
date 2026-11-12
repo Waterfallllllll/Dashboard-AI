@@ -225,6 +225,20 @@ export class IntegrationsService {
     return saved ? "linked" : "invalid";
   }
 
+  async telegramChatId(userId: string): Promise<string | null> {
+    const record = await this.integrations.find(userId, "telegram");
+
+    if (!record || record.userId !== userId || record.status !== "connected") {
+      return null;
+    }
+
+    return record.externalUserId;
+  }
+
+  async connectedCalendarUserIds(limit: number): Promise<readonly string[]> {
+    return this.integrations.listConnectedUserIds("google_calendar", limit);
+  }
+
   async disconnect(actor: Actor, type: IntegrationKind): Promise<void> {
     await this.integrations.softDelete(actor.userId, type, this.now());
   }

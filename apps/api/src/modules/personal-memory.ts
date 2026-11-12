@@ -273,6 +273,19 @@ export class MemoryRoutinesRepository implements RoutinesRepository {
 
     return { previous: cloneRule(previous), created: cloneRule(created) };
   }
+
+  async listActiveReminders(limit: number): Promise<RoutineRuleRecord[]> {
+    return [...this.rules.values()]
+      .filter(
+        (rule) =>
+          rule.deletedAt === null && rule.status === "active" && rule.reminderLocalTime !== null
+      )
+      .sort((left, right) =>
+        (left.reminderLocalTime ?? "").localeCompare(right.reminderLocalTime ?? "")
+      )
+      .slice(0, limit)
+      .map(cloneRule);
+  }
 }
 
 export class MemoryTimersRepository implements TimersRepository {
@@ -360,6 +373,20 @@ export class MemoryTimersRepository implements TimersRepository {
         const byTime = (right.startedAt?.getTime() ?? 0) - (left.startedAt?.getTime() ?? 0);
         return byTime === 0 ? right.id.localeCompare(left.id) : byTime;
       })
+      .slice(0, limit)
+      .map(cloneTimer);
+  }
+
+  async listDue(now: Date, limit: number): Promise<TimerRecord[]> {
+    return [...this.sessions.values()]
+      .filter(
+        (session) =>
+          session.completedAt === null &&
+          session.runStatus === "running" &&
+          session.endsAt !== null &&
+          session.endsAt.getTime() <= now.getTime()
+      )
+      .sort((left, right) => (left.endsAt?.getTime() ?? 0) - (right.endsAt?.getTime() ?? 0))
       .slice(0, limit)
       .map(cloneTimer);
   }

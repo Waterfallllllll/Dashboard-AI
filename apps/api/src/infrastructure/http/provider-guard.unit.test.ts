@@ -87,7 +87,8 @@ describe("защита внешних запросов", () => {
         url,
         allowHosts: [host],
         provider: "weather",
-        fetchImpl: async () => new Response(null, { status: 302, headers: { location: "https://evil.example" } }),
+        fetchImpl: async () =>
+          new Response(null, { status: 302, headers: { location: "https://evil.example" } }),
         breaker,
         maxAttempts: 1
       })

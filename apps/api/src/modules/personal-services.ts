@@ -9,6 +9,7 @@ import type { RoutinesRepository } from "./routines/routines.repository.js";
 import { RoutinesService } from "./routines/routines.service.js";
 import type { TimersRepository } from "./timers/timers.repository.js";
 import { TimersService } from "./timers/timers.service.js";
+import type { JobScheduler } from "./timers/timer-jobs.js";
 import type { WidgetsRepository } from "./widgets/widgets.repository.js";
 import { WidgetsService } from "./widgets/widgets.service.js";
 
@@ -32,12 +33,20 @@ export function createPersonalServices(
     readonly weather?: ExternalSectionSource<WeatherSection>;
     readonly calendar?: ExternalSectionSource<CalendarSection>;
     readonly news?: ExternalSectionSource<NewsSection>;
+    readonly jobs?: JobScheduler | null;
+    readonly maxAttempts?: number;
   }
 ): PersonalServices {
   const now = options?.now;
   const widgets = new WidgetsService(repositories.widgets, now);
   const routines = new RoutinesService(repositories.routines, now);
-  const timers = new TimersService(repositories.timers, widgets, now);
+  const timers = new TimersService(
+    repositories.timers,
+    widgets,
+    now,
+    options?.jobs ?? null,
+    options?.maxAttempts
+  );
   const unavailable = new UnavailableSectionSource();
 
   return {

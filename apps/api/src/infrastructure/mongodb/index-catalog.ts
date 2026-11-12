@@ -110,13 +110,29 @@ export const INDEX_DEFINITIONS: readonly IndexDefinition[] = [
     userId: 1,
     createdAt: -1
   }),
-  ttlIndex("notification_deliveries", "notification_deliveries_delete_at", "deleteAt")
+  ttlIndex("notification_deliveries", "notification_deliveries_delete_at", "deleteAt"),
+  uniqueIndex("scheduled_jobs", "scheduled_jobs_idempotency_key", { idempotencyKey: 1 }),
+  queryIndex("scheduled_jobs", "scheduled_jobs_status_run_at", { status: 1, runAt: 1 }),
+  queryIndex("scheduled_jobs", "scheduled_jobs_status_lock", { status: 1, lockExpiresAt: 1 }),
+  queryIndex("scheduled_jobs", "scheduled_jobs_user_status", { userId: 1, status: 1 }),
+  queryIndex("scheduled_jobs", "scheduled_jobs_type_updated", { type: 1, updatedAt: -1 }),
+  ttlIndex("scheduled_jobs", "scheduled_jobs_delete_at", "deleteAt"),
+  queryIndex("timer_sessions", "timer_sessions_due", { endsAt: 1 }, OPEN_TIMER),
+  queryIndex(
+    "routine_rules",
+    "routine_rules_status_reminder",
+    { status: 1, reminderLocalTime: 1 },
+    ACTIVE
+  ),
+  queryIndex("push_subscriptions", "push_subscriptions_revoked_at", { revokedAt: 1 }),
+  queryIndex("integrations", "integrations_type_status", { type: 1, status: 1 }, ACTIVE)
 ];
 
 const TTL_FIELDS: Readonly<Record<string, string>> = {
   sessions: "expiresAt",
   one_time_tokens: "expiresAt",
-  notification_deliveries: "deleteAt"
+  notification_deliveries: "deleteAt",
+  scheduled_jobs: "deleteAt"
 };
 
 export function assertIndexCatalog(indexes: readonly IndexDefinition[] = INDEX_DEFINITIONS): void {

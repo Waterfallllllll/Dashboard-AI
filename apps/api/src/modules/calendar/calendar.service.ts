@@ -1,10 +1,13 @@
+import { createHash } from "node:crypto";
+
 import { API_ERROR_CODES, SECTION_ERROR_MESSAGE } from "@dashboard/contracts";
 import type { CalendarEvent, CalendarSection } from "@dashboard/contracts";
 
 import { ProviderUnavailableError } from "../../infrastructure/http/provider-guard.js";
 import { ApiError } from "../../shared/errors/api-error.js";
 import type { Viewer } from "../../shared/http/require-actor.js";
-import { addDays, zonedDayBounds } from "../../shared/local-date.js";
+import { addDays, localDateInTimeZone, zonedDayBounds } from "../../shared/local-date.js";
+import type { JobScheduler } from "../timers/timer-jobs.js";
 import type { Actor } from "../auth/auth.types.js";
 import {
   CalendarAccessRevokedError,
@@ -207,6 +210,45 @@ export class CalendarService {
       refreshed,
       this.now()
     );
+  }
+
+  async enqueueUpcomingReminders(
+    userId: string,
+    timeZone: string,
+    jobs: JobScheduler,
+    maxAttempts: number
+  ): Promise<void> {
+    const today = localDateInTimeZone(this.now(), timeZone);
+    const bounds = zonedDayBounds(today, timeZone);
+    const events = await this.events.listRange(userId, bounds.from, bounds.to);
+
+    for (const event of events) {
+      if (event.allDay || event.userId !== userId) {
+        continue;
+      }
+
+      const lead = event.startAt.getTime() - this.now().getTime();
+
+      if (lead < 0 || lead > 15 * 60_000) {
+        continue;
+      }
+
+      const eventKey = createHash("sha256")
+        .update(event.externalEventId)
+        .digest("hex")
+        .slice(0, 32);
+
+      for (const channel of ["browser", "telegram", "in_app"] as const) {
+        await jobs.schedule({
+          type: "deliver-notification",
+          payload: { eventType: "calendar", channel, title: event.title.slice(0, 120) },
+          runAt: this.now(),
+          idempotencyKey: `calendar:${eventKey}:${today}:reminder:${channel}`,
+          userId,
+          maxAttempts
+        });
+      }
+    }
   }
 
   private async page(
