@@ -19,7 +19,9 @@ export type IntegrityCode =
   | "ROUTINE_OWNER_MISMATCH"
   | WidgetViolationCode
   | "DELIVERY_WITHOUT_EXPIRY"
-  | "DELIVERY_EXPIRY_OUT_OF_POLICY";
+  | "DELIVERY_EXPIRY_OUT_OF_POLICY"
+  | "CALENDAR_INTEGRATION_MISSING"
+  | "CALENDAR_OWNER_MISMATCH";
 
 export type IntegrityViolation = {
   readonly code: IntegrityCode;
@@ -42,6 +44,7 @@ const PROJECTIONS: Readonly<Record<UserOwnedCollection, Document>> = {
   routine_occurrences: { userId: 1, routineRuleId: 1 },
   timer_sessions: { userId: 1 },
   integrations: { userId: 1 },
+  calendar_events: { userId: 1, integrationId: 1 },
   push_subscriptions: { userId: 1 },
   notification_deliveries: { userId: 1, createdAt: 1, deleteAt: 1 }
 };
@@ -96,6 +99,7 @@ export async function checkDataIntegrity(db: Db): Promise<IntegrityReport> {
   scanned.users = usersScanned;
 
   const ruleOwners = new Map<string, string>();
+  const integrationOwners = new Map<string, string>();
 
   for (const name of USER_OWNED_COLLECTIONS) {
     let count = 0;
@@ -103,7 +107,7 @@ export async function checkDataIntegrity(db: Db): Promise<IntegrityReport> {
 
     for await (const doc of cursor) {
       count += 1;
-      collectViolations(name, doc, userIds, ruleOwners, violations, () => {
+      collectViolations(name, doc, userIds, ruleOwners, integrationOwners, violations, () => {
         truncated = true;
       });
     }
@@ -124,6 +128,7 @@ function collectViolations(
   doc: Document,
   userIds: ReadonlySet<string>,
   ruleOwners: Map<string, string>,
+  integrationOwners: Map<string, string>,
   violations: IntegrityViolation[],
   onTruncate: () => void
 ): void {
@@ -136,6 +141,21 @@ function collectViolations(
 
   if (name === "routine_rules" && documentId instanceof ObjectId && userId instanceof ObjectId) {
     ruleOwners.set(documentId.toHexString(), userId.toHexString());
+  }
+
+  if (name === "integrations" && documentId instanceof ObjectId && userId instanceof ObjectId) {
+    integrationOwners.set(documentId.toHexString(), userId.toHexString());
+  }
+
+  if (name === "calendar_events") {
+    const integrationId = doc["integrationId"];
+    const owner = integrationId instanceof ObjectId ? integrationOwners.get(integrationId.toHexString()) : undefined;
+
+    if (owner === undefined) {
+      pushViolation(violations, "CALENDAR_INTEGRATION_MISSING", name, documentId, onTruncate);
+    } else if (!(userId instanceof ObjectId) || owner !== userId.toHexString()) {
+      pushViolation(violations, "CALENDAR_OWNER_MISMATCH", name, documentId, onTruncate);
+    }
   }
 
   if (name === "routine_occurrences") {

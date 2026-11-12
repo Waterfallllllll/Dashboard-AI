@@ -4,22 +4,23 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 
 import { createApp } from "../../app/create-app.js";
+import {
+  GOOGLE_CALENDAR_SCOPE,
+  OAUTH_STATE_TTL_MS,
+  SESSION_TTL_MS
+} from "../../config/constants.js";
 import type { AppConfig } from "../../config/env.js";
 import {
   createCredentialCipher,
   readDataEncryptionKey
 } from "../../infrastructure/crypto/credential-cipher.js";
+import { ProviderUnavailableError } from "../../infrastructure/http/provider-guard.js";
 import { createLogger } from "../../infrastructure/logging/logger.js";
-import { OAUTH_STATE_TTL_MS, SESSION_TTL_MS } from "../../config/constants.js";
-import { AuthService } from "./auth.service.js";
-import type { GoogleOAuthClient } from "./google-oauth.js";
-import type { GoogleTokenSet } from "./google-identity.js";
-import {
-  createMemoryDatabase,
-  MemoryAuthRepository,
-  MemoryUsersRepository,
-  purgeMemoryUser
-} from "./memory-auth.repository.js";
+import { MemoryCalendarRepository } from "../calendar/calendar.repository.js";
+import { createExternalServices } from "../external-services.js";
+import type { CalendarOAuthClient } from "../integrations/google-calendar-oauth.js";
+import { MemoryIntegrationsRepository } from "../integrations/integrations.repository.js";
+import { MemoryNewsRepository } from "../news/news.repository.js";
 import {
   MemoryRoutinesRepository,
   MemoryTimersRepository,
@@ -27,6 +28,15 @@ import {
 } from "../personal-memory.js";
 import { createPersonalServices } from "../personal-services.js";
 import { UsersService } from "../users/users.service.js";
+import { AuthService } from "./auth.service.js";
+import type { GoogleTokenSet } from "./google-identity.js";
+import type { GoogleOAuthClient } from "./google-oauth.js";
+import {
+  createMemoryDatabase,
+  MemoryAuthRepository,
+  MemoryUsersRepository,
+  purgeMemoryUser
+} from "./memory-auth.repository.js";
 
 export const origin = "http://localhost:3000";
 const encryptionKey = Buffer.alloc(32, 8).toString("base64url");
@@ -72,6 +82,25 @@ export function googleUser(subject: string, name: string, picture: string): Goog
   };
 }
 
+class ScriptedCalendarOAuth implements CalendarOAuthClient {
+  async createAuthorizationRequest() {
+    return {
+      url: "https://accounts.google.com/o/oauth2/v2/auth?state=calendar-state",
+      state: "calendar-state",
+      codeVerifier: "calendar-verifier-secret"
+    };
+  }
+
+  async exchangeAuthorizationCode() {
+    return {
+      accessToken: "ya29.calendar-access",
+      refreshToken: "calendar-refresh",
+      expiresIn: 3600,
+      scope: GOOGLE_CALENDAR_SCOPE
+    };
+  }
+}
+
 export function createHarness(authLimit = 20) {
   const database = createMemoryDatabase();
   const google = new ScriptedGoogle();
@@ -86,13 +115,35 @@ export function createHarness(authLimit = 20) {
     SESSION_TTL_MS,
     OAUTH_STATE_TTL_MS
   );
-  const usersService = new UsersService(new MemoryUsersRepository(database), async (userId) => {
+  const usersRepository = new MemoryUsersRepository(database);
+  const usersService = new UsersService(usersRepository, async (userId) => {
     purgeMemoryUser(database, userId);
   });
   const personal = createPersonalServices({
     widgets: new MemoryWidgetsRepository(),
     routines: new MemoryRoutinesRepository(),
     timers: new MemoryTimersRepository()
+  });
+  const external = createExternalServices({
+    widgets: personal.widgets,
+    routines: personal.routines,
+    timers: personal.timers,
+    users: usersRepository,
+    integrations: new MemoryIntegrationsRepository(),
+    news: new MemoryNewsRepository(),
+    events: new MemoryCalendarRepository(),
+    cipher,
+    fetchImpl: async () => {
+      throw new Error("provider down");
+    },
+    oauth: new ScriptedCalendarOAuth(),
+    gateway: {
+      async listEvents() {
+        throw new ProviderUnavailableError("google-calendar");
+      }
+    },
+    weatherApiBaseUrl: "https://api.open-meteo.com",
+    telegram: null
   });
   const app = createApp({
     config,
@@ -103,6 +154,10 @@ export function createHarness(authLimit = 20) {
     routinesService: personal.routines,
     timersService: personal.timers,
     dashboardService: personal.dashboard,
+    weatherService: external.weather,
+    newsService: external.news,
+    calendarService: external.calendar,
+    integrationsService: external.integrations,
     readyCheck: async () => true
   });
 
@@ -119,6 +174,7 @@ function testConfig(authLimit: number): AppConfig {
     sessionTtlMs: SESSION_TTL_MS,
     oauthStateTtlMs: OAUTH_STATE_TTL_MS,
     googleRedirectUri: `${origin}/api/v1/auth/google/callback`,
+    googleCalendarRedirectUri: `${origin}/api/v1/integrations/google/callback`,
     corsOrigins: [origin],
     jsonBodyLimit: "16kb",
     logLevel: "silent",

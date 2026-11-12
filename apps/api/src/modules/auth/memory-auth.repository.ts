@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import { NEW_USER_DEFAULTS, type UserProfile } from "../users/user-profile.js";
 import type { ProfileUpdate } from "../users/user-profile.js";
-import type { UsersRepository } from "../users/users.repository.js";
+import type { StoredWeatherLocation, UsersRepository } from "../users/users.repository.js";
 import { GoogleAccountBlockedError } from "./auth.types.js";
 import type {
   ActiveSession,
@@ -12,7 +12,10 @@ import type {
 } from "./auth.repository.js";
 import { planGoogleLogin } from "./google-login.js";
 
-export type MemoryUser = UserProfile & { readonly deletedAt: Date | null };
+export type MemoryUser = UserProfile & {
+  readonly deletedAt: Date | null;
+  readonly weatherLocation?: StoredWeatherLocation | null;
+};
 
 export type MemoryAccount = {
   readonly id: string;
@@ -268,6 +271,31 @@ export class MemoryUsersRepository implements UsersRepository {
     }
 
     this.database.users.set(userId, { ...user, deletedAt: null, updatedAt: now });
+  }
+
+  async readWeatherLocation(userId: string): Promise<StoredWeatherLocation | null> {
+    const user = this.database.users.get(userId);
+
+    if (!user || user.deletedAt !== null || user.id !== userId) {
+      return null;
+    }
+
+    return user.weatherLocation ?? null;
+  }
+
+  async writeWeatherLocation(
+    userId: string,
+    location: StoredWeatherLocation | null,
+    now: Date
+  ): Promise<boolean> {
+    const user = this.database.users.get(userId);
+
+    if (!user || user.deletedAt !== null || user.id !== userId) {
+      return false;
+    }
+
+    this.database.users.set(userId, { ...user, weatherLocation: location, updatedAt: now });
+    return true;
   }
 }
 

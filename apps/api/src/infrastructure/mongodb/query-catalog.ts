@@ -13,6 +13,8 @@ export type QuerySample = {
   readonly endpointHash: string;
   readonly idempotencyKey: string;
   readonly publishedBefore: Date;
+  readonly integrationId: ObjectId;
+  readonly externalEventId: string;
 };
 
 export type MainQuery = {
@@ -40,7 +42,9 @@ export function createQuerySample(
     contentHash: "b".repeat(32),
     endpointHash: "c".repeat(64),
     idempotencyKey: "timer:sample:work-completed:telegram",
-    publishedBefore: new Date("2026-11-09T12:00:00.000Z")
+    publishedBefore: new Date("2026-11-09T12:00:00.000Z"),
+    integrationId: new ObjectId(),
+    externalEventId: "event-1"
   };
 }
 
@@ -131,6 +135,22 @@ export function buildMainQueries(sample: QuerySample): readonly MainQuery[] {
       indexName: "integrations_user_type",
       filter: { userId: sample.userId, type: "google_calendar", ...ACTIVE },
       indexProvidesOrder: false
+    },
+    {
+      name: "calendar-event-by-external-id",
+      collection: "calendar_events",
+      indexName: "calendar_events_integration_external",
+      filter: { integrationId: sample.integrationId, externalEventId: sample.externalEventId },
+      indexProvidesOrder: false
+    },
+    {
+      name: "calendar-by-user-start",
+      collection: "calendar_events",
+      indexName: "calendar_events_user_start",
+      filter: { userId: sample.userId, startAt: { $gte: sample.publishedBefore } },
+      sort: { startAt: 1 },
+      limit: 20,
+      indexProvidesOrder: true
     },
     {
       name: "news-by-content-hash",

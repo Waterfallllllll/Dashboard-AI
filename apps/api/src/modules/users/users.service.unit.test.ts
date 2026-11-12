@@ -39,6 +39,12 @@ describe("доступ к профилю", () => {
       },
       async restore() {
         return undefined;
+      },
+      async readWeatherLocation() {
+        return null;
+      },
+      async writeWeatherLocation() {
+        return true;
       }
     };
     const service = new UsersService(repository, async () => undefined);

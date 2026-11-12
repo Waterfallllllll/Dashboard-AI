@@ -72,6 +72,23 @@ export const localDateQuerySchema = z.strictObject({
   date: localDateSchema
 });
 
+export const httpsUrlSchema = z
+  .string()
+  .min(8)
+  .max(4096)
+  .refine((value) => isHttpsUrl(value), { error: "Нужна ссылка https." });
+
+export function isHttpsUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" && url.username === "" && url.password === "" && url.hash === ""
+    );
+  } catch {
+    return false;
+  }
+}
+
 function isKnownTimeZone(value: string): boolean {
   try {
     Intl.DateTimeFormat("en-US", { timeZone: value });
@@ -81,6 +98,7 @@ function isKnownTimeZone(value: string): boolean {
   }
 }
 
+export type HttpsUrl = z.infer<typeof httpsUrlSchema>;
 export type EntityId = z.infer<typeof entityIdSchema>;
 export type LocalDate = z.infer<typeof localDateSchema>;
 export type UtcDateTime = z.infer<typeof utcDateTimeSchema>;

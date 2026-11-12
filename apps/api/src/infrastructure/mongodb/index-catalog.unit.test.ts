@@ -26,6 +26,8 @@ describe("каталог индексов", () => {
       "timer_sessions_user_started_at",
       "timer_sessions_one_active_user",
       "integrations_user_type",
+      "calendar_events_integration_external",
+      "calendar_events_user_start",
       "news_items_content_hash",
       "news_items_published_topics_language",
       "push_subscriptions_endpoint_hash",

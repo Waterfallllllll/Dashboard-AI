@@ -16,14 +16,22 @@ import { loadSession } from "../middleware/require-session.js";
 import "../modules/auth/express-session.js";
 import type { AuthService } from "../modules/auth/auth.service.js";
 import { createAuthRouter } from "../modules/auth/auth.routes.js";
+import type { CalendarService } from "../modules/calendar/calendar.service.js";
+import { createCalendarRouter } from "../modules/calendar/calendar.routes.js";
 import type { DashboardService } from "../modules/dashboard/dashboard.service.js";
 import { createDashboardRouter } from "../modules/dashboard/dashboard.routes.js";
+import type { IntegrationsService } from "../modules/integrations/integrations.service.js";
+import { createIntegrationsRouter } from "../modules/integrations/integrations.routes.js";
+import type { NewsService } from "../modules/news/news.service.js";
+import { createNewsRouter } from "../modules/news/news.routes.js";
 import type { RoutinesService } from "../modules/routines/routines.service.js";
 import { createRoutinesRouter } from "../modules/routines/routines.routes.js";
 import type { TimersService } from "../modules/timers/timers.service.js";
 import { createTimersRouter } from "../modules/timers/timers.routes.js";
 import { createUsersRouter } from "../modules/users/users.routes.js";
 import type { UsersService } from "../modules/users/users.service.js";
+import type { WeatherService } from "../modules/weather/weather.service.js";
+import { createWeatherRouter } from "../modules/weather/weather.routes.js";
 import type { WidgetsService } from "../modules/widgets/widgets.service.js";
 import { createWidgetsRouter } from "../modules/widgets/widgets.routes.js";
 import { asyncHandler } from "../shared/http/async-handler.js";
@@ -40,6 +48,10 @@ export type AppDependencies = {
   readonly routinesService: RoutinesService;
   readonly timersService: TimersService;
   readonly dashboardService: DashboardService;
+  readonly weatherService: WeatherService;
+  readonly newsService: NewsService;
+  readonly calendarService: CalendarService;
+  readonly integrationsService: IntegrationsService;
 };
 
 export function createApp(deps: AppDependencies): Express {
@@ -82,6 +94,13 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/api/v1", createRoutinesRouter(deps.routinesService));
   app.use("/api/v1", createTimersRouter(deps.timersService));
   app.use("/api/v1", createDashboardRouter(deps.dashboardService));
+  app.use("/api/v1", createWeatherRouter(deps.weatherService));
+  app.use("/api/v1", createNewsRouter(deps.newsService));
+  app.use("/api/v1", createCalendarRouter(deps.calendarService));
+  app.use(
+    "/api/v1",
+    createIntegrationsRouter(deps.integrationsService, deps.calendarService, deps.config)
+  );
   app.use(notFound);
   app.use(errorHandler);
   return app;
@@ -116,7 +135,7 @@ function corsOptions(config: AppConfig): cors.CorsOptions {
       callback(null, false);
     },
     credentials: true,
-    methods: ["GET", "HEAD", "POST", "PATCH", "DELETE"],
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"],
     allowedHeaders: ["Content-Type", CSRF_HEADER, "X-Request-Id", "Idempotency-Key"],
     maxAge: 600
   };

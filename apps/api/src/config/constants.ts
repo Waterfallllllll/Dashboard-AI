@@ -1,8 +1,10 @@
 export const API_PREFIX = "/api/v1";
 export const SESSION_COOKIE = "__Host-session";
 export const GOOGLE_CALLBACK_PATH = "/api/v1/auth/google/callback";
+export const GOOGLE_CALENDAR_CALLBACK_PATH = "/api/v1/integrations/google/callback";
 export const GOOGLE_AUTHORIZATION_HOST = "accounts.google.com";
 export const GOOGLE_SCOPES = "openid email profile";
+export const GOOGLE_CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
 export const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 export const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 export const JSON_BODY_LIMIT = "16kb";

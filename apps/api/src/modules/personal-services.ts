@@ -1,3 +1,5 @@
+import type { CalendarSection, NewsSection, WeatherSection } from "@dashboard/contracts";
+
 import {
   DashboardService,
   UnavailableSectionSource,
@@ -27,9 +29,9 @@ export function createPersonalServices(
   repositories: PersonalRepositories,
   options?: {
     readonly now?: () => Date;
-    readonly weather?: ExternalSectionSource;
-    readonly calendar?: ExternalSectionSource;
-    readonly news?: ExternalSectionSource;
+    readonly weather?: ExternalSectionSource<WeatherSection>;
+    readonly calendar?: ExternalSectionSource<CalendarSection>;
+    readonly news?: ExternalSectionSource<NewsSection>;
   }
 ): PersonalServices {
   const now = options?.now;

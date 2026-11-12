@@ -10,6 +10,7 @@ export const USER_OWNED_COLLECTIONS = [
   "routine_occurrences",
   "timer_sessions",
   "integrations",
+  "calendar_events",
   "push_subscriptions",
   "notification_deliveries"
 ] as const satisfies readonly CollectionName[];

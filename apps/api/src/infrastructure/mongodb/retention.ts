@@ -33,6 +33,7 @@ export const HISTORY_POLICIES = [
     field: "deleteAt",
     days: DEFAULT_NOTIFICATION_RETENTION_DAYS
   },
+  { collection: "calendar_events", mode: "until-account-purge" },
   { collection: "timer_sessions", mode: "until-account-purge" },
   { collection: "routine_occurrences", mode: "until-account-purge" },
   { collection: "routine_rules", mode: "until-account-purge" }

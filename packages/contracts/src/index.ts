@@ -41,6 +41,8 @@ export {
   cursorSchema,
   entityIdSchema,
   idempotencyKeySchema,
+  httpsUrlSchema,
+  isHttpsUrl,
   localDateQuerySchema,
   localDateSchema,
   localTimeSchema,
@@ -51,7 +53,7 @@ export {
   timeZoneSchema,
   utcDateTimeSchema
 } from "./common/primitives.js";
-export type { EntityId, LocalDate, PageQuery, UtcDateTime } from "./common/primitives.js";
+export type { EntityId, HttpsUrl, LocalDate, PageQuery, UtcDateTime } from "./common/primitives.js";
 export {
   CSRF_HEADER,
   sessionResponseSchema,
@@ -74,16 +76,83 @@ export {
 export type { Profile, ProfilePatch, ThemePreference, TimeFormat } from "./auth/profile.js";
 export {
   SECTION_ERROR_MESSAGE,
+  calendarSectionSchema,
   dashboardResponseSchema,
   dashboardSchema,
   datetimeSectionSchema,
   externalSectionSchema,
+  newsSectionSchema,
   routinesSectionSchema,
   sectionErrorSchema,
   timerSectionSchema,
+  weatherSectionSchema,
   widgetsSectionSchema
 } from "./dashboard/dashboard.js";
-export type { Dashboard, ExternalSection } from "./dashboard/dashboard.js";
+export type {
+  CalendarSection,
+  Dashboard,
+  ExternalSection,
+  NewsSection,
+  WeatherSection
+} from "./dashboard/dashboard.js";
+export {
+  calendarDayResponseSchema,
+  calendarDaySchema,
+  calendarEventSchema,
+  calendarEventStatusSchema
+} from "./calendar/events.js";
+export type { CalendarDay, CalendarEvent } from "./calendar/events.js";
+export {
+  googleConnectResponseSchema,
+  googleConnectSchema,
+  integrationDeletionResponseSchema,
+  integrationDeletionSchema,
+  integrationListResponseSchema,
+  integrationListSchema,
+  integrationStatusSchema,
+  integrationSummarySchema,
+  integrationTypeSchema,
+  telegramLinkResponseSchema,
+  telegramLinkSchema
+} from "./integrations/integrations.js";
+export type {
+  IntegrationList,
+  IntegrationStatus,
+  IntegrationSummary,
+  IntegrationType
+} from "./integrations/integrations.js";
+export {
+  NEWS_TOPICS,
+  newsFeedSchema,
+  newsItemSchema,
+  newsLanguageSchema,
+  newsQuerySchema,
+  newsResponseSchema,
+  newsTopicSchema
+} from "./news/news.js";
+export type { NewsFeed, NewsItem, NewsQuery, NewsTopic } from "./news/news.js";
+export {
+  WEATHER_SCENES,
+  placeQuerySchema,
+  weatherHourSchema,
+  weatherLocationInputSchema,
+  weatherLocationResponseSchema,
+  weatherLocationStateSchema,
+  weatherPlaceSchema,
+  weatherPlacesResponseSchema,
+  weatherPlacesSchema,
+  weatherQuerySchema,
+  weatherResponseSchema,
+  weatherSnapshotSchema
+} from "./weather/weather.js";
+export type {
+  PlaceQuery,
+  WeatherLocationInput,
+  WeatherPlace,
+  WeatherQuery,
+  WeatherScene,
+  WeatherSnapshot
+} from "./weather/weather.js";
 export {
   RESTORE_EXPIRED,
   recurrenceSchema,

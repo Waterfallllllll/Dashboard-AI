@@ -90,6 +90,11 @@ export const INDEX_DEFINITIONS: readonly IndexDefinition[] = [
   queryIndex("timer_sessions", "timer_sessions_user_started_at", { userId: 1, startedAt: -1 }),
   uniqueIndex("timer_sessions", "timer_sessions_one_active_user", { userId: 1 }, OPEN_TIMER),
   uniqueIndex("integrations", "integrations_user_type", { userId: 1, type: 1 }, ACTIVE),
+  uniqueIndex("calendar_events", "calendar_events_integration_external", {
+    integrationId: 1,
+    externalEventId: 1
+  }),
+  queryIndex("calendar_events", "calendar_events_user_start", { userId: 1, startAt: 1 }),
   uniqueIndex("news_items", "news_items_content_hash", { contentHash: 1 }),
   queryIndex("news_items", "news_items_published_topics_language", {
     publishedAt: -1,

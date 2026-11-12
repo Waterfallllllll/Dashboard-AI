@@ -77,6 +77,7 @@ describe.skipIf(mongoUri === "")("проверка запросов, целос�
       const report = await checkDataIntegrity(database);
       expect(report.violations.map((item) => item.code).sort()).toEqual(
         [
+          "CALENDAR_INTEGRATION_MISSING",
           "DELIVERY_EXPIRY_OUT_OF_POLICY",
           "DELIVERY_WITHOUT_EXPIRY",
           "DUPLICATE_WIDGET",
@@ -116,6 +117,7 @@ describe.skipIf(mongoUri === "")("проверка запросов, целос�
       routine_occurrences: 1,
       timer_sessions: 1,
       integrations: 1,
+      calendar_events: 1,
       push_subscriptions: 1,
       notification_deliveries: 1
     });
@@ -127,7 +129,7 @@ describe.skipIf(mongoUri === "")("проверка запросов, целос�
     const repeated = await purgeAccount(database, current.userB);
     expect(repeated.user).toBe("missing");
     expect(Object.values(repeated.deleted).reduce((sum, count) => sum + count, 0)).toBe(0);
-    expect(await database.collection("schema_migrations").countDocuments()).toBe(1);
+    expect(await database.collection("schema_migrations").countDocuments()).toBe(3);
   });
 });
 
@@ -228,7 +230,7 @@ async function insertOwned(
     excludedAt: null
   });
   await database.collection("timer_sessions").insertOne(timer(userId, null, now));
-  await database.collection("integrations").insertOne({
+  const integration = await database.collection("integrations").insertOne({
     schemaVersion: 1,
     userId,
     type: "google_calendar",
@@ -241,6 +243,22 @@ async function insertOwned(
     createdAt: now,
     updatedAt: now,
     deletedAt: null
+  });
+  await database.collection("calendar_events").insertOne({
+    schemaVersion: 1,
+    userId,
+    integrationId: integration.insertedId,
+    externalEventId: `evt-${suffix}`,
+    calendarName: "Основной",
+    title: "Встреча",
+    startAt: new Date("2026-11-09T09:00:00.000Z"),
+    endAt: new Date("2026-11-09T10:00:00.000Z"),
+    allDay: false,
+    location: null,
+    meetingUrl: null,
+    htmlLink: "https://www.google.com/calendar/event?eid=abc",
+    status: "confirmed",
+    updatedAt: now
   });
   await database.collection("push_subscriptions").insertOne({
     schemaVersion: 1,
@@ -331,7 +349,13 @@ async function deleteVolume(
 async function insertBroken(
   database: Db,
   current: Fixture
-): Promise<{ orphanId: ObjectId; mismatchId: ObjectId; expiredId: ObjectId; openId: ObjectId }> {
+): Promise<{
+  orphanId: ObjectId;
+  mismatchId: ObjectId;
+  expiredId: ObjectId;
+  openId: ObjectId;
+  calendarId: ObjectId;
+}> {
   const orphan = await database.collection("routine_occurrences").insertOne({
     schemaVersion: 1,
     userId: new ObjectId(),
@@ -358,6 +382,22 @@ async function insertBroken(
   const expired = await database
     .collection("notification_deliveries")
     .insertOne(delivery(current.userA, "timer:expired:work-completed:telegram", now));
+  const brokenCalendar = await database.collection("calendar_events").insertOne({
+    schemaVersion: 1,
+    userId: current.userA,
+    integrationId: new ObjectId(),
+    externalEventId: "missing-integration",
+    calendarName: "Основной",
+    title: "Чужая",
+    startAt: now,
+    endAt: new Date("2026-11-09T13:00:00.000Z"),
+    allDay: false,
+    location: null,
+    meetingUrl: null,
+    htmlLink: "https://www.google.com/calendar/event?eid=missing",
+    status: "confirmed",
+    updatedAt: now
+  });
 
   await database
     .collection("dashboard_configs")
@@ -370,14 +410,21 @@ async function insertBroken(
     orphanId: orphan.insertedId,
     mismatchId: mismatch.insertedId,
     expiredId: expired.insertedId,
-    openId: openEnded.insertedId
+    openId: openEnded.insertedId,
+    calendarId: brokenCalendar.insertedId
   };
 }
 
 async function removeBroken(
   database: Db,
   userId: ObjectId,
-  broken: { orphanId: ObjectId; mismatchId: ObjectId; expiredId: ObjectId; openId: ObjectId }
+  broken: {
+    orphanId: ObjectId;
+    mismatchId: ObjectId;
+    expiredId: ObjectId;
+    openId: ObjectId;
+    calendarId: ObjectId;
+  }
 ): Promise<void> {
   await database.collection("routine_occurrences").deleteMany({
     _id: { $in: [broken.orphanId, broken.mismatchId] }
@@ -385,6 +432,7 @@ async function removeBroken(
   await database.collection("notification_deliveries").deleteMany({
     _id: { $in: [broken.expiredId, broken.openId] }
   });
+  await database.collection("calendar_events").deleteOne({ _id: broken.calendarId });
   await database
     .collection("dashboard_configs")
     .updateOne({ userId }, { $set: { widgets: [widget("routines", 0)] } });

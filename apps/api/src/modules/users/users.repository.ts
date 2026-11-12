@@ -10,9 +10,21 @@ import {
 import { parseObjectId } from "../../shared/object-id.js";
 import { toUserProfile, type ProfileUpdate, type UserProfile } from "./user-profile.js";
 
+export type StoredWeatherLocation = {
+  readonly latitude: number;
+  readonly longitude: number;
+  readonly label: string;
+};
+
 export type UsersRepository = {
   findActive(userId: string): Promise<UserProfile | null>;
   update(userId: string, patch: ProfileUpdate, now: Date): Promise<UserProfile | null>;
+  readWeatherLocation(userId: string): Promise<StoredWeatherLocation | null>;
+  writeWeatherLocation(
+    userId: string,
+    location: StoredWeatherLocation | null,
+    now: Date
+  ): Promise<boolean>;
   softDelete(userId: string, now: Date): Promise<SoftDeleteResult>;
   restore(userId: string, now: Date): Promise<void>;
 };
@@ -69,6 +81,46 @@ export class MongoUsersRepository implements UsersRepository {
     }
 
     await restoreSoftDeletedById(this.collection(), id, now);
+  }
+
+  async readWeatherLocation(userId: string): Promise<StoredWeatherLocation | null> {
+    const id = parseObjectId(userId);
+
+    if (!id) {
+      return null;
+    }
+
+    const document = await this.collection().findOne(activeUserFilter(id), {
+      projection: { weatherLocation: 1 }
+    });
+    const location = document?.weatherLocation;
+
+    if (!location) {
+      return null;
+    }
+
+    return {
+      latitude: location.latitude,
+      longitude: location.longitude,
+      label: location.label
+    };
+  }
+
+  async writeWeatherLocation(
+    userId: string,
+    location: StoredWeatherLocation | null,
+    now: Date
+  ): Promise<boolean> {
+    const id = parseObjectId(userId);
+
+    if (!id) {
+      return false;
+    }
+
+    const result = await this.collection().updateOne(activeUserFilter(id), {
+      $set: { weatherLocation: location, updatedAt: now }
+    });
+    return result.matchedCount === 1;
   }
 
   private collection() {

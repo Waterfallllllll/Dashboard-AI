@@ -17,6 +17,12 @@ import {
 import { MongoAuthRepository } from "./modules/auth/auth.repository.js";
 import { AuthService } from "./modules/auth/auth.service.js";
 import { createGoogleOAuthClient } from "./modules/auth/google-oauth.js";
+import { createExternalServices } from "./modules/external-services.js";
+import { createGoogleCalendarGateway } from "./modules/calendar/google-calendar-gateway.js";
+import { MongoCalendarRepository } from "./modules/calendar/calendar.repository.js";
+import { createCalendarOAuthClient } from "./modules/integrations/google-calendar-oauth.js";
+import { MongoIntegrationsRepository } from "./modules/integrations/integrations.repository.js";
+import { MongoNewsRepository } from "./modules/news/news.repository.js";
 import { createPersonalServices } from "./modules/personal-services.js";
 import { MongoRoutinesRepository } from "./modules/routines/routines.repository.js";
 import { MongoTimersRepository } from "./modules/timers/timers.repository.js";
@@ -42,12 +48,32 @@ try {
     runtime.config.sessionTtlMs,
     runtime.config.oauthStateTtlMs
   );
+  const users = new MongoUsersRepository(db);
   const personal = createPersonalServices({
     widgets: new MongoWidgetsRepository(db),
     routines: new MongoRoutinesRepository(db),
     timers: new MongoTimersRepository(db)
   });
-  const usersService = new UsersService(new MongoUsersRepository(db), async (userId) => {
+  const external = createExternalServices({
+    widgets: personal.widgets,
+    routines: personal.routines,
+    timers: personal.timers,
+    users,
+    integrations: new MongoIntegrationsRepository(db),
+    news: new MongoNewsRepository(db),
+    events: new MongoCalendarRepository(db),
+    cipher,
+    fetchImpl: fetch,
+    oauth: createCalendarOAuthClient({
+      clientId: runtime.googleClientId,
+      clientSecret: runtime.googleClientSecret,
+      redirectUri: runtime.config.googleCalendarRedirectUri
+    }),
+    gateway: createGoogleCalendarGateway(runtime.googleClientId, runtime.googleClientSecret),
+    weatherApiBaseUrl: runtime.weatherApiBaseUrl,
+    telegram: runtime.telegram
+  });
+  const usersService = new UsersService(users, async (userId) => {
     const id = parseObjectId(userId);
 
     if (!id) {
@@ -64,7 +90,11 @@ try {
     widgetsService: personal.widgets,
     routinesService: personal.routines,
     timersService: personal.timers,
-    dashboardService: personal.dashboard,
+    dashboardService: external.dashboard,
+    weatherService: external.weather,
+    newsService: external.news,
+    calendarService: external.calendar,
+    integrationsService: external.integrations,
     readyCheck: async () => {
       try {
         await db.command({ ping: 1 });

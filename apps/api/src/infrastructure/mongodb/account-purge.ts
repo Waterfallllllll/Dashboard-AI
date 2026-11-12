@@ -93,6 +93,7 @@ function emptyDeleted(): PurgeDeletedCounts {
     routine_occurrences: 0,
     timer_sessions: 0,
     integrations: 0,
+    calendar_events: 0,
     push_subscriptions: 0,
     notification_deliveries: 0
   };

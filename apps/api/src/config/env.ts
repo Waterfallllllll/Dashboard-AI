@@ -1,5 +1,6 @@
 import { readDataEncryptionKey } from "../infrastructure/crypto/credential-cipher.js";
 import {
+  GOOGLE_CALENDAR_CALLBACK_PATH,
   GOOGLE_CALLBACK_PATH,
   JSON_BODY_LIMIT,
   OAUTH_STATE_TTL_MS,
@@ -19,6 +20,7 @@ export type AppConfig = {
   readonly sessionTtlMs: number;
   readonly oauthStateTtlMs: number;
   readonly googleRedirectUri: string;
+  readonly googleCalendarRedirectUri: string;
   readonly corsOrigins: readonly string[];
   readonly jsonBodyLimit: string;
   readonly logLevel: string;
@@ -26,10 +28,17 @@ export type AppConfig = {
   readonly apiRateLimit: { readonly windowMs: number; readonly limit: number };
 };
 
+export type TelegramBotConfig = {
+  readonly token: string;
+  readonly username: string;
+};
+
 export type ApiRuntime = {
   readonly config: AppConfig;
   readonly googleClientId: string;
   readonly googleClientSecret: string;
+  readonly weatherApiBaseUrl: string;
+  readonly telegram: TelegramBotConfig | null;
 };
 
 export function readApiEnv(source: NodeJS.ProcessEnv): ApiRuntime {
@@ -37,11 +46,17 @@ export function readApiEnv(source: NodeJS.ProcessEnv): ApiRuntime {
   const nodeEnv = readNodeEnv(source.NODE_ENV);
   const appOrigin = readAppOrigin(source.APP_ORIGIN, nodeEnv);
   const googleRedirectUri = readRedirectUri(source.GOOGLE_REDIRECT_URI, appOrigin);
+  const googleCalendarRedirectUri = readCalendarRedirectUri(
+    source.GOOGLE_CALENDAR_REDIRECT_URI,
+    appOrigin
+  );
   const googleClientSecret = requiredSecret(source.GOOGLE_CLIENT_SECRET, "GOOGLE_CLIENT_SECRET");
 
   return {
     googleClientId: requiredId(source.GOOGLE_CLIENT_ID, "GOOGLE_CLIENT_ID"),
     googleClientSecret,
+    weatherApiBaseUrl: readWeatherBaseUrl(source.WEATHER_API_BASE_URL),
+    telegram: readTelegram(source.TELEGRAM_BOT_TOKEN, source.TELEGRAM_BOT_USERNAME),
     config: {
       nodeEnv,
       port: readPort(source.PORT),
@@ -51,6 +66,7 @@ export function readApiEnv(source: NodeJS.ProcessEnv): ApiRuntime {
       sessionTtlMs: SESSION_TTL_MS,
       oauthStateTtlMs: OAUTH_STATE_TTL_MS,
       googleRedirectUri,
+      googleCalendarRedirectUri,
       corsOrigins: readCorsOrigins(source.CORS_ALLOWED_ORIGINS, appOrigin, nodeEnv),
       jsonBodyLimit: JSON_BODY_LIMIT,
       logLevel: readLogLevel(source.LOG_LEVEL),
@@ -94,6 +110,66 @@ function readRedirectUri(value: string | undefined, appOrigin: string): string {
   }
 
   return url.href;
+}
+
+function readCalendarRedirectUri(value: string | undefined, appOrigin: string): string {
+  const raw = value?.trim() || `${appOrigin}${GOOGLE_CALENDAR_CALLBACK_PATH}`;
+  const url = parseOrigin(raw, "GOOGLE_CALENDAR_REDIRECT_URI");
+
+  if (
+    url.origin !== appOrigin ||
+    url.pathname !== GOOGLE_CALENDAR_CALLBACK_PATH ||
+    url.search !== ""
+  ) {
+    throw new Error("GOOGLE_CALENDAR_REDIRECT_URI должен указывать на callback того же APP_ORIGIN");
+  }
+
+  return url.href;
+}
+
+function readWeatherBaseUrl(value: string | undefined): string {
+  const raw = value?.trim() || "https://api.open-meteo.com";
+  let url: URL;
+
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error("WEATHER_API_BASE_URL должен быть https://api.open-meteo.com");
+  }
+
+  if (
+    url.origin !== "https://api.open-meteo.com" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    (url.pathname !== "/" && url.pathname !== "")
+  ) {
+    throw new Error("WEATHER_API_BASE_URL должен быть https://api.open-meteo.com");
+  }
+
+  return "https://api.open-meteo.com";
+}
+
+function readTelegram(
+  tokenValue: string | undefined,
+  usernameValue: string | undefined
+): TelegramBotConfig | null {
+  const token = tokenValue?.trim() ?? "";
+  const username = usernameValue?.trim() ?? "";
+
+  if (token === "" && username === "") {
+    return null;
+  }
+
+  if (
+    !/^\d{6,16}:[A-Za-z0-9_-]{20,128}$/.test(token) ||
+    !/^[A-Za-z][A-Za-z0-9_]{4,31}$/.test(username)
+  ) {
+    throw new Error("TELEGRAM_BOT_TOKEN и TELEGRAM_BOT_USERNAME задаются вместе");
+  }
+
+  return { token, username };
 }
 
 function readCorsOrigins(value: string | undefined, appOrigin: string, nodeEnv: NodeEnv): string[] {

@@ -553,6 +553,7 @@ modules/routines/
 `users`:
 
 - профиль, locale, timezone, тема;
+- необязательное `weatherLocation`: широта и долгота, округлённые до двух знаков, и подпись места. Поле не входит в публичный профиль;
 - индекс по внешним идентификаторам не хранится здесь.
 
 `auth_accounts`:
@@ -570,8 +571,8 @@ modules/routines/
 
 `one_time_tokens`:
 
-- одноразовый OAuth state: hash, назначение `oauth_state`, зашифрованный payload, `expiresAt`, `consumedAt`;
-- пользователя в документе нет: state создаётся до входа;
+- одноразовый OAuth state, state календаря и ссылка Telegram: hash, назначение `oauth_state` | `calendar_oauth` | `telegram_link`, зашифрованный payload, `expiresAt`, `consumedAt`;
+- пользователя в документе нет: идентификатор сессии лежит только внутри зашифрованного payload;
 - unique по hash;
 - TTL index по `expiresAt` с `expireAfterSeconds: 0`.
 
@@ -693,7 +694,7 @@ Access token, refresh token, credentials интеграций и ключи Web 
 
 Миграции лежат в `apps/api/src/infrastructure/mongodb/migrations`. Номера сплошные, начиная с 1. `up` идемпотентен. Команда `npm run db:migrate --workspace @dashboard/api` применяет только ещё не записанные версии и фиксирует их в `schema_migrations` (`version`, `name`, `appliedAt`). Уникальный индекс по `version` не даёт применить одну версию дважды.
 
-Первая миграция создаёт коллекции с валидаторами и индексы каталога на момент запуска. Вторая миграция `one-time-tokens` идемпотентно добавляет `one_time_tokens` для баз, которые уже применили версию 1. Новая миграция не удаляет поля в том же выпуске, где код перестаёт их читать. `calendar_events`, `scheduled_jobs` и `audit_events` по-прежнему не создаются.
+Первая миграция создаёт коллекции с валидаторами и индексы каталога на момент запуска. Вторая миграция `one-time-tokens` идемпотентно добавляет `one_time_tokens` для баз, которые уже применили версию 1. Третья миграция `external-adapters` добавляет `calendar_events`, необязательное `users.weatherLocation` и назначения `calendar_oauth` и `telegram_link` у `one_time_tokens`. Новая миграция не удаляет поля в том же выпуске, где код перестаёт их читать. `scheduled_jobs` и `audit_events` по-прежнему не создаются.
 
 ### 8.8. Проверка запросов
 
@@ -712,16 +713,17 @@ Access token, refresh token, credentials интеграций и ключи Web 
 - документ пользовательской коллекции ссылается на отсутствующего пользователя;
 - экземпляр рутины ссылается на отсутствующее правило или на правило другого пользователя;
 - в настройках дашборда повторяются тип или позиция виджета;
-- у записи `notification_deliveries` нет `deleteAt` либо срок не равен 30 дням от `createdAt`.
+- у записи `notification_deliveries` нет `deleteAt` либо срок не равен 30 дням от `createdAt`;
+- событие календаря ссылается на отсутствующую интеграцию или на интеграцию другого пользователя.
 
 Сроки:
 
 - `sessions` удаляет TTL по `expiresAt`;
 - `one_time_tokens` удаляет TTL по `expiresAt` и не принадлежит пользователю;
 - журнал доставки живёт 30 дней;
-- `timer_sessions`, `routine_rules` и `routine_occurrences` живут до очистки аккаунта. TTL на них не ставится.
+- `timer_sessions`, `routine_rules`, `routine_occurrences` и `calendar_events` живут до очистки аккаунта. TTL на них не ставится.
 
-`purgeAccount` в одной транзакции удаляет пользователя и документы с его `userId` из `auth_accounts`, `sessions`, `dashboard_configs`, `routine_rules`, `routine_occurrences`, `timer_sessions`, `integrations`, `push_subscriptions`, `notification_deliveries`. `news_items` — общий кэш, он не удаляется. `one_time_tokens` тоже не удаляется: срок жизни задаёт TTL. Живой аккаунт (`deletedAt: null`) не удаляется. Повтор после очистки ничего не стирает. Коллекций `calendar_events`, `scheduled_jobs` и `audit_events` ещё нет, поэтому очистка их не затрагивает.
+`purgeAccount` в одной транзакции удаляет пользователя и документы с его `userId` из `auth_accounts`, `sessions`, `dashboard_configs`, `routine_rules`, `routine_occurrences`, `timer_sessions`, `integrations`, `calendar_events`, `push_subscriptions`, `notification_deliveries`. `news_items` — общий кэш, он не удаляется. `one_time_tokens` тоже не удаляется: срок жизни задаёт TTL. Живой аккаунт (`deletedAt: null`) не удаляется. Повтор после очистки ничего не стирает. Коллекций `scheduled_jobs` и `audit_events` ещё нет, поэтому очистка их не затрагивает.
 
 `DELETE /api/v1/account` вызывает очистку только для пользователя текущей сессии и только после мягкого удаления. Если очистка не удалась, мягкое удаление возвращается, а клиент получает 503. Отдельной команды очистки в CLI нет.
 
@@ -827,27 +829,26 @@ sequenceDiagram
 1. Пользователь начинает подключение через backend.
 2. Backend создаёт `state`/PKCE и перенаправляет в Google.
 3. Callback приходит в backend.
-4. Credentials шифруются и сохраняются в `integrations`.
-5. API ставит initial sync job.
-6. Worker получает события и сохраняет нормализованный кэш.
-7. Dashboard читает кэш, а не блокируется прямым запросом к Google.
-8. Google webhook только ставит sync job; тяжёлая синхронизация не выполняется внутри webhook.
+4. Credentials шифруются и сохраняются в `integrations`. Scope — только `calendar.readonly`, отдельно от входа.
+5. Callback и `POST /api/v1/calendar/sync` делают ограниченную синхронизацию: не больше трёх страниц по 50 событий. Истёкший `syncToken` (ответ 410) сбрасывается, после чего читается видимое окно.
+6. Нормализованные события лежат в `calendar_events`. Dashboard читает только этот кэш.
+7. Google webhook и фоновая очередь синхронизации остаются отдельным этапом. Тяжёлая синхронизация по webhook не выполняется.
 
 ### 10.4. Погода
 
 1. Browser получает координаты после согласия.
-2. Координаты округляются до необходимой точности.
-3. Backend вычисляет cache key по координатам и временному bucket.
-4. При свежем кэше возвращает сохранённые данные.
-5. При отсутствии вызывает provider adapter, нормализует ответ и сохраняет TTL/`expiresAt`.
+2. Backend округляет их до двух знаков и хранит в `users.weatherLocation`. В публичный профиль координаты не попадают.
+3. Ключ кэша строится по округлённым координатам и единице температуры.
+4. Свежий ответ живёт 15 минут в памяти процесса. Отдельной коллекции погоды нет.
+5. Если Open-Meteo недоступен, отдаётся устаревший снимок не старше 6 часов. Иначе секция получает статус ошибки и не роняет дашборд.
 
 ### 10.5. AI-новости
 
-1. Worker по расписанию читает разрешённые RSS/News API.
-2. Adapter преобразует данные в единый формат.
-3. Выполняются нормализация URL, дедупликация и topic classification.
-4. Новости upsert-ятся в `news_items`.
-5. API фильтрует готовую коллекцию по языку, теме и источникам пользователя.
+1. `GET /api/v1/news` читает `news_items`. Если общий кэш старше 15 минут, API обновляет его из разрешённых RSS/Atom-лент.
+2. Загрузка идёт только на allowlist-хосты, без следования редиректам. У каждого хоста свой предохранитель.
+3. Adapter убирает HTML, нормализует URL, убирает дубли и назначает темы.
+4. Новости upsert-ятся в `news_items` по hash канонического URL.
+5. API фильтрует готовую коллекцию по языку, теме, лимиту и режиму источников. Если обновление не удалось, остаётся прошлый снимок. Расписание worker — отдельный этап.
 
 ## 11. Авторизация и сессия
 
@@ -866,18 +867,19 @@ Cookie:
 
 Google OAuth использует scopes `openid email profile`, PKCE, `state` и `nonce`. `state` живёт 10 минут, расходуется один раз, а payload шифруется. Callback принимает только `code`, `state`, `error`, `error_description`, `iss` и `scope` и всегда перенаправляет на фиксированный путь приложения.
 
-OAuth state хранится в `one_time_tokens`. Telegram link token и recovery token остаются целевыми и в этой коллекции пока не создаются. Одноразовые токены:
+OAuth state входа, state календаря и одноразовая ссылка Telegram хранятся в `one_time_tokens`. В базе лежит только hash, payload шифруется. Recovery token по-прежнему не создаётся. Завершение Telegram-ссылки есть в сервисе и будет вызвано webhook на следующем этапе. Одноразовые токены:
 
 - короткоживущие;
 - хранятся в виде hash;
 - автоматически удаляются TTL index.
 
-Для мутаций с cookie backend проверяет, что `Origin` равен `APP_ORIGIN`, и заголовок `X-CSRF-Token`. Токен — HMAC сырого session token на `SESSION_SECRET`. `GET /api/v1/auth/google` и `GET /api/v1/auth/google/callback` CSRF не требуют: это переход браузера, а адрес возврата не берётся из запроса. Внешние webhook имеют отдельные правила.
+Для мутаций с cookie backend проверяет, что `Origin` равен `APP_ORIGIN`, и заголовок `X-CSRF-Token`. Токен — HMAC сырого session token на `SESSION_SECRET`. `GET /api/v1/auth/google`, `GET /api/v1/auth/google/callback` и `GET /api/v1/integrations/google/callback` CSRF не требуют: это переход браузера, а адрес возврата не берётся из запроса. Внешние webhook имеют отдельные правила.
 
 Эндпоинты входа и профиля:
 
 - `GET /health/live`, `GET /health/ready`;
 - `GET /api/v1/auth/google`, `GET /api/v1/auth/google/callback`;
+- `GET /api/v1/integrations/google/callback`;
 - `GET /api/v1/auth/session`;
 - `POST /api/v1/auth/logout`;
 - `GET /api/v1/profile`, `PATCH /api/v1/profile`;

@@ -16,7 +16,8 @@ import {
   type SessionDocument,
   type TimerSessionDocument,
   type UserDocument,
-  type AuthAccountDocument
+  type AuthAccountDocument,
+  type CalendarEventDocument
 } from "./collection-catalog.js";
 
 const SECRET_FIELD_NAMES = [
@@ -42,6 +43,7 @@ describe("каталог коллекций", () => {
       "routine_occurrences",
       "timer_sessions",
       "integrations",
+      "calendar_events",
       "news_items",
       "push_subscriptions",
       "notification_deliveries"
@@ -85,6 +87,7 @@ describe("каталог коллекций", () => {
       "timezone",
       "timeFormat",
       "theme",
+      "weatherLocation",
       "createdAt",
       "updatedAt",
       "deletedAt"
@@ -168,6 +171,23 @@ describe("каталог коллекций", () => {
       "completedAt",
       "cycleNumber",
       "version"
+    ]);
+    expectFields<CalendarEventDocument>()("calendar_events", [
+      "_id",
+      "schemaVersion",
+      "userId",
+      "integrationId",
+      "externalEventId",
+      "calendarName",
+      "title",
+      "startAt",
+      "endAt",
+      "allDay",
+      "location",
+      "meetingUrl",
+      "htmlLink",
+      "status",
+      "updatedAt"
     ]);
     expectFields<IntegrationDocument>()("integrations", [
       "_id",

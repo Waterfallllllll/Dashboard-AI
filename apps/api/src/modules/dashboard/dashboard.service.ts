@@ -1,5 +1,5 @@
 import { SECTION_ERROR_MESSAGE } from "@dashboard/contracts";
-import type { Dashboard } from "@dashboard/contracts";
+import type { CalendarSection, Dashboard, NewsSection, WeatherSection } from "@dashboard/contracts";
 
 import { localDateInTimeZone } from "../../shared/local-date.js";
 import type { Viewer } from "../../shared/http/require-actor.js";
@@ -7,13 +7,18 @@ import type { RoutinesService } from "../routines/routines.service.js";
 import type { TimersService } from "../timers/timers.service.js";
 import type { WidgetsService } from "../widgets/widgets.service.js";
 
-export type ExternalSectionSource = {
-  load(): Promise<"unavailable">;
+export type ExternalSectionSource<T = { readonly status: "unavailable" }> = {
+  load(viewer: Viewer, date: string): Promise<T>;
 };
 
-export class UnavailableSectionSource implements ExternalSectionSource {
-  async load(): Promise<"unavailable"> {
-    return "unavailable";
+export class UnavailableSectionSource
+  implements
+    ExternalSectionSource<WeatherSection>,
+    ExternalSectionSource<CalendarSection>,
+    ExternalSectionSource<NewsSection>
+{
+  async load(): Promise<{ status: "unavailable" }> {
+    return { status: "unavailable" };
   }
 }
 
@@ -30,9 +35,9 @@ export class DashboardService {
     private readonly widgets: WidgetsService,
     private readonly routines: RoutinesService,
     private readonly timers: TimersService,
-    private readonly weather: ExternalSectionSource,
-    private readonly calendar: ExternalSectionSource,
-    private readonly news: ExternalSectionSource,
+    private readonly weather: ExternalSectionSource<WeatherSection>,
+    private readonly calendar: ExternalSectionSource<CalendarSection>,
+    private readonly news: ExternalSectionSource<NewsSection>,
     private readonly now: () => Date = () => new Date()
   ) {}
 
@@ -44,9 +49,9 @@ export class DashboardService {
       this.widgets.get(viewer),
       this.routines.listDay(viewer, date, today),
       this.timers.current(viewer, date, viewer.timezone),
-      this.weather.load(),
-      this.calendar.load(),
-      this.news.load()
+      this.weather.load(viewer, date),
+      this.calendar.load(viewer, date),
+      this.news.load(viewer, date)
     ]);
 
     return {
@@ -80,14 +85,12 @@ function mapSection<T, R>(result: PromiseSettledResult<T>, map: (value: T) => R)
   return map(result.value);
 }
 
-function externalSection(
-  result: PromiseSettledResult<"unavailable">
-): { status: "unavailable" } | SectionError {
+function externalSection<T>(result: PromiseSettledResult<T>): T | SectionError {
   if (result.status === "rejected") {
     return sectionError();
   }
 
-  return { status: "unavailable" };
+  return result.value;
 }
 
 function sectionError(): SectionError {

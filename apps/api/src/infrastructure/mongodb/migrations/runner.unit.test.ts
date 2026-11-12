@@ -12,7 +12,8 @@ describe("план миграций", () => {
   it("применяет версии по порядку и пропускает уже записанные", () => {
     expect(MIGRATIONS.map((migration) => [migration.version, migration.name])).toEqual([
       [1, "initial-indexes"],
-      [2, "one-time-tokens"]
+      [2, "one-time-tokens"],
+      [3, "external-adapters"]
     ]);
     expect(planMigrations([], migrations).apply.map((migration) => migration.version)).toEqual([
       1, 2

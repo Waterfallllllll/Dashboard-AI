@@ -102,6 +102,35 @@ export class WidgetsService {
     return typeof goal === "number" && Number.isInteger(goal) && goal >= 1 && goal <= 24 ? goal : 8;
   }
 
+  async temperatureUnit(actor: Actor): Promise<"celsius" | "fahrenheit"> {
+    const settings = await this.widgetSettings(actor.userId, "weather");
+    return settings?.temperatureUnit === "fahrenheit" ? "fahrenheit" : "celsius";
+  }
+
+  async newsPreference(actor: Actor): Promise<{ limit: number; sourceMode: "all" | "official" }> {
+    const settings = await this.widgetSettings(actor.userId, "news");
+    const limit = settings?.itemLimit;
+    return {
+      limit: typeof limit === "number" ? limit : 5,
+      sourceMode: settings?.newsSourceMode === "official" ? "official" : "all"
+    };
+  }
+
+  async calendarLimit(actor: Actor): Promise<number> {
+    const limit = (await this.widgetSettings(actor.userId, "calendar"))?.itemLimit;
+    return typeof limit === "number" ? limit : 5;
+  }
+
+  private async widgetSettings(userId: string, widgetType: "weather" | "news" | "calendar") {
+    const config = await this.widgets.findByUser(userId);
+
+    if (!config || config.userId !== userId) {
+      return null;
+    }
+
+    return config.widgets.find((widget) => widget.widgetType === widgetType)?.settings ?? null;
+  }
+
   private async owned(actor: Actor): Promise<DashboardConfigRecord | null> {
     const config = await this.widgets.findByUser(actor.userId);
 

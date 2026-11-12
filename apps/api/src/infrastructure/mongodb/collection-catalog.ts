@@ -23,6 +23,7 @@ export const COLLECTION_NAMES = [
   "routine_occurrences",
   "timer_sessions",
   "integrations",
+  "calendar_events",
   "news_items",
   "push_subscriptions",
   "notification_deliveries"
@@ -73,6 +74,11 @@ export type UserDocument = {
   timezone: string;
   timeFormat: "12" | "24";
   theme: "system" | "light" | "dark";
+  weatherLocation?: {
+    latitude: number;
+    longitude: number;
+    label: string;
+  } | null;
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
@@ -106,7 +112,7 @@ export type OneTimeTokenDocument = {
   _id: ObjectId;
   schemaVersion: 1;
   tokenHash: string;
-  purpose: "oauth_state";
+  purpose: "oauth_state" | "calendar_oauth" | "telegram_link";
   encryptedPayload: string;
   expiresAt: Date;
   createdAt: Date;
@@ -197,6 +203,24 @@ export type IntegrationDocument = {
   createdAt: Date;
   updatedAt: Date;
   deletedAt: Date | null;
+};
+
+export type CalendarEventDocument = {
+  _id: ObjectId;
+  schemaVersion: 1;
+  userId: ObjectId;
+  integrationId: ObjectId;
+  externalEventId: string;
+  calendarName: string;
+  title: string;
+  startAt: Date;
+  endAt: Date;
+  allDay: boolean;
+  location: string | null;
+  meetingUrl: string | null;
+  htmlLink: string;
+  status: "confirmed" | "tentative";
+  updatedAt: Date;
 };
 
 export type NewsItemDocument = {
@@ -304,6 +328,21 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
         timezone: text(1, 64),
         timeFormat: { bsonType: "string", enum: ["12", "24"] },
         theme: { bsonType: "string", enum: ["system", "light", "dark"] },
+        weatherLocation: {
+          anyOf: [
+            { bsonType: "null" },
+            {
+              bsonType: "object",
+              additionalProperties: false,
+              required: ["latitude", "longitude", "label"],
+              properties: {
+                latitude: { bsonType: "number", minimum: -90, maximum: 90 },
+                longitude: { bsonType: "number", minimum: -180, maximum: 180 },
+                label: text(1, 80)
+              }
+            }
+          ]
+        },
         createdAt: date,
         updatedAt: date,
         deletedAt: dateOrNull
@@ -358,7 +397,10 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
           maxLength: 64,
           pattern: "^[a-f0-9]{64}$"
         },
-        purpose: { bsonType: "string", enum: ["oauth_state"] },
+        purpose: {
+          bsonType: "string",
+          enum: ["oauth_state", "calendar_oauth", "telegram_link"]
+        },
         encryptedPayload: text(1, 8192),
         expiresAt: date,
         createdAt: date,
@@ -510,6 +552,41 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
         createdAt: date,
         updatedAt: date,
         deletedAt: dateOrNull
+      }
+    )
+  },
+  {
+    name: "calendar_events",
+    schema: documentSchema(
+      [
+        "userId",
+        "integrationId",
+        "externalEventId",
+        "calendarName",
+        "title",
+        "startAt",
+        "endAt",
+        "allDay",
+        "location",
+        "meetingUrl",
+        "htmlLink",
+        "status",
+        "updatedAt"
+      ],
+      {
+        userId: objectId,
+        integrationId: objectId,
+        externalEventId: text(1, 1024),
+        calendarName: text(1, 120),
+        title: text(1, 300),
+        startAt: date,
+        endAt: date,
+        allDay: { bsonType: "bool" },
+        location: textOrNull(300),
+        meetingUrl: textOrNull(2048),
+        htmlLink: text(1, 2048),
+        status: { bsonType: "string", enum: ["confirmed", "tentative"] },
+        updatedAt: date
       }
     )
   },
