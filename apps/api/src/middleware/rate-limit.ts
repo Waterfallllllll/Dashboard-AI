@@ -4,13 +4,16 @@ import { ipKeyGenerator, rateLimit } from "express-rate-limit";
 import { ApiError, toPublicErrorResponse } from "../shared/errors/api-error.js";
 import { requestIdFrom } from "../shared/http/request-id.js";
 
-export function createRateLimiter(options: { readonly windowMs: number; readonly limit: number }) {
+export function createRateLimiter(
+  options: { readonly windowMs: number; readonly limit: number },
+  requestPropertyName = "rateLimit"
+) {
   return rateLimit({
     windowMs: options.windowMs,
     limit: options.limit,
     standardHeaders: "draft-8",
     legacyHeaders: false,
-    requestPropertyName: "rateLimit",
+    requestPropertyName,
     keyGenerator(req) {
       return ipKeyGenerator(req.ip ?? "0.0.0.0");
     },

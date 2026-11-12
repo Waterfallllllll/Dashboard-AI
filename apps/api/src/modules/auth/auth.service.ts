@@ -5,6 +5,7 @@ import {
   type CredentialCipher
 } from "../../infrastructure/crypto/credential-cipher.js";
 import { DEFAULT_LOCALE } from "../../config/constants.js";
+import { noopAudit, type AuditRecorder } from "../audit/audit.service.js";
 import type { UserProfile } from "../users/user-profile.js";
 import {
   GoogleAccountBlockedError,
@@ -33,7 +34,8 @@ export class AuthService {
     private readonly cipher: CredentialCipher,
     private readonly sessionTtlMs: number,
     private readonly oauthStateTtlMs: number,
-    private readonly now: () => Date = () => new Date()
+    private readonly now: () => Date = () => new Date(),
+    private readonly audit: AuditRecorder = noopAudit
   ) {}
 
   async beginLogin(): Promise<string> {
@@ -133,6 +135,12 @@ export class AuthService {
         now
       });
 
+      await this.audit.record({
+        userId: login.user.id,
+        action: "login",
+        target: "google"
+      });
+
       return { token, user: login.user, expiresAt: login.expiresAt };
     } catch (error) {
       if (error instanceof GoogleAccountBlockedError) {
@@ -162,8 +170,9 @@ export class AuthService {
     };
   }
 
-  async revoke(sessionId: string): Promise<void> {
+  async revoke(sessionId: string, userId: string): Promise<void> {
     await this.repository.revokeSession(sessionId, this.now());
+    await this.audit.record({ userId, action: "logout", target: null });
   }
 
   private async consumeIfPresent(state: string | null): Promise<void> {

@@ -1,7 +1,7 @@
 import { ObjectId, type Db, type Document } from "mongodb";
 
 import type { CollectionName } from "./collection-catalog.js";
-import { deliveryRetentionViolation } from "./retention.js";
+import { auditRetentionViolation, deliveryRetentionViolation } from "./retention.js";
 import {
   assertStoredCollections,
   USER_OWNED_COLLECTIONS,
@@ -21,7 +21,10 @@ export type IntegrityCode =
   | "DELIVERY_WITHOUT_EXPIRY"
   | "DELIVERY_EXPIRY_OUT_OF_POLICY"
   | "CALENDAR_INTEGRATION_MISSING"
-  | "CALENDAR_OWNER_MISMATCH";
+  | "CALENDAR_OWNER_MISMATCH"
+  | "AUDIT_ANONYMOUS_ACTION"
+  | "AUDIT_WITHOUT_EXPIRY"
+  | "AUDIT_EXPIRY_OUT_OF_POLICY";
 
 export type IntegrityViolation = {
   readonly code: IntegrityCode;
@@ -47,7 +50,8 @@ const PROJECTIONS: Readonly<Record<UserOwnedCollection, Document>> = {
   calendar_events: { userId: 1, integrationId: 1 },
   push_subscriptions: { userId: 1 },
   notification_deliveries: { userId: 1, createdAt: 1, deleteAt: 1 },
-  scheduled_jobs: { userId: 1 }
+  scheduled_jobs: { userId: 1 },
+  audit_events: { userId: 1, action: 1, createdAt: 1, deleteAt: 1 }
 };
 
 export function widgetShapeViolations(widgets: readonly unknown[]): readonly WidgetViolationCode[] {
@@ -136,6 +140,11 @@ function collectViolations(
   const userId = doc["userId"];
   const documentId = doc["_id"];
 
+  if (name === "audit_events") {
+    reviewAuditEvent(doc, userId, userIds, violations, name, documentId, onTruncate);
+    return;
+  }
+
   if (name === "scheduled_jobs" && userId === null) {
     return;
   }
@@ -203,6 +212,39 @@ function collectViolations(
     if (code) {
       pushViolation(violations, code, name, documentId, onTruncate);
     }
+  }
+}
+
+function reviewAuditEvent(
+  doc: Document,
+  userId: unknown,
+  userIds: ReadonlySet<string>,
+  violations: IntegrityViolation[],
+  name: UserOwnedCollection,
+  documentId: unknown,
+  onTruncate: () => void
+): void {
+  const action = doc["action"];
+
+  if (userId === null) {
+    if (action !== "account_deleted") {
+      pushViolation(violations, "AUDIT_ANONYMOUS_ACTION", name, documentId, onTruncate);
+    }
+  } else if (!(userId instanceof ObjectId) || !userIds.has(userId.toHexString())) {
+    pushViolation(violations, "ORPHAN_USER", name, documentId, onTruncate);
+  }
+
+  const deleteAt = doc["deleteAt"];
+  const code =
+    deleteAt != null && !(deleteAt instanceof Date)
+      ? "AUDIT_EXPIRY_OUT_OF_POLICY"
+      : auditRetentionViolation(
+          doc["createdAt"] instanceof Date ? doc["createdAt"] : new Date(Number.NaN),
+          deleteAt instanceof Date ? deleteAt : null
+        );
+
+  if (code) {
+    pushViolation(violations, code, name, documentId, onTruncate);
   }
 }
 

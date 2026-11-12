@@ -19,7 +19,8 @@ describe("границы данных пользователя", () => {
     expect(USER_OWNED_COLLECTIONS).not.toContain("users");
     expect(USER_OWNED_COLLECTIONS).toContain("calendar_events");
     expect(USER_OWNED_COLLECTIONS).toContain("scheduled_jobs");
-    expect(() => assertUserDataCoverage([...COLLECTION_NAMES, "audit_events"])).toThrow(
+    expect(USER_OWNED_COLLECTIONS).toContain("audit_events");
+    expect(() => assertUserDataCoverage([...COLLECTION_NAMES, "spare_notes"])).toThrow(
       /общему кэшу/
     );
   });

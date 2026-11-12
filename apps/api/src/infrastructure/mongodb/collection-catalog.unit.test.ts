@@ -18,7 +18,8 @@ import {
   type TimerSessionDocument,
   type UserDocument,
   type AuthAccountDocument,
-  type CalendarEventDocument
+  type CalendarEventDocument,
+  type AuditEventDocument
 } from "./collection-catalog.js";
 
 const SECRET_FIELD_NAMES = [
@@ -48,7 +49,8 @@ describe("каталог коллекций", () => {
       "news_items",
       "push_subscriptions",
       "notification_deliveries",
-      "scheduled_jobs"
+      "scheduled_jobs",
+      "audit_events"
     ]);
     expect(COLLECTION_DEFINITIONS).toHaveLength(COLLECTION_NAMES.length);
   });
@@ -265,6 +267,15 @@ describe("каталог коллекций", () => {
       "userId",
       "createdAt",
       "updatedAt",
+      "deleteAt"
+    ]);
+    expectFields<AuditEventDocument>()("audit_events", [
+      "_id",
+      "schemaVersion",
+      "userId",
+      "action",
+      "target",
+      "createdAt",
       "deleteAt"
     ]);
   });

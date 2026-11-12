@@ -44,7 +44,9 @@ describe("каталог индексов", () => {
       "timer_sessions_due",
       "routine_rules_status_reminder",
       "push_subscriptions_revoked_at",
-      "integrations_type_status"
+      "integrations_type_status",
+      "audit_events_user_created",
+      "audit_events_delete_at"
     ]);
     expect(indexedCollections()).toEqual(
       COLLECTION_NAMES.filter((name) => name !== "users").sort()
@@ -72,7 +74,12 @@ describe("каталог индексов", () => {
       key: { deleteAt: 1 },
       expireAfterSeconds: 0
     });
-    expect(INDEX_DEFINITIONS.filter((index) => index.kind === "ttl")).toHaveLength(4);
+    expect(indexByName("audit_events_delete_at")).toMatchObject({
+      kind: "ttl",
+      key: { deleteAt: 1 },
+      expireAfterSeconds: 0
+    });
+    expect(INDEX_DEFINITIONS.filter((index) => index.kind === "ttl")).toHaveLength(5);
     expect(partialFilter("integrations_user_type")).toEqual({ deletedAt: null });
     expect(partialFilter("routine_rules_user_status")).toEqual({ deletedAt: null });
     expect(indexByName("timer_sessions_one_active_user")).toMatchObject({

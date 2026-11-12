@@ -40,7 +40,7 @@ describe.skipIf(mongoUri === "")("миграции MongoDB", () => {
     const repeated = await runMigrations(database);
 
     expect(repeated.applied).toEqual([]);
-    expect(repeated.skipped).toEqual([1, 2, 3]);
+    expect(repeated.skipped).toEqual([1, 2, 3, 4, 5]);
     expect(
       (await database.collection(SCHEMA_MIGRATIONS_COLLECTION).find().project({ _id: 0 }).toArray())
         .slice()
@@ -59,6 +59,16 @@ describe.skipIf(mongoUri === "")("миграции MongoDB", () => {
       expect.objectContaining({
         version: 3,
         name: "external-adapters",
+        appliedAt: expect.any(Date)
+      }),
+      expect.objectContaining({
+        version: 4,
+        name: "background-jobs",
+        appliedAt: expect.any(Date)
+      }),
+      expect.objectContaining({
+        version: 5,
+        name: "security-audit",
         appliedAt: expect.any(Date)
       })
     ]);

@@ -13,6 +13,8 @@ import {
 } from "../infrastructure/mongodb/index.js";
 import { MongoAuthRepository } from "../modules/auth/auth.repository.js";
 import { AuthService } from "../modules/auth/auth.service.js";
+import { AuditService } from "../modules/audit/audit.service.js";
+import { MongoAuditRepository } from "../modules/audit/audit.repository.js";
 import { createGoogleOAuthClient } from "../modules/auth/google-oauth.js";
 import { MongoCalendarRepository } from "../modules/calendar/calendar.repository.js";
 import { renewCalendarWatches } from "../modules/calendar/calendar-watch.js";
@@ -63,6 +65,7 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
   const cipher = createCredentialCipher(readDataEncryptionKey(env));
   const jobs = new MongoJobQueue(db);
   const users = new MongoUsersRepository(db);
+  const audit = new AuditService(new MongoAuditRepository(db));
   const integrationsRepository = new MongoIntegrationsRepository(db);
   const personal = createPersonalServices(
     {
@@ -98,7 +101,8 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
     }),
     gateway,
     weatherApiBaseUrl: runtime.weatherApiBaseUrl,
-    telegram: runtime.telegram
+    telegram: runtime.telegram,
+    audit
   });
   const notificationRepository = new MongoNotificationRepository(db, cipher);
   const notificationsService = new NotificationsService(
@@ -124,17 +128,24 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
     }),
     cipher,
     runtime.config.sessionTtlMs,
-    runtime.config.oauthStateTtlMs
+    runtime.config.oauthStateTtlMs,
+    () => new Date(),
+    audit
   );
-  const usersService = new UsersService(users, async (userId) => {
-    const id = parseObjectId(userId);
+  const usersService = new UsersService(
+    users,
+    async (userId) => {
+      const id = parseObjectId(userId);
 
-    if (!id) {
-      throw new Error("Некорректный идентификатор пользователя");
-    }
+      if (!id) {
+        throw new Error("Некорректный идентификатор пользователя");
+      }
 
-    await purgeAccount(db, id);
-  });
+      await purgeAccount(db, id);
+    },
+    () => new Date(),
+    audit
+  );
 
   return {
     runtime,

@@ -96,6 +96,7 @@ export function createApp(deps: AppDependencies): Express {
   if (deps.metrics) {
     app.get(
       "/metrics",
+      createRateLimiter(deps.config.apiRateLimit, "metricsRateLimit"),
       asyncHandler(async (_req, res) => {
         res.setHeader("Content-Type", deps.metrics?.contentType ?? "text/plain; charset=utf-8");
         res.status(200).send(await deps.metrics?.text());

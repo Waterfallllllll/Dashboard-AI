@@ -27,7 +27,8 @@ export const COLLECTION_NAMES = [
   "news_items",
   "push_subscriptions",
   "notification_deliveries",
-  "scheduled_jobs"
+  "scheduled_jobs",
+  "audit_events"
 ] as const;
 
 export type CollectionName = (typeof COLLECTION_NAMES)[number];
@@ -315,6 +316,21 @@ export type ScheduledJobDocument = {
   createdAt: Date;
   updatedAt: Date;
   deleteAt: Date | null;
+};
+
+export type AuditEventDocument = {
+  _id: ObjectId;
+  schemaVersion: 1;
+  userId: ObjectId | null;
+  action:
+    | "login"
+    | "logout"
+    | "integration_connected"
+    | "integration_disconnected"
+    | "account_deleted";
+  target: "google" | "google_calendar" | "telegram" | null;
+  createdAt: Date;
+  deleteAt: Date;
 };
 
 const text = (minLength: number, maxLength: number): JsonSchema => ({
@@ -819,6 +835,33 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
         createdAt: date,
         updatedAt: date,
         deleteAt: dateOrNull
+      }
+    )
+  },
+  {
+    name: "audit_events",
+    schema: documentSchema(
+      ["userId", "action", "target", "createdAt", "deleteAt"],
+      {
+        userId: { bsonType: ["objectId", "null"] },
+        action: {
+          bsonType: "string",
+          enum: [
+            "login",
+            "logout",
+            "integration_connected",
+            "integration_disconnected",
+            "account_deleted"
+          ]
+        },
+        target: {
+          anyOf: [
+            { bsonType: "null" },
+            { bsonType: "string", enum: ["google", "google_calendar", "telegram"] }
+          ]
+        },
+        createdAt: date,
+        deleteAt: date
       }
     )
   }

@@ -125,14 +125,17 @@ export const INDEX_DEFINITIONS: readonly IndexDefinition[] = [
     ACTIVE
   ),
   queryIndex("push_subscriptions", "push_subscriptions_revoked_at", { revokedAt: 1 }),
-  queryIndex("integrations", "integrations_type_status", { type: 1, status: 1 }, ACTIVE)
+  queryIndex("integrations", "integrations_type_status", { type: 1, status: 1 }, ACTIVE),
+  queryIndex("audit_events", "audit_events_user_created", { userId: 1, createdAt: -1 }),
+  ttlIndex("audit_events", "audit_events_delete_at", "deleteAt")
 ];
 
 const TTL_FIELDS: Readonly<Record<string, string>> = {
   sessions: "expiresAt",
   one_time_tokens: "expiresAt",
   notification_deliveries: "deleteAt",
-  scheduled_jobs: "deleteAt"
+  scheduled_jobs: "deleteAt",
+  audit_events: "deleteAt"
 };
 
 export function assertIndexCatalog(indexes: readonly IndexDefinition[] = INDEX_DEFINITIONS): void {

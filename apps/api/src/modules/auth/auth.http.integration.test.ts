@@ -28,6 +28,8 @@ import {
 } from "../personal-memory.js";
 import { createPersonalServices } from "../personal-services.js";
 import { UsersService } from "../users/users.service.js";
+import { AuditService } from "../audit/audit.service.js";
+import { MemoryAuditRepository } from "../audit/audit.repository.js";
 import { AuthService } from "./auth.service.js";
 import type { GoogleTokenSet } from "./google-identity.js";
 import type { GoogleOAuthClient } from "./google-oauth.js";
@@ -101,24 +103,33 @@ class ScriptedCalendarOAuth implements CalendarOAuthClient {
   }
 }
 
-export function createHarness(authLimit = 20) {
+export function createHarness(authLimit = 20, nodeEnv: AppConfig["nodeEnv"] = "test") {
   const database = createMemoryDatabase();
   const google = new ScriptedGoogle();
-  const config = testConfig(authLimit);
+  const config = testConfig(authLimit, nodeEnv);
   const cipher = createCredentialCipher(
     readDataEncryptionKey({ DATA_ENCRYPTION_KEY: encryptionKey })
   );
+  const auditLog = new MemoryAuditRepository();
+  const audit = new AuditService(auditLog);
   const authService = new AuthService(
     new MemoryAuthRepository(database),
     google,
     cipher,
     SESSION_TTL_MS,
-    OAUTH_STATE_TTL_MS
+    OAUTH_STATE_TTL_MS,
+    () => new Date(),
+    audit
   );
   const usersRepository = new MemoryUsersRepository(database);
-  const usersService = new UsersService(usersRepository, async (userId) => {
-    purgeMemoryUser(database, userId);
-  });
+  const usersService = new UsersService(
+    usersRepository,
+    async (userId) => {
+      purgeMemoryUser(database, userId);
+    },
+    () => new Date(),
+    audit
+  );
   const personal = createPersonalServices({
     widgets: new MemoryWidgetsRepository(),
     routines: new MemoryRoutinesRepository(),
@@ -143,7 +154,8 @@ export function createHarness(authLimit = 20) {
       }
     },
     weatherApiBaseUrl: "https://api.open-meteo.com",
-    telegram: null
+    telegram: null,
+    audit
   });
   const app = createApp({
     config,
@@ -161,12 +173,12 @@ export function createHarness(authLimit = 20) {
     readyCheck: async () => true
   });
 
-  return { app, google, database };
+  return { app, google, database, auditLog };
 }
 
-function testConfig(authLimit: number): AppConfig {
+function testConfig(authLimit: number, nodeEnv: AppConfig["nodeEnv"]): AppConfig {
   return {
-    nodeEnv: "test",
+    nodeEnv,
     port: 4000,
     appOrigin: origin,
     trustProxyHops: 1,
@@ -224,6 +236,13 @@ describe("вход, сессия и профиль", () => {
     expect(live.body.data.status).toBe("live");
     expect(live.headers["x-powered-by"]).toBeUndefined();
     expect(live.headers["x-content-type-options"]).toBe("nosniff");
+    expect(live.headers["referrer-policy"]).toBe("no-referrer");
+    expect(live.headers["permissions-policy"]).toContain("geolocation=()");
+    expect(live.headers["permissions-policy"]).toContain("camera=()");
+    expect(live.headers["content-security-policy"]).toContain("default-src 'none'");
+    expect(live.headers["content-security-policy"]).toContain("frame-ancestors 'none'");
+    expect(live.headers["strict-transport-security"]).toBeUndefined();
+    expect(live.headers["cross-origin-resource-policy"]).toBe("same-site");
 
     const missing = await request(app).get("/api/v1/missing").expect(404);
     expect(missing.body.error.code).toBe("NOT_FOUND");
@@ -231,7 +250,7 @@ describe("вход, сессия и профиль", () => {
   });
 
   it("держит сессию в cookie и не смешивает данные двух пользователей", async () => {
-    const { app, google, database } = createHarness();
+    const { app, google, database, auditLog } = createHarness();
     google.identities.set(
       "user-a",
       googleUser("google-a", "Илья", "https://lh3.googleusercontent.com/a/a")
@@ -337,6 +356,20 @@ describe("вход, сессия и профиль", () => {
     expect(removed.body.data.deleted).toBe(true);
     await request(app).get("/api/v1/profile").set("Cookie", cookieHeader(cookieB)).expect(401);
     expect([...database.users.values()].map((user) => user.displayName)).toEqual(["Илья Петров"]);
+    const userId = sessionA.body.data.user.id as string;
+    expect(auditLog.records.map((record) => record.action)).toEqual([
+      "login",
+      "login",
+      "logout",
+      "account_deleted"
+    ]);
+    expect(auditLog.records.filter((record) => record.userId === userId)).toHaveLength(3);
+    expect(auditLog.records.at(-1)).toMatchObject({
+      userId: null,
+      action: "account_deleted",
+      target: null
+    });
+    expect(JSON.stringify(auditLog.records)).not.toMatch(/ya29|refresh-google|__Host-session/);
   });
 
   it("перенаправляет отмену и повтор callback без нового входа", async () => {
@@ -365,6 +398,73 @@ describe("вход, сессия и профиль", () => {
     await request(app).get("/api/v1/auth/google").expect(302);
     await request(app).get("/api/v1/auth/google").expect(302);
     const limited = await request(app).get("/api/v1/auth/google").expect(429);
+    expect(limited.body.error.code).toBe("RATE_LIMITED");
+  });
+
+  it("включает HSTS только в production", async () => {
+    const { app } = createHarness(20, "production");
+    const live = await request(app).get("/health/live").expect(200);
+    expect(live.headers["strict-transport-security"]).toMatch(/max-age=\d+/);
+  });
+
+  it("пишет привязку и отвязку календаря и ограничивает одноразовые ссылки", async () => {
+    const { app, google, auditLog } = createHarness(3);
+    google.identities.set(
+      "user-a",
+      googleUser("google-a", "Илья", "https://lh3.googleusercontent.com/a/a")
+    );
+    const cookie = await login(app, google, "user-a");
+    const session = await request(app)
+      .get("/api/v1/auth/session")
+      .set("Cookie", cookieHeader(cookie))
+      .expect(200);
+    const csrf = session.body.data.csrfToken as string;
+    const userId = session.body.data.user.id as string;
+
+    const connect = await request(app)
+      .post("/api/v1/integrations/google/connect")
+      .set("Cookie", cookieHeader(cookie))
+      .set("Origin", origin)
+      .set(CSRF_HEADER, csrf)
+      .expect(200);
+    expect(connect.body.data.url).toContain("https://accounts.google.com/");
+    expect(connect.body.data.url).not.toContain("calendar-verifier-secret");
+
+    const state = new URL(connect.body.data.url as string).searchParams.get("state");
+    const callback = await request(app)
+      .get("/api/v1/integrations/google/callback")
+      .query({ code: "calendar-code", state })
+      .set("Cookie", cookieHeader(cookie))
+      .expect(302);
+    expect(callback.headers.location).toBe(`${origin}/settings/integrations?calendar=connected`);
+
+    await request(app)
+      .delete("/api/v1/integrations/google")
+      .set("Cookie", cookieHeader(cookie))
+      .set("Origin", origin)
+      .set(CSRF_HEADER, csrf)
+      .expect(200);
+
+    expect(auditLog.records.map((record) => [record.action, record.target])).toEqual([
+      ["login", "google"],
+      ["integration_connected", "google_calendar"],
+      ["integration_disconnected", "google_calendar"]
+    ]);
+    expect(auditLog.records.every((record) => record.userId === userId)).toBe(true);
+    expect(JSON.stringify(auditLog.records)).not.toContain("ya29.calendar-access");
+
+    await request(app)
+      .post("/api/v1/integrations/google/connect")
+      .set("Cookie", cookieHeader(cookie))
+      .set("Origin", origin)
+      .set(CSRF_HEADER, csrf)
+      .expect(200);
+    const limited = await request(app)
+      .post("/api/v1/integrations/google/connect")
+      .set("Cookie", cookieHeader(cookie))
+      .set("Origin", origin)
+      .set(CSRF_HEADER, csrf)
+      .expect(429);
     expect(limited.body.error.code).toBe("RATE_LIMITED");
   });
 });

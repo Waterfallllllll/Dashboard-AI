@@ -643,9 +643,11 @@ modules/routines/
 
 `audit_events`:
 
-- события безопасности;
+- события безопасности: вход, выход, привязка и отвязка интеграции, удаление аккаунта;
+- в документе только `userId`, действие, цель (`google`, `google_calendar`, `telegram`) и даты. Токены, cookie, адреса и payload не пишутся;
+- `userId` есть у событий живого аккаунта. После очистки аккаунта остаётся одна запись `account_deleted` с `userId: null`;
 - индекс `{ userId: 1, createdAt: -1 }`;
-- TTL определяется политикой хранения.
+- TTL по `deleteAt`, 90 дней от `createdAt`.
 
 Ограничения TTL и compound indexes определяются возможностями выбранного хранилища из [TECHNOLOGIES.md](./TECHNOLOGIES.md).
 
@@ -694,7 +696,7 @@ Access token, refresh token, credentials интеграций и ключи Web 
 
 Миграции лежат в `apps/api/src/infrastructure/mongodb/migrations`. Номера сплошные, начиная с 1. `up` идемпотентен. Команда `npm run db:migrate --workspace @dashboard/api` применяет только ещё не записанные версии и фиксирует их в `schema_migrations` (`version`, `name`, `appliedAt`). Уникальный индекс по `version` не даёт применить одну версию дважды.
 
-Первая миграция создаёт коллекции с валидаторами и индексы каталога на момент запуска. Вторая миграция `one-time-tokens` идемпотентно добавляет `one_time_tokens` для баз, которые уже применили версию 1. Третья миграция `external-adapters` добавляет `calendar_events`, необязательное `users.weatherLocation` и назначения `calendar_oauth` и `telegram_link` у `one_time_tokens`. Четвёртая миграция `background-jobs` создаёт `scheduled_jobs`, обновляет валидаторы `users` и `integrations` и добавляет индексы очереди, срока таймера, напоминаний рутин, отозванных push-подписок и подключённых интеграций. Новая миграция не удаляет поля в том же выпуске, где код перестаёт их читать. `audit_events` по-прежнему не создаётся.
+Первая миграция создаёт коллекции с валидаторами и индексы каталога на момент запуска. Вторая миграция `one-time-tokens` идемпотентно добавляет `one_time_tokens` для баз, которые уже применили версию 1. Третья миграция `external-adapters` добавляет `calendar_events`, необязательное `users.weatherLocation` и назначения `calendar_oauth` и `telegram_link` у `one_time_tokens`. Четвёртая миграция `background-jobs` создаёт `scheduled_jobs`, обновляет валидаторы `users` и `integrations` и добавляет индексы очереди, срока таймера, напоминаний рутин, отозванных push-подписок и подключённых интеграций. Пятая миграция `security-audit` создаёт `audit_events` и её индексы. Новая миграция не удаляет поля в том же выпуске, где код перестаёт их читать.
 
 ### 8.8. Проверка запросов
 
@@ -721,10 +723,11 @@ Access token, refresh token, credentials интеграций и ключи Web 
 - `sessions` удаляет TTL по `expiresAt`;
 - `one_time_tokens` удаляет TTL по `expiresAt` и не принадлежит пользователю;
 - журнал доставки живёт 30 дней;
+- журнал аудита живёт 90 дней;
 - завершённые и проваленные задачи очереди удаляет TTL по `scheduled_jobs.deleteAt`;
 - `timer_sessions`, `routine_rules`, `routine_occurrences` и `calendar_events` живут до очистки аккаунта. TTL на них не ставится.
 
-`purgeAccount` в одной транзакции удаляет пользователя и документы с его `userId` из `auth_accounts`, `sessions`, `dashboard_configs`, `routine_rules`, `routine_occurrences`, `timer_sessions`, `integrations`, `calendar_events`, `push_subscriptions`, `notification_deliveries` и `scheduled_jobs`. Задачи без пользователя (`userId: null`) — lock планировщика и heartbeat — не удаляются. `news_items` — общий кэш, он не удаляется. `one_time_tokens` тоже не удаляется: срок жизни задаёт TTL. Живой аккаунт (`deletedAt: null`) не удаляется. Повтор после очистки ничего не стирает. Коллекции `audit_events` по-прежнему нет.
+`purgeAccount` в одной транзакции удаляет пользователя и документы с его `userId` из `auth_accounts`, `sessions`, `dashboard_configs`, `routine_rules`, `routine_occurrences`, `timer_sessions`, `integrations`, `calendar_events`, `push_subscriptions`, `notification_deliveries`, `scheduled_jobs` и `audit_events`. Задачи без пользователя (`userId: null`) — lock планировщика и heartbeat — не удаляются. Запись `account_deleted` с пустым `userId` тоже остаётся и удаляется только TTL. `news_items` — общий кэш, он не удаляется. `one_time_tokens` тоже не удаляется: срок жизни задаёт TTL. Живой аккаунт (`deletedAt: null`) не удаляется. Повтор после очистки ничего не стирает.
 
 `DELETE /api/v1/account` вызывает очистку только для пользователя текущей сессии и только после мягкого удаления. Если очистка не удалась, мягкое удаление возвращается, а клиент получает 503. Отдельной команды очистки в CLI нет.
 
@@ -1104,7 +1107,7 @@ Frontend и backend используют единый release/version identifier
 - Refresh tokens и push keys шифруются authenticated encryption.
 - Ключ шифрования отделён от хранилища.
 - Webhook проверяет секрет/подпись до чтения бизнес-payload.
-- Rate limit различается для login, API и webhook.
+- Rate limit различается для входа, одноразовых ссылок интеграций, API, webhook и `/metrics`. `/health/live` и `/health/ready` не ограничиваются: это проверки процесса.
 - В production включаются CSP, HSTS и ограничивающая Permissions Policy.
 
 ## 17. Тестовая архитектура

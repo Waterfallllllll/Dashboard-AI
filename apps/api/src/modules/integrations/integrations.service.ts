@@ -14,6 +14,7 @@ import { ApiError } from "../../shared/errors/api-error.js";
 import type { Actor } from "../auth/auth.types.js";
 import { assertGoogleAuthorizationUrl } from "../auth/oauth-request.js";
 import { hashToken } from "../auth/token-hash.js";
+import { noopAudit, type AuditRecorder } from "../audit/audit.service.js";
 import type { CalendarOAuthClient } from "./google-calendar-oauth.js";
 import type { IntegrationKind, IntegrationsRepository } from "./integrations.repository.js";
 import type { TelegramClient } from "./telegram-client.js";
@@ -41,7 +42,8 @@ export class IntegrationsService {
     private readonly telegram: TelegramClient | null,
     private readonly telegramUsername: string | null,
     private readonly now: () => Date = () => new Date(),
-    private readonly ttlMs = OAUTH_STATE_TTL_MS
+    private readonly ttlMs = OAUTH_STATE_TTL_MS,
+    private readonly audit: AuditRecorder = noopAudit
   ) {}
 
   async list(actor: Actor): Promise<IntegrationList> {
@@ -160,6 +162,12 @@ export class IntegrationsService {
       throw new ApiError({ code: API_ERROR_CODES.unavailable });
     }
 
+    await this.audit.record({
+      userId: actor.userId,
+      action: "integration_connected",
+      target: "google_calendar"
+    });
+
     return "connected";
   }
 
@@ -222,7 +230,17 @@ export class IntegrationsService {
       now: this.now()
     });
 
-    return saved ? "linked" : "invalid";
+    if (!saved) {
+      return "invalid";
+    }
+
+    await this.audit.record({
+      userId: payload.userId,
+      action: "integration_connected",
+      target: "telegram"
+    });
+
+    return "linked";
   }
 
   async telegramChatId(userId: string): Promise<string | null> {
@@ -241,6 +259,11 @@ export class IntegrationsService {
 
   async disconnect(actor: Actor, type: IntegrationKind): Promise<void> {
     await this.integrations.softDelete(actor.userId, type, this.now());
+    await this.audit.record({
+      userId: actor.userId,
+      action: "integration_disconnected",
+      target: type
+    });
   }
 
   async calendarState(userId: string): Promise<{

@@ -155,4 +155,11 @@
 - Миграция 4 `background-jobs` создаёт очередь и обновляет валидаторы пользователя и интеграции. Новых имён секретов нет: читаются уже описанные `WEB_PUSH_*`, `TELEGRAM_WEBHOOK_SECRET`, `GOOGLE_CALENDAR_WEBHOOK_URL`, `GOOGLE_CALENDAR_WEBHOOK_TOKEN` и настройки worker. Пустые ключи Web Push означают, что отправка не настроена.
 - Проверки: ESLint для `apps/api` и `packages/contracts` проходит; `tsc --noEmit` для API проходит; Vitest проектов api и contracts без integration-файлов — 46 файлов, 101 тест. Полный прогон с web и MongoDB в этом запуске не выполнялся. Браузер не проверялся: пользовательский интерфейс не менялся.
 
+## 2026-11-12 — Тесты backend и усиление безопасности
+
+- Журнал `audit_events` пишет вход, выход, привязку и отвязку календаря или Telegram и удаление аккаунта. В записи нет токенов, cookie и адресов. После очистки аккаунта остаётся только `account_deleted` без `userId`. Срок хранения — 90 дней. Миграция 5 `security-audit`.
+- Создание ссылки Google Calendar и Telegram и callback календаря ограничены тем же окном, что и вход. `/metrics` ограничен лимитом API. Заголовки CSP, `nosniff`, `no-referrer`, Permissions-Policy и HSTS в production проверяются HTTP-тестами.
+- Проверки бизнес-логики входа, сессии, привязки календаря и лимитов дополнены в существующих HTTP-тестах. Новых переменных окружения нет.
+- Проверки: `npm run lint` проходит. Vitest 230 passed / 9 skipped. Девять integration-тестов MongoDB пропущены: локальный MongoDB на порту 27017 не отвечал и `MONGODB_URI` в этом запуске не задан. `npm run build --workspace @dashboard/api` проходит. Playwright 37 passed / 5 skipped. Браузерный интерфейс не менялся.
+
 

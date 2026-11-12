@@ -62,7 +62,7 @@ export function createAuthController(auth: AuthService, config: AppConfig, logge
     }),
     logout: asyncHandler(async (req, res) => {
       if (req.session) {
-        await auth.revoke(req.session.actor.sessionId);
+        await auth.revoke(req.session.actor.sessionId, req.session.actor.userId);
       }
 
       clearSessionCookie(res);

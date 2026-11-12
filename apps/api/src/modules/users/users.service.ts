@@ -2,6 +2,7 @@ import { API_ERROR_CODES } from "@dashboard/contracts";
 import type { ProfilePatch } from "@dashboard/contracts";
 
 import { ApiError } from "../../shared/errors/api-error.js";
+import { noopAudit, type AuditRecorder } from "../audit/audit.service.js";
 import type { Actor } from "../auth/auth.types.js";
 import type { ProfileUpdate, UserProfile } from "./user-profile.js";
 import type { UsersRepository } from "./users.repository.js";
@@ -12,7 +13,8 @@ export class UsersService {
   constructor(
     private readonly users: UsersRepository,
     private readonly purge: AccountPurge,
-    private readonly now: () => Date = () => new Date()
+    private readonly now: () => Date = () => new Date(),
+    private readonly audit: AuditRecorder = noopAudit
   ) {}
 
   async getProfile(actor: Actor): Promise<UserProfile> {
@@ -38,6 +40,9 @@ export class UsersService {
       await this.users.restore(actor.userId, this.now()).catch(() => undefined);
       throw new ApiError({ code: API_ERROR_CODES.unavailable });
     }
+
+    await this.audit.forgetUser(actor.userId);
+    await this.audit.record({ userId: null, action: "account_deleted", target: null });
   }
 
   private async ownedProfile(actor: Actor): Promise<UserProfile> {

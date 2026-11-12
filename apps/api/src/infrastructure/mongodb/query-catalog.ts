@@ -274,6 +274,15 @@ export function buildMainQueries(sample: QuerySample): readonly MainQuery[] {
       indexName: "integrations_type_status",
       filter: { type: "google_calendar", status: "connected", ...ACTIVE },
       indexProvidesOrder: false
+    },
+    {
+      name: "audit-by-user",
+      collection: "audit_events",
+      indexName: "audit_events_user_created",
+      filter: { userId: sample.userId },
+      sort: { createdAt: -1 },
+      limit: 50,
+      indexProvidesOrder: true
     }
   ];
 }

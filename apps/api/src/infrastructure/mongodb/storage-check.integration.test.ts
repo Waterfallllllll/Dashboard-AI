@@ -8,7 +8,7 @@ import type { UserDocument } from "./collection-catalog.js";
 import { INDEX_USED_REASON, explainNamedQuery } from "./explain-query.js";
 import { checkDataIntegrity } from "./integrity.js";
 import { closeMongo, connectMongo } from "./mongo-client.js";
-import { notificationDeleteAt } from "./retention.js";
+import { auditDeleteAt, notificationDeleteAt } from "./retention.js";
 import { softDeleteById } from "./soft-delete.js";
 import { runMigrations } from "./migrations/runner.js";
 
@@ -120,7 +120,8 @@ describe.skipIf(mongoUri === "")("проверка запросов, целос�
       calendar_events: 1,
       push_subscriptions: 1,
       notification_deliveries: 1,
-      scheduled_jobs: 1
+      scheduled_jobs: 1,
+      audit_events: 1
     });
     expect(await database.collection("users").countDocuments({ _id: current.userB })).toBe(0);
     expect(await database.collection("sessions").countDocuments({ userId: current.userB })).toBe(0);
@@ -130,7 +131,7 @@ describe.skipIf(mongoUri === "")("проверка запросов, целос�
     const repeated = await purgeAccount(database, current.userB);
     expect(repeated.user).toBe("missing");
     expect(Object.values(repeated.deleted).reduce((sum, count) => sum + count, 0)).toBe(0);
-    expect(await database.collection("schema_migrations").countDocuments()).toBe(4);
+    expect(await database.collection("schema_migrations").countDocuments()).toBe(5);
   });
 });
 
@@ -292,6 +293,14 @@ async function insertOwned(
     createdAt: now,
     updatedAt: now,
     deleteAt: null
+  });
+  await database.collection("audit_events").insertOne({
+    schemaVersion: 1,
+    userId,
+    action: "login",
+    target: "google",
+    createdAt: now,
+    deleteAt: auditDeleteAt(now)
   });
 }
 

@@ -13,7 +13,8 @@ export const USER_OWNED_COLLECTIONS = [
   "calendar_events",
   "push_subscriptions",
   "notification_deliveries",
-  "scheduled_jobs"
+  "scheduled_jobs",
+  "audit_events"
 ] as const satisfies readonly CollectionName[];
 
 export type UserOwnedCollection = (typeof USER_OWNED_COLLECTIONS)[number];

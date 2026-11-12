@@ -1,6 +1,7 @@
 import type { CredentialCipher } from "../infrastructure/crypto/credential-cipher.js";
 import type { FetchLike } from "../infrastructure/http/provider-guard.js";
 import type { TelegramBotConfig } from "../config/env.js";
+import { OAUTH_STATE_TTL_MS } from "../config/constants.js";
 import { DashboardService } from "./dashboard/dashboard.service.js";
 import { CalendarService } from "./calendar/calendar.service.js";
 import type { CalendarGateway } from "./calendar/google-calendar-gateway.js";
@@ -9,6 +10,7 @@ import { IntegrationsService } from "./integrations/integrations.service.js";
 import type { CalendarOAuthClient } from "./integrations/google-calendar-oauth.js";
 import type { IntegrationsRepository } from "./integrations/integrations.repository.js";
 import { TelegramClient } from "./integrations/telegram-client.js";
+import type { AuditRecorder } from "./audit/audit.service.js";
 import { NewsService } from "./news/news.service.js";
 import type { NewsRepository } from "./news/news.repository.js";
 import type { RoutinesService } from "./routines/routines.service.js";
@@ -40,6 +42,7 @@ export function createExternalServices(input: {
   readonly weatherApiBaseUrl: string;
   readonly telegram: TelegramBotConfig | null;
   readonly now?: () => Date;
+  readonly audit?: AuditRecorder;
 }): ExternalServices {
   const clock = input.now ?? (() => new Date());
   const integrations = new IntegrationsService(
@@ -52,7 +55,9 @@ export function createExternalServices(input: {
         )
       : null,
     input.telegram?.username ?? null,
-    clock
+    clock,
+    OAUTH_STATE_TTL_MS,
+    input.audit
   );
   const weather = new WeatherService(
     {

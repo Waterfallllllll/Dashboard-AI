@@ -1,6 +1,7 @@
 import { INDEX_DEFINITIONS, type IndexDefinition } from "./index-catalog.js";
 
 export const DEFAULT_NOTIFICATION_RETENTION_DAYS = 30;
+export const DEFAULT_AUDIT_RETENTION_DAYS = 90;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MAX_RETENTION_DAYS = 3650;
@@ -22,7 +23,23 @@ export function notificationDeleteAt(
   return new Date(createdAtMs + retentionDays * DAY_MS);
 }
 
+export function auditDeleteAt(createdAt: Date, retentionDays = DEFAULT_AUDIT_RETENTION_DAYS): Date {
+  if (!Number.isInteger(retentionDays) || retentionDays < 1 || retentionDays > MAX_RETENTION_DAYS) {
+    throw new Error("Срок хранения аудита должен быть целым числом дней от 1 до 3650");
+  }
+
+  const createdAtMs = createdAt.getTime();
+
+  if (Number.isNaN(createdAtMs)) {
+    throw new Error("Некорректная дата события аудита");
+  }
+
+  return new Date(createdAtMs + retentionDays * DAY_MS);
+}
+
 export type DeliveryRetentionCode = "DELIVERY_WITHOUT_EXPIRY" | "DELIVERY_EXPIRY_OUT_OF_POLICY";
+
+export type AuditRetentionCode = "AUDIT_WITHOUT_EXPIRY" | "AUDIT_EXPIRY_OUT_OF_POLICY";
 
 export const HISTORY_POLICIES = [
   { collection: "sessions", mode: "ttl-field", field: "expiresAt" },
@@ -34,6 +51,12 @@ export const HISTORY_POLICIES = [
     days: DEFAULT_NOTIFICATION_RETENTION_DAYS
   },
   { collection: "scheduled_jobs", mode: "ttl-field", field: "deleteAt" },
+  {
+    collection: "audit_events",
+    mode: "ttl-days",
+    field: "deleteAt",
+    days: DEFAULT_AUDIT_RETENTION_DAYS
+  },
   { collection: "calendar_events", mode: "until-account-purge" },
   { collection: "timer_sessions", mode: "until-account-purge" },
   { collection: "routine_occurrences", mode: "until-account-purge" },
@@ -56,6 +79,25 @@ export function deliveryRetentionViolation(
 
   if (deleteAt.getTime() !== notificationDeleteAt(createdAt).getTime()) {
     return "DELIVERY_EXPIRY_OUT_OF_POLICY";
+  }
+
+  return null;
+}
+
+export function auditRetentionViolation(
+  createdAt: Date,
+  deleteAt: Date | null
+): AuditRetentionCode | null {
+  if (!(createdAt instanceof Date) || Number.isNaN(createdAt.getTime())) {
+    return "AUDIT_EXPIRY_OUT_OF_POLICY";
+  }
+
+  if (!(deleteAt instanceof Date) || Number.isNaN(deleteAt.getTime())) {
+    return "AUDIT_WITHOUT_EXPIRY";
+  }
+
+  if (deleteAt.getTime() !== auditDeleteAt(createdAt).getTime()) {
+    return "AUDIT_EXPIRY_OUT_OF_POLICY";
   }
 
   return null;
