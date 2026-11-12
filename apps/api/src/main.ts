@@ -17,8 +17,12 @@ import {
 import { MongoAuthRepository } from "./modules/auth/auth.repository.js";
 import { AuthService } from "./modules/auth/auth.service.js";
 import { createGoogleOAuthClient } from "./modules/auth/google-oauth.js";
+import { createPersonalServices } from "./modules/personal-services.js";
+import { MongoRoutinesRepository } from "./modules/routines/routines.repository.js";
+import { MongoTimersRepository } from "./modules/timers/timers.repository.js";
 import { MongoUsersRepository } from "./modules/users/users.repository.js";
 import { UsersService } from "./modules/users/users.service.js";
+import { MongoWidgetsRepository } from "./modules/widgets/widgets.repository.js";
 
 try {
   const runtime = readApiEnv(process.env);
@@ -38,6 +42,11 @@ try {
     runtime.config.sessionTtlMs,
     runtime.config.oauthStateTtlMs
   );
+  const personal = createPersonalServices({
+    widgets: new MongoWidgetsRepository(db),
+    routines: new MongoRoutinesRepository(db),
+    timers: new MongoTimersRepository(db)
+  });
   const usersService = new UsersService(new MongoUsersRepository(db), async (userId) => {
     const id = parseObjectId(userId);
 
@@ -52,6 +61,10 @@ try {
     logger,
     authService,
     usersService,
+    widgetsService: personal.widgets,
+    routinesService: personal.routines,
+    timersService: personal.timers,
+    dashboardService: personal.dashboard,
     readyCheck: async () => {
       try {
         await db.command({ ping: 1 });

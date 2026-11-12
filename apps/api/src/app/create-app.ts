@@ -16,8 +16,16 @@ import { loadSession } from "../middleware/require-session.js";
 import "../modules/auth/express-session.js";
 import type { AuthService } from "../modules/auth/auth.service.js";
 import { createAuthRouter } from "../modules/auth/auth.routes.js";
+import type { DashboardService } from "../modules/dashboard/dashboard.service.js";
+import { createDashboardRouter } from "../modules/dashboard/dashboard.routes.js";
+import type { RoutinesService } from "../modules/routines/routines.service.js";
+import { createRoutinesRouter } from "../modules/routines/routines.routes.js";
+import type { TimersService } from "../modules/timers/timers.service.js";
+import { createTimersRouter } from "../modules/timers/timers.routes.js";
 import { createUsersRouter } from "../modules/users/users.routes.js";
 import type { UsersService } from "../modules/users/users.service.js";
+import type { WidgetsService } from "../modules/widgets/widgets.service.js";
+import { createWidgetsRouter } from "../modules/widgets/widgets.routes.js";
 import { asyncHandler } from "../shared/http/async-handler.js";
 import { requestIdFrom } from "../shared/http/request-id.js";
 import { sendParsed } from "../shared/http/respond.js";
@@ -28,6 +36,10 @@ export type AppDependencies = {
   readonly readyCheck: () => Promise<boolean>;
   readonly authService: AuthService;
   readonly usersService: UsersService;
+  readonly widgetsService: WidgetsService;
+  readonly routinesService: RoutinesService;
+  readonly timersService: TimersService;
+  readonly dashboardService: DashboardService;
 };
 
 export function createApp(deps: AppDependencies): Express {
@@ -66,6 +78,10 @@ export function createApp(deps: AppDependencies): Express {
   app.use("/api/v1", createRateLimiter(deps.config.apiRateLimit));
   app.use("/api/v1/auth", createAuthRouter(deps));
   app.use("/api/v1", createUsersRouter(deps.usersService));
+  app.use("/api/v1", createWidgetsRouter(deps.widgetsService));
+  app.use("/api/v1", createRoutinesRouter(deps.routinesService));
+  app.use("/api/v1", createTimersRouter(deps.timersService));
+  app.use("/api/v1", createDashboardRouter(deps.dashboardService));
   app.use(notFound);
   app.use(errorHandler);
   return app;

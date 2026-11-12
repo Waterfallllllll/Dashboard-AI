@@ -20,9 +20,15 @@ import {
   MemoryUsersRepository,
   purgeMemoryUser
 } from "./memory-auth.repository.js";
+import {
+  MemoryRoutinesRepository,
+  MemoryTimersRepository,
+  MemoryWidgetsRepository
+} from "../personal-memory.js";
+import { createPersonalServices } from "../personal-services.js";
 import { UsersService } from "../users/users.service.js";
 
-const origin = "http://localhost:3000";
+export const origin = "http://localhost:3000";
 const encryptionKey = Buffer.alloc(32, 8).toString("base64url");
 
 class ScriptedGoogle implements GoogleOAuthClient {
@@ -52,7 +58,7 @@ class ScriptedGoogle implements GoogleOAuthClient {
   }
 }
 
-function googleUser(subject: string, name: string, picture: string): GoogleTokenSet {
+export function googleUser(subject: string, name: string, picture: string): GoogleTokenSet {
   return {
     subject,
     emailVerified: true,
@@ -66,7 +72,7 @@ function googleUser(subject: string, name: string, picture: string): GoogleToken
   };
 }
 
-function createHarness(authLimit = 20) {
+export function createHarness(authLimit = 20) {
   const database = createMemoryDatabase();
   const google = new ScriptedGoogle();
   const config = testConfig(authLimit);
@@ -83,11 +89,20 @@ function createHarness(authLimit = 20) {
   const usersService = new UsersService(new MemoryUsersRepository(database), async (userId) => {
     purgeMemoryUser(database, userId);
   });
+  const personal = createPersonalServices({
+    widgets: new MemoryWidgetsRepository(),
+    routines: new MemoryRoutinesRepository(),
+    timers: new MemoryTimersRepository()
+  });
   const app = createApp({
     config,
     logger: createLogger("silent"),
     authService,
     usersService,
+    widgetsService: personal.widgets,
+    routinesService: personal.routines,
+    timersService: personal.timers,
+    dashboardService: personal.dashboard,
     readyCheck: async () => true
   });
 
@@ -112,7 +127,7 @@ function testConfig(authLimit: number): AppConfig {
   };
 }
 
-async function login(app: Express, google: ScriptedGoogle, code: string): Promise<string> {
+export async function login(app: Express, google: ScriptedGoogle, code: string): Promise<string> {
   const start = await request(app).get("/api/v1/auth/google").expect(302);
   const location = start.headers.location ?? "";
   expect(location.startsWith("https://accounts.google.com/")).toBe(true);
@@ -141,7 +156,7 @@ function sessionCookie(response: request.Response): string {
   return value;
 }
 
-function cookieHeader(token: string): string {
+export function cookieHeader(token: string): string {
   return `__Host-session=${token}`;
 }
 
