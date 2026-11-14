@@ -1,0 +1,544 @@
+// Схема Evergreen Dashboard. Частичные индексы (WHERE deleted_at IS NULL,
+// WHERE completed_at IS NULL, WHERE status = 'pending') Prisma ORM 7 не выражает:
+// их добавляет SQL-миграция. Здесь перечислены модели, связи и обычные индексы.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TimeFormat {
+  hour12 @map("12")
+  hour24 @map("24")
+
+  @@map("time_format")
+}
+
+enum ThemePreference {
+  system
+  light
+  dark
+
+  @@map("theme_preference")
+}
+
+enum AuthProvider {
+  google
+  telegram
+
+  @@map("auth_provider")
+}
+
+enum OneTimeTokenPurpose {
+  oauth_state
+  calendar_oauth
+  telegram_link
+
+  @@map("one_time_token_purpose")
+}
+
+enum WidgetType {
+  datetime
+  weather
+  calendar
+  routines
+  timer
+  news
+
+  @@map("widget_type")
+}
+
+enum WidgetSize {
+  compact
+  standard
+  wide
+  full
+
+  @@map("widget_size")
+}
+
+enum RecurrenceKind {
+  daily
+  weekdays
+  weekly
+  once
+
+  @@map("recurrence_kind")
+}
+
+enum RoutineStatus {
+  active
+  paused
+  ended
+
+  @@map("routine_status")
+}
+
+enum OccurrenceStatus {
+  pending
+  done
+  hidden
+
+  @@map("occurrence_status")
+}
+
+enum TimerMode {
+  pomodoro
+  custom
+  manual
+
+  @@map("timer_mode")
+}
+
+enum TimerRunStatus {
+  idle
+  running
+  paused
+
+  @@map("timer_run_status")
+}
+
+enum TimerPhase {
+  work
+  shortBreak @map("short-break")
+  longBreak  @map("long-break")
+
+  @@map("timer_phase")
+}
+
+enum IntegrationType {
+  google_calendar
+  telegram
+
+  @@map("integration_type")
+}
+
+enum IntegrationStatus {
+  disconnected
+  connected
+  revoked
+
+  @@map("integration_status")
+}
+
+enum CalendarEventStatus {
+  confirmed
+  tentative
+
+  @@map("calendar_event_status")
+}
+
+enum NotificationEventType {
+  work
+  break
+  routine
+  calendar
+
+  @@map("notification_event_type")
+}
+
+enum NotificationChannel {
+  browser
+  telegram
+  in_app
+
+  @@map("notification_channel")
+}
+
+enum DeliveryStatus {
+  pending
+  sent
+  failed
+  skipped
+
+  @@map("delivery_status")
+}
+
+enum ScheduledJobType {
+  timerDue             @map("timer-due")
+  deliverNotification  @map("deliver-notification")
+  refreshNews          @map("refresh-news")
+  syncCalendar         @map("sync-calendar")
+  scanDueTimers        @map("scan-due-timers")
+  scanRoutineReminders @map("scan-routine-reminders")
+  purgeRevokedPush     @map("purge-revoked-push")
+  renewCalendarWatch   @map("renew-calendar-watch")
+  schedulerLock        @map("scheduler-lock")
+  workerHeartbeat      @map("worker-heartbeat")
+
+  @@map("scheduled_job_type")
+}
+
+enum JobStatus {
+  pending
+  processing
+  completed
+  failed
+
+  @@map("job_status")
+}
+
+enum AuditAction {
+  login
+  logout
+  integration_connected
+  integration_disconnected
+  account_deleted
+
+  @@map("audit_action")
+}
+
+enum AuditTarget {
+  google
+  google_calendar
+  telegram
+
+  @@map("audit_target")
+}
+
+/// Профиль. Внешний идентификатор провайдера здесь не хранится.
+model User {
+  id        String    @id @default(uuid()) @db.Uuid
+  displayName String  @map("display_name") @db.VarChar(120)
+  avatarUrl   String? @map("avatar_url") @db.VarChar(2048)
+  locale      String  @db.VarChar(35)
+  timezone    String  @db.VarChar(64)
+  timeFormat  TimeFormat @default(hour24) @map("time_format")
+  theme       ThemePreference @default(system)
+
+  /// Широта, округлённая до двух знаков. Не входит в публичный профиль.
+  weatherLatitude  Decimal? @map("weather_latitude") @db.Decimal(5, 2)
+  weatherLongitude Decimal? @map("weather_longitude") @db.Decimal(6, 2)
+  weatherLabel     String?  @map("weather_label") @db.VarChar(80)
+
+  /// Ограниченный объект каналов и тихих часов. Перед записью его проверяет схема приложения.
+  notificationSettings Json? @map("notification_settings")
+
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt DateTime? @map("deleted_at") @db.Timestamptz
+
+  authAccounts           AuthAccount[]
+  sessions               Session[]
+  widgetPreferences      WidgetPreference[]
+  routineRules           RoutineRule[]
+  timerPreset            TimerPreset?
+  timerSessions          TimerSession[]
+  integrations           Integration[]
+  pushSubscriptions      PushSubscription[]
+  scheduledJobs          ScheduledJob[]
+  notificationDeliveries NotificationDelivery[]
+  auditEvents            AuditEvent[]
+
+  @@map("users")
+}
+
+/// OAuth и Telegram. accessToken и refreshToken — ciphertext enc:v1.
+model AuthAccount {
+  id           String       @id @default(uuid()) @db.Uuid
+  userId       String       @map("user_id") @db.Uuid
+  provider     AuthProvider
+  providerUserId String     @map("provider_user_id") @db.VarChar(128)
+  accessToken  String?      @map("access_token") @db.Text
+  refreshToken String?      @map("refresh_token") @db.Text
+  scope        String[]
+  expiresAt    DateTime?    @map("expires_at") @db.Timestamptz
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId], map: "auth_accounts_provider_identity")
+  @@unique([userId, provider], map: "auth_accounts_user_provider")
+  @@map("auth_accounts")
+}
+
+/// В базе только SHA-256 hash cookie-токена.
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash") @db.VarChar(128)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([tokenHash], map: "sessions_token_hash")
+  @@index([expiresAt], map: "sessions_expires_at")
+  @@map("sessions")
+}
+
+/// Одноразовый state входа, календаря и ссылка Telegram. Строки пользователя нет.
+/// payload — ciphertext enc:v1.
+model OneTimeToken {
+  id        String              @id @default(uuid()) @db.Uuid
+  tokenHash String              @map("token_hash") @db.VarChar(128)
+  purpose   OneTimeTokenPurpose
+  payload   String              @db.Text
+  expiresAt DateTime            @map("expires_at") @db.Timestamptz
+  createdAt DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  consumedAt DateTime?          @map("consumed_at") @db.Timestamptz
+
+  @@unique([tokenHash], map: "one_time_tokens_token_hash")
+  @@index([expiresAt], map: "one_time_tokens_expires_at")
+  @@map("one_time_tokens")
+}
+
+/// Одна строка на пару пользователь + тип виджета. settings — ограниченный Json.
+model WidgetPreference {
+  id         String     @id @default(uuid()) @db.Uuid
+  userId     String     @map("user_id") @db.Uuid
+  widgetType WidgetType @map("widget_type")
+  enabled    Boolean
+  position   Int
+  size       WidgetSize
+  settings   Json
+  version    Int        @default(1)
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, widgetType], map: "widget_preferences_user_type")
+  @@unique([userId, position], map: "widget_preferences_user_position")
+  @@map("widget_preferences")
+}
+
+model RoutineRule {
+  id                String         @id @default(uuid()) @db.Uuid
+  userId            String         @map("user_id") @db.Uuid
+  title             String         @db.VarChar(120)
+  description       String?        @db.VarChar(500)
+  startDate         DateTime       @map("start_date") @db.Date
+  endDate           DateTime?      @map("end_date") @db.Date
+  recurrenceKind    RecurrenceKind @map("recurrence_kind")
+  recurrenceDays    Int[]          @map("recurrence_days")
+  reminderLocalTime String?        @map("reminder_local_time") @db.VarChar(5)
+  timezone          String         @db.VarChar(64)
+  status            RoutineStatus
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt         DateTime?      @map("deleted_at") @db.Timestamptz
+
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  occurrences RoutineOccurrence[]
+
+  /// Составная цель для внешнего ключа экземпляра. Уникальность живых строк по статусу и дате — частичный индекс миграции.
+  @@unique([id, userId], map: "routine_rules_id_user")
+  @@map("routine_rules")
+}
+
+model RoutineOccurrence {
+  id            String           @id @default(uuid()) @db.Uuid
+  routineRuleId String           @map("routine_rule_id") @db.Uuid
+  userId        String           @map("user_id") @db.Uuid
+  localDate     DateTime         @map("local_date") @db.Date
+  titleOverride String?          @map("title_override") @db.VarChar(120)
+  status        OccurrenceStatus
+  completedAt   DateTime?        @map("completed_at") @db.Timestamptz
+  excludedAt    DateTime?        @map("excluded_at") @db.Timestamptz
+
+  rule RoutineRule @relation(fields: [routineRuleId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@unique([routineRuleId, localDate], map: "routine_occurrences_rule_date")
+  @@index([userId, localDate], map: "routine_occurrences_user_date")
+  @@map("routine_occurrences")
+}
+
+/// Один пресет длительностей на пользователя.
+model TimerPreset {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @unique(map: "timer_presets_user") @map("user_id") @db.Uuid
+  mode              TimerMode
+  workMinutes       Int       @map("work_minutes")
+  shortBreakMinutes Int       @map("short_break_minutes")
+  longBreakMinutes  Int       @map("long_break_minutes")
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("timer_presets")
+}
+
+/// История и текущая сессия. Одна незавершённая сессия на пользователя — частичный unique миграции.
+model TimerSession {
+  id                String         @id @default(uuid()) @db.Uuid
+  userId            String         @map("user_id") @db.Uuid
+  mode              TimerMode
+  workMinutes       Int            @map("work_minutes")
+  shortBreakMinutes Int            @map("short_break_minutes")
+  longBreakMinutes  Int            @map("long_break_minutes")
+  runStatus         TimerRunStatus @map("run_status")
+  phase             TimerPhase
+  startedAt         DateTime?      @map("started_at") @db.Timestamptz
+  pausedAt          DateTime?      @map("paused_at") @db.Timestamptz
+  endsAt            DateTime?      @map("ends_at") @db.Timestamptz
+  completedAt       DateTime?      @map("completed_at") @db.Timestamptz
+  cycleNumber       Int            @default(0) @map("cycle_number")
+  version           Int            @default(1)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt(sort: Desc)], map: "timer_sessions_user_started_at")
+  @@map("timer_sessions")
+}
+
+/// Google Calendar и Telegram. credentials — ciphertext enc:v1.
+model Integration {
+  id               String            @id @default(uuid()) @db.Uuid
+  userId           String            @map("user_id") @db.Uuid
+  type             IntegrationType
+  status           IntegrationStatus
+  credentials      String?           @db.Text
+  scope            String[]
+  externalUserId   String?           @map("external_user_id") @db.VarChar(128)
+  lastSyncAt       DateTime?         @map("last_sync_at") @db.Timestamptz
+  syncCursor       String?           @map("sync_cursor") @db.Text
+  watchChannelId   String?           @map("watch_channel_id") @db.VarChar(256)
+  watchResourceId  String?           @map("watch_resource_id") @db.VarChar(256)
+  watchExpiresAt   DateTime?         @map("watch_expires_at") @db.Timestamptz
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz
+  deletedAt        DateTime?         @map("deleted_at") @db.Timestamptz
+
+  user   User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events CalendarEvent[]
+
+  /// Составная цель для событий календаря. Уникальность живой пары (user_id, type) — частичный индекс миграции.
+  @@unique([id, userId], map: "integrations_id_user")
+  @@map("integrations")
+}
+
+model CalendarEvent {
+  id              String              @id @default(uuid()) @db.Uuid
+  integrationId   String              @map("integration_id") @db.Uuid
+  userId          String              @map("user_id") @db.Uuid
+  externalEventId String              @map("external_event_id") @db.VarChar(1024)
+  calendarName    String              @map("calendar_name") @db.VarChar(256)
+  title           String              @db.VarChar(1024)
+  startAt         DateTime            @map("start_at") @db.Timestamptz
+  endAt           DateTime            @map("end_at") @db.Timestamptz
+  allDay          Boolean             @map("all_day")
+  location        String?             @db.VarChar(512)
+  meetingUrl      String?             @map("meeting_url") @db.VarChar(2048)
+  htmlLink        String              @map("html_link") @db.VarChar(2048)
+  status          CalendarEventStatus
+  updatedAt       DateTime            @updatedAt @map("updated_at") @db.Timestamptz
+
+  integration Integration @relation(fields: [integrationId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@unique([integrationId, externalEventId], map: "calendar_events_integration_external")
+  @@index([userId, startAt], map: "calendar_events_user_start")
+  @@map("calendar_events")
+}
+
+/// Общий кэш новостей, без владельца. contentHash — hash канонического URL.
+model NewsItem {
+  id           String   @id @default(uuid()) @db.Uuid
+  source       String   @db.VarChar(256)
+  title        String   @db.VarChar(512)
+  excerpt      String   @db.VarChar(2000)
+  canonicalUrl String   @map("canonical_url") @db.VarChar(2048)
+  contentHash  String   @map("content_hash") @db.VarChar(128)
+  publishedAt  DateTime @map("published_at") @db.Timestamptz
+  language     String   @db.VarChar(35)
+  topics       String[]
+  imageUrl     String?  @map("image_url") @db.VarChar(2048)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([contentHash], map: "news_items_content_hash")
+  @@index([publishedAt(sort: Desc), language], map: "news_items_published_language")
+  @@index([topics], type: Gin, map: "news_items_topics")
+  @@map("news_items")
+}
+
+/// keys — ciphertext enc:v1. Уникален hash endpoint, не сам адрес.
+model PushSubscription {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  endpointHash String    @map("endpoint_hash") @db.VarChar(128)
+  endpoint     String    @db.Text
+  keys         String    @db.Text
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([endpointHash], map: "push_subscriptions_endpoint_hash")
+  @@index([userId, revokedAt], map: "push_subscriptions_user_revoked")
+  @@index([revokedAt], map: "push_subscriptions_revoked_at")
+  @@map("push_subscriptions")
+}
+
+/// Очередь. userId пустой у задач планировщика и heartbeat. payload без секретов.
+model ScheduledJob {
+  id              String           @id @default(uuid()) @db.Uuid
+  type            ScheduledJobType
+  payload         Json
+  runAt           DateTime         @map("run_at") @db.Timestamptz
+  status          JobStatus        @default(pending)
+  attempts        Int              @default(0)
+  maxAttempts     Int              @map("max_attempts")
+  idempotencyKey  String           @map("idempotency_key") @db.VarChar(200)
+  lockedBy        String?          @map("locked_by") @db.VarChar(64)
+  lockedAt        DateTime?        @map("locked_at") @db.Timestamptz
+  lockExpiresAt   DateTime?        @map("lock_expires_at") @db.Timestamptz
+  lastError       String?          @map("last_error") @db.VarChar(500)
+  userId          String?          @map("user_id") @db.Uuid
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+  deleteAt        DateTime?        @map("delete_at") @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([idempotencyKey], map: "scheduled_jobs_idempotency_key")
+  @@index([status, runAt], map: "scheduled_jobs_status_run_at")
+  @@index([status, lockExpiresAt], map: "scheduled_jobs_status_lock")
+  @@index([userId, status], map: "scheduled_jobs_user_status")
+  @@index([type, updatedAt(sort: Desc)], map: "scheduled_jobs_type_updated")
+  @@index([deleteAt], map: "scheduled_jobs_delete_at")
+  @@map("scheduled_jobs")
+}
+
+model NotificationDelivery {
+  id                String                @id @default(uuid()) @db.Uuid
+  userId            String                @map("user_id") @db.Uuid
+  eventType         NotificationEventType @map("event_type")
+  channel           NotificationChannel
+  idempotencyKey    String                @map("idempotency_key") @db.VarChar(200)
+  status            DeliveryStatus
+  attempts          Int                   @default(0)
+  providerMessageId String?               @map("provider_message_id") @db.VarChar(256)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz
+  /// 30 дней от createdAt. Срок записывает приложение, строку удаляет worker.
+  deleteAt          DateTime              @map("delete_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([idempotencyKey], map: "notification_deliveries_idempotency_key")
+  @@index([userId, createdAt(sort: Desc)], map: "notification_deliveries_user_created")
+  @@index([deleteAt], map: "notification_deliveries_delete_at")
+  @@map("notification_deliveries")
+}
+
+/// Журнал безопасности. После очистки аккаунта остаётся account_deleted с пустым userId.
+model AuditEvent {
+  id        String       @id @default(uuid()) @db.Uuid
+  userId    String?      @map("user_id") @db.Uuid
+  action    AuditAction
+  target    AuditTarget?
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  /// 90 дней от createdAt. Срок записывает приложение, строку удаляет worker.
+  deleteAt  DateTime     @map("delete_at") @db.Timestamptz
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)], map: "audit_events_user_created")
+  @@index([deleteAt], map: "audit_events_delete_at")
+  @@map("audit_events")
+}

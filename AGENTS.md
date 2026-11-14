@@ -36,13 +36,15 @@
 | Вопрос без правок кода | `@project-context` |
 | Фича / баг / рефакторинг (любые) | `@git-workflow` + `@architecture-boundaries` + `@project-context` + `@verification` |
 | UI, виджет, страница, стили | набор «фича» + `@frontend` + `@design-accessibility` |
-| REST, worker, MongoDB, интеграции | набор «фича» + `@backend` |
+| REST, worker, PostgreSQL, Prisma, интеграции | набор «фича» + `@backend` |
 | Новый или изменённый эндпоинт | набор «фича» + `@contracts` + `@backend` + `@frontend` |
 | Auth, секреты, ввод, webhook | набор задачи + `@security` |
 | Добавить пакет / сменить библиотеку | `@stack` + `@architecture-boundaries` |
 | Запустить, прогнать тесты, починить CI | `@commands` + `@verification` |
 | Сквозная фича (UI + API) | `@git-workflow` `@project-context` `@architecture-boundaries` `@contracts` `@backend` `@frontend` `@design-accessibility` `@verification` |
 | Сомневаешься, какое правило нужно | `@project-context`, затем дочитай канонические документы и добавь узкое правило |
+
+Единственная база данных — PostgreSQL. Доступ к ней только через Prisma ORM.
 
 ## Канонические документы
 

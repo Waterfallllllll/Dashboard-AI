@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { createBackend } from "./app/create-backend.js";
 import { createApp } from "./app/create-app.js";
 import { installShutdown } from "./app/shutdown.js";
+import { pingDatabase } from "./infrastructure/db/prisma-client.js";
 
 try {
   const backend = await createBackend();
@@ -26,7 +27,7 @@ try {
     readyCheck: async () => {
       try {
         await backend.client.db(backend.dbName).command({ ping: 1 });
-        return true;
+        return await pingDatabase(backend.prisma);
       } catch {
         return false;
       }

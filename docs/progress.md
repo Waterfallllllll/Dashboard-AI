@@ -16,7 +16,7 @@
 
 ## 2026-10-26 — ESLint-правила архитектурных границ
 
-- Добавлен `@dashboard/config/eslint/boundaries`: запрет импортов web↔api, MongoDB/Express во frontend и contracts, UI-пакетов в api/contracts, внутренностей features не через `index.ts`, Next.js Route Handlers как доменного backend, browser storage в `features/auth`, обратных импортов слоёв api.
+- Добавлен `@dashboard/config/eslint/boundaries`: запрет импортов web↔api, клиента хранилища и Express во frontend и contracts, UI-пакетов в api/contracts, внутренностей features не через `index.ts`, Next.js Route Handlers как доменного backend, browser storage в `features/auth`, обратных импортов слоёв api.
 - В `eslint/base` включены `consistent-type-imports` и `no-import-type-side-effects` под `verbatimModuleSyntax`.
 - Запрещённый стек (Tailwind, CSS-in-JS, Prisma/Drizzle, GraphQL, PostgreSQL) закрыт через `no-restricted-imports` без новых пакетов.
 - Изменены: `packages/config/eslint/boundaries.mjs`, `packages/config/eslint/base.mjs`, `packages/config/package.json`, `eslint.config.mjs`.
@@ -79,12 +79,12 @@
 - Новые E2E проверяют манифест, service worker, ширины 320/768/1024/1440, текст 200%, клавиатурный пропуск, рутину и таймер, разрешения, скрытие виджета, CLS и отклик таймера.
 - Проверки: Vitest 107 passed; Playwright 37 passed / 5 skipped; `npm run lint` проходит; `npm run build --workspace @dashboard/web` проходит. UI проверен в браузере на странице интеграций и дашборде: service worker активирован, ошибок в консоли нет. Новые переменные окружения не добавлялись. Используются уже описанные `NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY` и серверные ключи Web Push.
 
-## 2026-11-09 — Коллекции MongoDB
+## 2026-11-09 — Коллекции данных
 
 - В `apps/api` описаны и создаются коллекции пользователей и OAuth-аккаунтов, сессий, настроек виджетов, правил и экземпляров рутин, сессий таймера, интеграций, новостей, push-подписок и журнала доставки.
 - Форма документа задана JSON Schema: лишние поля отклоняются, токены сессии хранятся только как hash, а токены интеграций и ключи push — как ciphertext. Настройки виджетов встроены в один документ на пользователя, не больше 12 карточек.
 - Индексы, шифрование, мягкое удаление и миграции не делались: это следующий пункт плана. Очередь задач, кэш календаря и аудит тоже ждут своих этапов.
-- Команда создания: `npm run db:ensure --workspace @dashboard/api`. Локальный MongoDB на порту 27017 в момент проверки не отвечал, поэтому integration-тест пропущен.
+- Команда создания: `npm run db:ensure --workspace @dashboard/api`. Локальная база в момент проверки не отвечала, поэтому integration-тест пропущен.
 - Проверки: typecheck API, Vitest каталога, ESLint. Новые переменные окружения не добавлялись.
 
 ## 2026-11-09 — Индексы, шифрование, мягкое удаление и миграции
@@ -92,8 +92,8 @@
 - Для существующих коллекций добавлены unique, TTL и query-индексы. TTL стоит на `sessions.expiresAt` и `notification_deliveries.deleteAt`. У пользователя нет вторичного индекса по внешним идентификаторам. Живые рутины и интеграции индексируются при `deletedAt: null`, незавершённый таймер — один на пользователя.
 - Credentials шифруются AES-256-GCM ключом `DATA_ENCRYPTION_KEY` до записи. Мягкое удаление ставит `deletedAt` и умеет вернуть документ для undo. Миграции нумеруются с 1, пишутся в `schema_migrations` и запускаются командой `npm run db:migrate --workspace @dashboard/api`.
 - Коллекции календаря, очереди, аудита и одноразовых токенов не создавались. Новые переменные окружения не добавлялись: используется уже описанный `DATA_ENCRYPTION_KEY`.
-- Изменены `apps/api/src/infrastructure/crypto`, `apps/api/src/infrastructure/mongodb`, `apps/api/package.json`, `docs/architecture.md`, `.env.example`.
-- Проверки: `npm run lint` проходит; Vitest 122 passed / 3 skipped. Integration-тесты коллекций и миграций пропущены: MongoDB на порту 27017 не отвечал. `npm run build --workspace @dashboard/api` проходит. Корневой `npm run build` по-прежнему падает на пустом `@dashboard/contracts`. E2E не запускался: интерфейс не менялся.
+- Изменены `apps/api/src/infrastructure/crypto`, модуль хранилища в `apps/api/src/infrastructure`, `apps/api/package.json`, `docs/architecture.md`, `.env.example`.
+- Проверки: `npm run lint` проходит; Vitest 122 passed / 3 skipped. Integration-тесты коллекций и миграций пропущены: база не отвечала. `npm run build --workspace @dashboard/api` проходит. Корневой `npm run build` по-прежнему падает на пустом `@dashboard/contracts`. E2E не запускался: интерфейс не менялся.
 
 ## 2026-11-09 — Проверка запросов, целостности и очистки аккаунта
 
@@ -102,9 +102,9 @@
 - `purgeAccount` в транзакции физически удаляет мягко удалённый аккаунт и его данные. Живой аккаунт не удаляется. Общий кэш `news_items` остаётся. История таймера и рутин хранится до этой очистки и не получает TTL.
 - Команда проверки: `npm run db:check --workspace @dashboard/api`. Отдельной команды очистки нет: её вызовет будущий обработчик только для пользователя текущей сессии.
 - Коллекции календаря, очереди и аудита по-прежнему не созданы, очистка их не затрагивает.
-- Изменены `apps/api/src/infrastructure/mongodb`, `apps/api/package.json`, `docs/architecture.md`.
+- Изменены модуль хранилища в `apps/api/src/infrastructure`, `apps/api/package.json`, `docs/architecture.md`.
 - Новые переменные окружения не добавлялись.
-- Проверки: `npm run lint` проходит; Vitest 139 passed. Integration-тесты выполнены на MongoDB 8.0.19 replica set. `npm run build --workspace @dashboard/api` проходит. Корневой `npm run build` не перезапускался: пакет `@dashboard/contracts` не менялся и раньше не собирается, потому что в нём нет исходников. E2E не запускался: интерфейс не менялся.
+- Проверки: `npm run lint` проходит; Vitest 139 passed. Integration-тесты хранилища выполнены на поднятой локальной базе. `npm run build --workspace @dashboard/api` проходит. Корневой `npm run build` не перезапускался: пакет `@dashboard/contracts` не менялся и раньше не собирается, потому что в нём нет исходников. E2E не запускался: интерфейс не менялся.
 
 ## 2026-11-11 — Общие DTO и формат ошибок API
 
@@ -113,7 +113,7 @@
 - Express, OAuth и доменные эндпоинты не добавлялись: это следующий пункт плана.
 - Изменены `packages/contracts`, `apps/api/src/shared/errors`, `vitest.config.ts`, корневой `package.json`.
 - Новые переменные окружения не добавлялись.
-- Проверки: `npm run lint` проходит; Vitest 150 passed / 7 skipped. Семь integration-тестов хранилища пропущены, потому что в этом запуске не задан `MONGODB_URI`. `npm run build` проходит. E2E не запускался: интерфейс не менялся.
+- Проверки: `npm run lint` проходит; Vitest 150 passed / 7 skipped. Семь integration-тестов хранилища пропущены, потому что в этом запуске не задан адрес базы. `npm run build` проходит. E2E не запускался: интерфейс не менялся.
 
 ## 2026-11-11 — Настройки виджетов, рутины, таймер и дашборд
 
@@ -123,7 +123,7 @@
 - Таймер считается от `endsAt`. Одновременно открыт один интервал. Пауза замораживает остаток, сброс не попадает в журнал, истёкший интервал закрывается при чтении. Уведомление и очередь задач не ставились: это следующий пункт плана.
 - Секции погоды, календаря и новостей отвечают «недоступно», пока нет адаптеров. Сбой одной секции не превращает дашборд в 500.
 - Кнопка Google и локальные данные интерфейса не переключались на API.
-- Проверки: `npm run lint` проходит. Vitest: 195 passed / 9 skipped. Девять integration-тестов MongoDB пропущены, потому что в этом запуске не задан `MONGODB_URI`. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся. Новые переменные окружения не добавлялись.
+- Проверки: `npm run lint` проходит. Vitest: 195 passed / 9 skipped. Девять integration-тестов хранилища пропущены, потому что в этом запуске не задан адрес базы. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся. Новые переменные окружения не добавлялись.
 
 ## 2026-11-11 — Express API, Google OAuth и профиль
 
@@ -131,7 +131,7 @@
 - Доступ к профилю идёт только от пользователя текущей сессии. Чужой документ репозитория для сервиса неотличим от отсутствующего. Удаление сначала помечает аккаунт, затем вызывает `purgeAccount`; при сбое очистки пометка возвращается.
 - Для OAuth state добавлена коллекция `one_time_tokens` и миграция 2. Она не принадлежит пользователю и живёт по TTL. Новые переменные окружения не добавлялись.
 - Кнопка Google на странице входа по-прежнему выключена: frontend остаётся на локальном состоянии до отдельной задачи.
-- Проверки: `npm run lint` проходит; Vitest 165 passed / 8 skipped. Восемь integration-тестов хранилища пропущены, потому что в этом запуске не задан `MONGODB_URI`. `npm run build --workspace @dashboard/contracts` и `npm run build --workspace @dashboard/api` проходят. E2E не запускался: интерфейс не менялся.
+- Проверки: `npm run lint` проходит; Vitest 165 passed / 8 skipped. Восемь integration-тестов хранилища пропущены, потому что в этом запуске не задан адрес базы. `npm run build --workspace @dashboard/contracts` и `npm run build --workspace @dashboard/api` проходят. E2E не запускался: интерфейс не менялся.
 
 ## 2026-11-12 — Адаптеры погоды, новостей, календаря и Telegram
 
@@ -143,23 +143,40 @@
 - Добавлена миграция 3 `external-adapters`: коллекция `calendar_events`, поле локации и назначения одноразовых токенов `calendar_oauth` и `telegram_link`.
 - Кнопка Google и локальные данные интерфейса не переключались на API.
 - В `.env.example` добавлен необязательный `GOOGLE_CALENDAR_REDIRECT_URI`. Без него адрес собирается из `APP_ORIGIN`. Новых обязательных секретов нет: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME` и `WEATHER_API_BASE_URL` уже были.
-- Проверки: `npm run lint` проходит; Vitest 210 passed / 9 skipped. Девять integration-тестов MongoDB пропущены, потому что в этом запуске не задан `MONGODB_URI`. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
+- Проверки: `npm run lint` проходит; Vitest 210 passed / 9 skipped. Девять integration-тестов хранилища пропущены, потому что в этом запуске не задан адрес базы. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
 
 ## 2026-11-12 — Очередь, worker и уведомления
 
-- Worker — второй процесс той же кодовой базы. Очередь `scheduled_jobs` живёт в MongoDB за `JobQueue`: атомарный claim, аренда, возврат просроченной аренды, экспоненциальный повтор и уникальный ключ идемпотентности. Тяжёлая работа webhook не выполняется в запросе.
+- Worker — второй процесс той же кодовой базы. Очередь `scheduled_jobs` живёт в основной базе за `JobQueue`: атомарный claim, аренда, возврат просроченной аренды, экспоненциальный повтор и уникальный ключ идемпотентности. Тяжёлая работа webhook не выполняется в запросе.
 - Web Push отправляется с VAPID на каждый вызов. Подписка на приватный адрес не сохраняется, ответ 404 или 410 её отзывает. Telegram получает `sendMessage` только на allowlist. Журнал доставки идемпотентен: повтор уже отправленного или пропущенного уведомления провайдера не вызывает. Тихие часы и выключенный канал записывают `skipped`.
 - `POST /api/v1/webhooks/telegram` и `POST /api/v1/webhooks/google-calendar` стоят до CSRF и сверяют секрет. Настройки, журнал, подписка и её удаление доступны под сессией. `GET /metrics` читает очередь, heartbeat и журнал из базы, без идентификаторов пользователей.
 - Таймер ставит задачу на `endsAt`. Сброс интервала уведомление не создаёт. Рутина напоминает в двухминутном окне местного времени. Календарь синхронизируется по пользователям и напоминает о событии за 15 минут. Канал Google продлевается, только если заданы публичный адрес и токен webhook.
 - Кнопка Web Push во frontend по-прежнему не отправляет подписку на API. Локальные данные интерфейса не переключались.
 - Миграция 4 `background-jobs` создаёт очередь и обновляет валидаторы пользователя и интеграции. Новых имён секретов нет: читаются уже описанные `WEB_PUSH_*`, `TELEGRAM_WEBHOOK_SECRET`, `GOOGLE_CALENDAR_WEBHOOK_URL`, `GOOGLE_CALENDAR_WEBHOOK_TOKEN` и настройки worker. Пустые ключи Web Push означают, что отправка не настроена.
-- Проверки: ESLint для `apps/api` и `packages/contracts` проходит; `tsc --noEmit` для API проходит; Vitest проектов api и contracts без integration-файлов — 46 файлов, 101 тест. Полный прогон с web и MongoDB в этом запуске не выполнялся. Браузер не проверялся: пользовательский интерфейс не менялся.
+- Проверки: ESLint для `apps/api` и `packages/contracts` проходит; `tsc --noEmit` для API проходит; Vitest проектов api и contracts без integration-файлов — 46 файлов, 101 тест. Полный прогон с web и базой в этом запуске не выполнялся. Браузер не проверялся: пользовательский интерфейс не менялся.
 
 ## 2026-11-12 — Тесты backend и усиление безопасности
 
 - Журнал `audit_events` пишет вход, выход, привязку и отвязку календаря или Telegram и удаление аккаунта. В записи нет токенов, cookie и адресов. После очистки аккаунта остаётся только `account_deleted` без `userId`. Срок хранения — 90 дней. Миграция 5 `security-audit`.
 - Создание ссылки Google Calendar и Telegram и callback календаря ограничены тем же окном, что и вход. `/metrics` ограничен лимитом API. Заголовки CSP, `nosniff`, `no-referrer`, Permissions-Policy и HSTS в production проверяются HTTP-тестами.
 - Проверки бизнес-логики входа, сессии, привязки календаря и лимитов дополнены в существующих HTTP-тестах. Новых переменных окружения нет.
-- Проверки: `npm run lint` проходит. Vitest 230 passed / 9 skipped. Девять integration-тестов MongoDB пропущены: локальный MongoDB на порту 27017 не отвечал и `MONGODB_URI` в этом запуске не задан. `npm run build --workspace @dashboard/api` проходит. Playwright 37 passed / 5 skipped. Браузерный интерфейс не менялся.
+- Проверки: `npm run lint` проходит. Vitest 230 passed / 9 skipped. Девять integration-тестов хранилища пропущены: локальная база не отвечала и её адрес в этом запуске не задан. `npm run build --workspace @dashboard/api` проходит. Playwright 37 passed / 5 skipped. Браузерный интерфейс не менялся.
+
+## 2026-11-14 — Единственная база в правилах агента
+
+- В `AGENTS.md` единственная база данных — PostgreSQL, доступ к ней только через Prisma ORM.
+- Из этого журнала убраны названия прежней СУБД и её переменной подключения. Записи о сделанной работе сохранены.
+- Изменены `AGENTS.md` и `docs/progress.md`. Новые переменные окружения не добавлялись. Код и сборка не менялись.
+
+## 2026-11-14 — PostgreSQL 18 и схема Prisma
+
+- Локальный `infra/compose.dev.yml` поднимает PostgreSQL 18 рядом с прежним экземпляром. CI-job `.github/workflows/postgres.yml` поднимает PostgreSQL 18, проверяет схему и выполняет `SELECT 1`.
+- Подключён Prisma ORM 7.10.1: `apps/api/prisma/schema.prisma`, `prisma.config.ts`, клиент `@prisma/adapter-pg` и `pg` 8.23.1. На процесс один `PrismaClient` и пул до 10 соединений. Runtime читает `DATABASE_URL`, миграции — `DIRECT_DATABASE_URL`.
+- В схеме описаны пользователи, сессии, одноразовые токены, виджеты, рутины, таймеры, интеграции, календарь, новости, очередь, push, журнал доставки и аудит. Частичные unique-индексы и SQL-миграция ещё не применяются: это следующий пункт плана.
+- API и worker при старте выполняют `SELECT 1` и закрывают клиент при остановке. Репозитории по-прежнему пишут через прежний драйвер.
+- Команды: `db:generate`, `db:migrate:dev`, `db:migrate` (`prisma migrate deploy`). Прежние команды каталога переименованы в `db:mongo:ensure`, `db:mongo:migrate`, `db:mongo:check`.
+- Новые переменные: `DATABASE_URL`, `DIRECT_DATABASE_URL`.
+- Изменены `apps/api`, `infra/compose.dev.yml`, `.env.example`, `.github/workflows/postgres.yml`, правила ESLint и `.cursor/rules`, `docs/architecture.md`.
+- Проверки: `npm run lint` проходит. Vitest 235 passed / 10 skipped. Девять прежних integration-тестов и новый `SELECT 1` пропущены: Docker на этой машине не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
 
 

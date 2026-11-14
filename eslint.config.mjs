@@ -10,6 +10,7 @@ export default defineConfig([
     "**/.next/**",
     "**/dist/**",
     "**/coverage/**",
+    "apps/api/src/generated/**",
     "**/next-env.d.ts",
     "playwright-report/**",
     "test-results/**"

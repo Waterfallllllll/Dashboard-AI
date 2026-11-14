@@ -1,0 +1,48 @@
+name: PostgreSQL
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  postgres:
+    name: PostgreSQL 18
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: dashboard
+          POSTGRES_PASSWORD: dashboard
+          POSTGRES_DB: dashboard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dashboard -d dashboard"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://dashboard:dashboard@localhost:5432/dashboard
+      DIRECT_DATABASE_URL: postgresql://dashboard:dashboard@localhost:5432/dashboard
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Prisma schema
+        run: npm exec --workspace @dashboard/api -- prisma validate
+
+      - name: Generate Prisma Client
+        run: npm run db:generate --workspace @dashboard/api
+
+      - name: Connect and run SELECT 1
+        run: npx vitest run apps/api/src/infrastructure/db/prisma-client.integration.test.ts

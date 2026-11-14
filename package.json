@@ -27,7 +27,7 @@
     "start:worker": "npm run start:worker --workspace @dashboard/api",
     "lint": "eslint .",
     "typecheck": "npm run build --workspace @dashboard/contracts && npm run typecheck --workspace @dashboard/contracts && npm run typecheck --workspace @dashboard/api && npm run typecheck --workspace @dashboard/web",
-    "test": "vitest run",
+    "test": "npm run db:generate --workspace @dashboard/api && vitest run",
     "test:unit": "vitest run --project unit",
     "test:component": "vitest run --project component",
     "test:integration": "vitest run --project integration",

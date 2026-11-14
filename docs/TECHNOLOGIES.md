@@ -1,7 +1,8 @@
 # Технологии проекта
 
-Версия документа: 1.0  
+Версия документа: 1.1  
 Статус: обязательный технологический стандарт  
+Изменение 1.1: постоянное хранилище — PostgreSQL 18 и Prisma ORM 7.10.1.  
 Связанные документы:
 
 - [Техническое задание](./TECHNICAL_SPECIFICATION.md)
@@ -37,10 +38,11 @@
 
 ### Хранение данных
 
-- MongoDB 8.0 как основная и обязательная база данных для локального и self-hosted окружения.
-- Официальный MongoDB Node.js Driver 7.7.0.
-- MongoDB Atlas как рекомендуемый production-вариант.
-- Replica set обязателен в окружениях, где используются transactions или change streams.
+- PostgreSQL 18 как основная и обязательная база данных для локального, CI и self-hosted окружения.
+- Prisma ORM 7.10.1. Пакеты `prisma`, `@prisma/client` и `@prisma/adapter-pg` фиксируются одной версией.
+- `pg` 8.23.1 — драйвер node-postgres. Пул соединений создаёт `@prisma/adapter-pg`, а Prisma Client работает через этот адаптер.
+- Managed PostgreSQL 18 — рекомендуемый production-вариант. В production база не ставится на тот же сервер, что и приложение, если доступен managed-сервис.
+- Prisma ORM 8 не используется: в реестре npm линия 8 остаётся release candidate и не входит в обязательный стек до стабильного релиза.
 - Redis не требуется для MVP и может быть добавлен только для подтверждённых задач распределённого кэша, rate limiting, блокировок или очередей.
 
 ## 3. Границы ответственности технологий
@@ -51,9 +53,9 @@
 - Express является единственной точкой входа доменного REST API, OAuth callback и webhook.
 - Backend владеет бизнес-логикой, секретами, внешними интеграциями и доступом к базе данных.
 - Next.js Route Handlers не используются как второй доменный backend.
-- Frontend не подключается к MongoDB напрямую.
+- Frontend не подключается к PostgreSQL и не импортирует Prisma Client.
 - Worker выполняет фоновые, периодические и отложенные задачи независимо от HTTP API.
-- Общие API DTO и runtime-схемы размещаются в `packages/contracts`; модели базы данных во frontend не экспортируются.
+- Общие API DTO и runtime-схемы размещаются в `packages/contracts`; модели Prisma во frontend не экспортируются.
 
 ## 4. Frontend-библиотеки
 
@@ -120,23 +122,23 @@
 
 - `packages/contracts` содержит сериализуемые DTO, runtime-схемы и типы, выведенные из схем.
 - `zod` является базовой библиотекой runtime-схем.
-- Контракты не зависят от React, Express или MongoDB.
-- В API не передаются `ObjectId`, внутренние документы базы данных и секретные поля интеграций.
+- Контракты не зависят от React, Express или Prisma.
+- В API не передаются модели Prisma, строки таблиц и секретные поля интеграций.
 - TypeScript `any` допускается только с документированным обоснованием.
 
 ## 7. Фоновые задачи и кэш
 
-На MVP persistent job queue хранится в MongoDB:
+На MVP persistent job queue хранится в PostgreSQL:
 
-- worker получает задачи атомарной операцией;
-- lease защищает от одновременной обработки;
+- worker забирает задачу одним условным `UPDATE` с `FOR UPDATE SKIP LOCKED`;
+- lease защищает от зависшей обработки;
 - unique idempotency key предотвращает дубли;
-- TTL indexes удаляют временные завершённые записи;
-- периодические задачи используют распределённый lock.
+- worker удаляет завершённые записи по сроку `deleteAt`;
+- периодические задачи используют распределённый lock в той же базе.
 
 Доступ к очереди скрывается интерфейсом `JobQueue`. При подтверждённом росте нагрузки реализацию можно заменить Redis-backed или managed queue без изменения доменных сервисов.
 
-Погода, новости и синхронизированные события используют серверный кэш. MongoDB остаётся источником истины для persistent данных.
+Погода, новости и синхронизированные события используют серверный кэш. PostgreSQL остаётся источником истины для persistent данных. У PostgreSQL нет TTL-индексов: сроки хранения исполняет worker.
 
 ## 8. Monorepo и package management
 
@@ -186,7 +188,7 @@ Turborepo или аналог допускается только при зам�
 
 Команды из корня `my-app`: `npm test`, `npm run test:unit`, `npm run test:component`, `npm run test:integration`, `npm run test:coverage`, `npm run test:e2e`, `npm run test:e2e:install`.
 
-Integration tests хранилища выполняются с реальным MongoDB replica set, а не с несовместимым in-memory API. HTTP-тесты API на Supertest добавляются вместе с backend-модулями.
+Integration tests хранилища выполняются с реальным PostgreSQL 18. Prisma Client в этих тестах не подменяется моком. Перед прогоном схема накатывается командой `prisma migrate deploy`. HTTP-тесты API на Supertest добавляются вместе с backend-модулями.
 
 ## 10. Сборка и запуск
 
@@ -222,7 +224,7 @@ Integration tests хранилища выполняются с реальным 
 - один frontend-контейнер;
 - один API-контейнер;
 - один worker-контейнер;
-- managed MongoDB Atlas;
+- managed PostgreSQL 18;
 - Docker Compose.
 
 Kubernetes не используется на MVP. Он рассматривается только после появления операционной необходимости, которую нельзя закрыть Compose или managed platform.
@@ -237,7 +239,7 @@ Pipeline использует:
 - multi-stage Docker builds;
 - dependency/security scan;
 - versioned images с immutable tag по commit SHA;
-- MongoDB migration/index scripts;
+- `prisma generate` и `prisma migrate deploy`;
 - health checks и rollback.
 
 ## 13. Web Platform API
@@ -260,8 +262,9 @@ OAuth-токены, refresh tokens и server session не хранятся в `l
 Не входят в целевой стек:
 
 - Tailwind CSS;
-- PostgreSQL;
-- Prisma;
+- MongoDB и MongoDB Node.js Driver;
+- Mongoose;
+- Prisma ORM 8 до стабильного релиза;
 - Drizzle;
 - GraphQL;
 - Kubernetes на MVP;
@@ -272,7 +275,8 @@ OAuth-токены, refresh tokens и server session не хранятся в `l
 
 ## 15. Открытые технологические решения
 
-- Конкретный production-тариф и регион MongoDB Atlas.
+- Конкретный провайдер, тариф и регион managed PostgreSQL 18.
+- Нужен ли внешний пулер соединений после появления реальной нагрузки. На MVP пул держит `@prisma/adapter-pg`.
 - Нужен ли Redis после появления реальной нагрузки.
 - Production-провайдер Linux/VPS или managed container platform.
 - Провайдер Weather API после проверки лимитов и коммерческих условий.
@@ -296,7 +300,8 @@ OAuth-токены, refresh tokens и server session не хранятся в `l
 - [Next.js: Sass](https://nextjs.org/docs/app/guides/sass)
 - [Express: Production Best Practices](https://expressjs.com/en/advanced/best-practice-performance.html)
 - [Express: Behind Proxies](https://expressjs.com/en/guide/behind-proxies.html)
-- [MongoDB: Data Modeling](https://www.mongodb.com/docs/manual/data-modeling/)
-- [MongoDB: Production Notes](https://www.mongodb.com/docs/manual/administration/production-notes/)
+- [Prisma ORM: PostgreSQL](https://www.prisma.io/docs/orm/overview/databases/postgresql)
+- [Prisma Migrate](https://www.prisma.io/docs/orm/prisma-migrate)
+- [PostgreSQL 18: Documentation](https://www.postgresql.org/docs/18/index.html)
 - [Google Calendar API: Synchronize resources](https://developers.google.com/workspace/calendar/api/guides/sync)
 

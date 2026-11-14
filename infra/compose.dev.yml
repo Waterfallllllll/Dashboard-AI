@@ -1,6 +1,25 @@
 name: evergreen-dashboard-dev
 
 services:
+  postgres:
+    image: postgres:18
+    container_name: evergreen-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dashboard
+      POSTGRES_PASSWORD: dashboard
+      POSTGRES_DB: dashboard
+    ports:
+      - "5432:5432"
+    volumes:
+      # У PostgreSQL 18 каталог данных — /var/lib/postgresql, не /var/lib/postgresql/data.
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dashboard -d dashboard"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   mongodb:
     image: mongo:8.0
     container_name: evergreen-mongodb
@@ -39,4 +58,5 @@ services:
         }
 
 volumes:
+  postgres-data:
   mongodb-data:

@@ -9,9 +9,8 @@ const contractFiles = ["packages/contracts/**/*.{js,mjs,cjs,ts,mts,cts}"];
 const forbiddenStackMessage = {
   tailwind: "Tailwind CSS не входит в стек. Стили — SCSS Modules и CSS custom properties.",
   cssInJs: "runtime CSS-in-JS не используется. Стили — SCSS Modules.",
-  prisma: "Prisma/Drizzle не входят в стек. Хранилище — MongoDB Driver.",
-  graphql: "GraphQL не входит в стек. API — REST /api/v1.",
-  postgres: "PostgreSQL не входит в стек. Хранилище — MongoDB."
+  drizzle: "Drizzle не входит в стек. Хранилище — Prisma ORM и PostgreSQL.",
+  graphql: "GraphQL не входит в стек. API — REST /api/v1."
 };
 
 const forbiddenStackPaths = [
@@ -21,35 +20,35 @@ const forbiddenStackPaths = [
   { name: "@emotion/react", message: forbiddenStackMessage.cssInJs },
   { name: "@emotion/styled", message: forbiddenStackMessage.cssInJs },
   { name: "@emotion/css", message: forbiddenStackMessage.cssInJs },
-  { name: "prisma", message: forbiddenStackMessage.prisma },
-  { name: "@prisma/client", message: forbiddenStackMessage.prisma },
-  { name: "drizzle-orm", message: forbiddenStackMessage.prisma },
+  { name: "drizzle-orm", message: forbiddenStackMessage.drizzle },
   { name: "graphql", message: forbiddenStackMessage.graphql },
   { name: "graphql-tag", message: forbiddenStackMessage.graphql },
-  { name: "@apollo/client", message: forbiddenStackMessage.graphql },
-  { name: "pg", message: forbiddenStackMessage.postgres },
-  { name: "postgres", message: forbiddenStackMessage.postgres }
+  { name: "@apollo/client", message: forbiddenStackMessage.graphql }
 ];
 
 const forbiddenStackPatterns = [
   { group: ["tailwindcss/*", "@tailwindcss/*"], message: forbiddenStackMessage.tailwind },
   { group: ["styled-jsx/*"], message: forbiddenStackMessage.cssInJs },
   { group: ["@emotion/*"], message: forbiddenStackMessage.cssInJs },
-  { group: ["@prisma/*"], message: forbiddenStackMessage.prisma },
-  { group: ["drizzle-orm/*"], message: forbiddenStackMessage.prisma },
+  { group: ["drizzle-orm/*"], message: forbiddenStackMessage.drizzle },
   { group: ["@apollo/*"], message: forbiddenStackMessage.graphql }
 ];
 
 const backendOnlyMessage =
-  "Frontend не импортирует backend-пакеты и не подключается к MongoDB. Данные — через /api/v1.";
+  "Frontend не импортирует backend-пакеты и не подключается к PostgreSQL. Данные — через /api/v1.";
 const frontendOnlyMessage =
   "apps/api не импортирует frontend-код. UI живёт в apps/web.";
 const contractsMessage =
-  "packages/contracts содержит только сериализуемые DTO и Zod-схемы: без UI, Express и MongoDB.";
+  "packages/contracts содержит только сериализуемые DTO и Zod-схемы: без UI, Express и Prisma.";
 
 const backendOnlyPaths = [
   { name: "mongodb", message: backendOnlyMessage },
   { name: "bson", message: backendOnlyMessage },
+  { name: "pg", message: backendOnlyMessage },
+  { name: "postgres", message: backendOnlyMessage },
+  { name: "prisma", message: backendOnlyMessage },
+  { name: "@prisma/client", message: backendOnlyMessage },
+  { name: "@prisma/adapter-pg", message: backendOnlyMessage },
   { name: "express", message: backendOnlyMessage },
   { name: "helmet", message: backendOnlyMessage },
   { name: "cors", message: backendOnlyMessage },
@@ -80,6 +79,10 @@ const frontendOnlyPatterns = [
   { group: ["react/*", "react-dom/*"], message: frontendOnlyMessage },
   { group: ["next/*"], message: frontendOnlyMessage },
   { group: ["@dnd-kit/*"], message: frontendOnlyMessage }
+];
+
+const backendOnlyPatterns = [
+  { group: ["@prisma/*", "prisma/*"], message: backendOnlyMessage }
 ];
 
 const webToApiPatterns = [
@@ -128,7 +131,7 @@ export default [
     rules: {
       "no-restricted-imports": restrictedImports({
         paths: backendOnlyPaths,
-        patterns: [...webToApiPatterns, featureInternalsPattern]
+        patterns: [...backendOnlyPatterns, ...webToApiPatterns, featureInternalsPattern]
       })
     }
   },
@@ -151,7 +154,10 @@ export default [
           ...backendOnlyPaths.map((item) => ({ ...item, message: contractsMessage })),
           ...frontendOnlyPaths.map((item) => ({ ...item, message: contractsMessage }))
         ],
-        patterns: frontendOnlyPatterns.map((item) => ({ ...item, message: contractsMessage }))
+        patterns: [
+          ...frontendOnlyPatterns.map((item) => ({ ...item, message: contractsMessage })),
+          ...backendOnlyPatterns.map((item) => ({ ...item, message: contractsMessage }))
+        ]
       })
     }
   },

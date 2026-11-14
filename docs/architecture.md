@@ -1,7 +1,8 @@
 # Архитектура персонального дашборда
 
-Версия: 1.0  
+Версия: 1.1  
 Статус: целевая архитектура MVP  
+Изменение 1.1: постоянное хранилище — PostgreSQL 18 и Prisma ORM. Очередь задач и сроки хранения тоже живут в PostgreSQL.  
 Основание: [TECHNICAL_SPECIFICATION.md](./TECHNICAL_SPECIFICATION.md)  
 Технологический стандарт: [TECHNOLOGIES.md](./TECHNOLOGIES.md)
 
@@ -180,6 +181,9 @@ dashboard/
 │  │  └─ tsconfig.json
 │  │
 │  └─ api/
+│     ├─ prisma/
+│     │  ├─ schema.prisma
+│     │  └─ migrations/
 │     ├─ src/
 │     │  ├─ main.ts
 │     │  ├─ worker-main.ts
@@ -204,10 +208,10 @@ dashboard/
 │     │  │  └─ widgets/
 │     │  ├─ infrastructure/
 │     │  │  ├─ crypto/
+│     │  │  ├─ db/
 │     │  │  ├─ http-clients/
 │     │  │  ├─ jobs/
 │     │  │  ├─ logging/
-│     │  │  ├─ mongodb/
 │     │  │  └─ push/
 │     │  ├─ middleware/
 │     │  ├─ shared/
@@ -215,7 +219,6 @@ dashboard/
 │     │  │  ├─ types/
 │     │  │  └─ utils/
 │     │  └─ tests/
-│     ├─ migrations/
 │     ├─ package.json
 │     └─ tsconfig.json
 │
@@ -242,9 +245,6 @@ dashboard/
 │  ├─ compose.dev.yml
 │  └─ compose.prod.yml
 │
-├─ scripts/
-│  ├─ create-indexes.ts
-│  └─ migrate.ts
 ├─ .env.example
 ├─ package.json
 ├─ package-lock.json
@@ -273,7 +273,7 @@ node dist/worker-main.js
 - `apps/api` не импортирует frontend-код.
 - Оба приложения могут импортировать только публичные API из `packages/contracts` и `packages/config`.
 - `packages/contracts` не зависит от UI, HTTP framework и реализации хранилища.
-- Внутренние типы документов хранилища не публикуются во frontend.
+- Модели Prisma и внутренние типы строк не публикуются во frontend.
 - Секреты и server-only код не размещаются в общих пакетах.
 
 Направление зависимостей:
@@ -294,7 +294,7 @@ flowchart LR
 - Route вызывает controller.
 - Controller валидирует HTTP DTO и вызывает service.
 - Service содержит бизнес-логику и вызывает repository/integration.
-- Repository работает с одной или несколькими коллекциями своего модуля.
+- Repository работает с таблицами своего модуля через Prisma Client.
 - Один модуль не обращается напрямую к repository другого модуля.
 - Межмодульное взаимодействие выполняется через публичный service.
 - Infrastructure реализует интерфейсы внешних зависимостей.
@@ -514,10 +514,10 @@ modules/routines/
 - JSON-поля API используют единое соглашение `camelCase`;
 - даты-время передаются в ISO 8601 UTC;
 - локальная дата передаётся как `YYYY-MM-DD`;
-- pagination — cursor-based для растущих коллекций;
+- pagination — cursor-based для растущих списков;
 - `PATCH` используется для частичных изменений;
 - повторяемые POST-запросы принимают `Idempotency-Key`;
-- API не возвращает внутренний документ хранилища напрямую;
+- API не возвращает модель Prisma или строку таблицы напрямую;
 - DTO преобразуется явно в service/controller.
 
 ### 7.4. Общие контракты
@@ -532,7 +532,7 @@ modules/routines/
 
 Контракты не содержат:
 
-- внутренние идентификаторы и collection types;
+- модели Prisma и внутренние типы строк;
 - framework Request/Response;
 - UI components;
 - секреты или внутренние поля интеграций.
@@ -541,126 +541,152 @@ modules/routines/
 
 ### 8.1. Подключение
 
-- Каждый процесс создаёт один клиент хранилища.
-- Внутри процесса используется общий connection pool.
-- Клиент открывается при старте и закрывается при `SIGTERM`/`SIGINT`.
-- API становится ready только после успешного подключения.
+- Схема живёт в `apps/api/prisma/schema.prisma`. Модели называются в PascalCase, поля — в camelCase. Таблицы и колонки в PostgreSQL — в snake_case через `@@map` и `@map`.
+- Первичный ключ — UUID (`gen_random_uuid()`). Моменты времени — `timestamptz`. Локальная дата рутины — `date`.
+- Каждый процесс создаёт один `PrismaClient` поверх `@prisma/adapter-pg` в `apps/api/src/infrastructure/db/prisma-client.ts`. В watch mode клиент переиспользуется внутри процесса, чтобы пул не размножался.
+- Пул адаптера ограничен десятью соединениями на процесс. Сумма соединений API, worker и миграции остаётся ниже `max_connections` сервера. Время выполнения запроса ограничено 10 секундами.
+- Клиент открывается при старте и закрывается через `$disconnect` при `SIGTERM`/`SIGINT`.
+- API становится ready только после успешного `SELECT 1`.
 - На transient errors применяются ограниченные retries с exponential backoff.
 - Запросы имеют ограничение максимального времени выполнения.
+- Runtime читает `DATABASE_URL`. `prisma migrate` использует прямое соединение: на MVP это тот же адрес, а при появлении transaction-mode пулера — отдельный `DIRECT_DATABASE_URL`.
 
-### 8.2. Коллекции
+### 8.2. Таблицы
 
 `users`:
 
 - профиль, locale, timezone, тема;
 - необязательное `weatherLocation`: широта и долгота, округлённые до двух знаков, и подпись места. Поле не входит в публичный профиль;
-- индекс по внешним идентификаторам не хранится здесь.
+- внешний идентификатор провайдера здесь не хранится.
 
 `auth_accounts`:
 
 - OAuth/Telegram identity;
 - зашифрованные токены;
-- unique `{ provider: 1, providerUserId: 1 }`;
-- unique `{ userId: 1, provider: 1 }`.
+- внешний ключ на `users` с `ON DELETE CASCADE`;
+- unique `(provider, providerUserId)`;
+- unique `(userId, provider)`.
 
 `sessions`:
 
 - hash session token, `userId`, `expiresAt`;
+- внешний ключ на `users` с `ON DELETE CASCADE`;
 - unique по hash;
-- TTL index только по `expiresAt` с `expireAfterSeconds: 0`.
+- индекс по `expiresAt` для очистки просроченных сессий.
 
 `one_time_tokens`:
 
 - одноразовый OAuth state, state календаря и ссылка Telegram: hash, назначение `oauth_state` | `calendar_oauth` | `telegram_link`, зашифрованный payload, `expiresAt`, `consumedAt`;
-- пользователя в документе нет: идентификатор сессии лежит только внутри зашифрованного payload;
+- строки пользователя нет: идентификатор сессии лежит только внутри зашифрованного payload;
 - unique по hash;
-- TTL index по `expiresAt` с `expireAfterSeconds: 0`.
+- индекс по `expiresAt` для очистки.
 
-`dashboard_configs`:
+`widget_preferences`:
 
-- один документ на пользователя;
-- небольшой ограниченный массив настроек виджетов;
-- unique `{ userId: 1 }`;
-- уникальность `{ userId, widgetType }` из спецификации держится одним документом и проверкой массива в приложении, отдельный индекс коллекции не создаётся;
-- порядок и видимость обновляются атомарно одним документом.
+- одна строка на пару пользователь + тип виджета;
+- порядок, видимость, размер и ограниченный `Json` настроек;
+- внешний ключ на `users` с `ON DELETE CASCADE`;
+- unique `(userId, widgetType)`;
+- `position` обязателен, поэтому unique `(userId, position)` запрещает две карточки на одной позиции;
+- пакетное изменение порядка и видимости выполняется одной транзакцией.
 
 `routine_rules`:
 
 - шаблоны повторений;
-- индекс `{ userId: 1, status: 1 }` по живым документам (`deletedAt: null`);
-- индекс `{ userId: 1, startDate: 1 }` по живым документам (`deletedAt: null`).
+- внешний ключ на `users` с `ON DELETE CASCADE`;
+- unique `(id, userId)` для составной ссылки из экземпляров;
+- индекс `(userId, status)` по живым строкам (`deletedAt IS NULL`);
+- индекс `(userId, startDate)` по живым строкам (`deletedAt IS NULL`).
 
 `routine_occurrences`:
 
 - состояние рутины на конкретную локальную дату;
-- unique `{ routineRuleId: 1, localDate: 1 }`;
-- индекс `{ userId: 1, localDate: 1 }`.
+- внешний ключ `(routineRuleId, userId)` → `routine_rules (id, userId)`;
+- unique `(routineRuleId, localDate)`;
+- индекс `(userId, localDate)`.
+
+`timer_presets`:
+
+- длительности работы и перерывов одного пользователя;
+- внешний ключ на `users` с `ON DELETE CASCADE`;
+- unique `userId`: у пользователя один пресет.
 
 `timer_sessions`:
 
 - история и текущая сессия;
-- индекс `{ userId: 1, startedAt: -1 }`;
-- partial unique `{ userId: 1 }` при `completedAt: null`: не больше одной незавершённой сессии.
+- внешний ключ на `users` с `ON DELETE CASCADE`;
+- индекс `(userId, startedAt DESC)`;
+- partial unique `(userId)` при `completedAt IS NULL`: не больше одной незавершённой сессии.
 
 `integrations`:
 
 - Google Calendar и Telegram;
 - credentials шифруются на уровне приложения;
-- unique `{ userId: 1, type: 1 }` по живым документам (`deletedAt: null`).
+- внешний ключ на `users` с `ON DELETE CASCADE`;
+- unique `(id, userId)` для составной ссылки из событий календаря;
+- unique `(userId, type)` по живым строкам (`deletedAt IS NULL`).
 
 `calendar_events`:
 
 - нормализованный пользовательский кэш;
-- unique `{ integrationId: 1, externalEventId: 1 }`;
-- индекс `{ userId: 1, startAt: 1 }`.
+- внешний ключ `(integrationId, userId)` → `integrations (id, userId)`;
+- unique `(integrationId, externalEventId)`;
+- индекс `(userId, startAt)`.
 
 `news_items`:
 
-- глобальный кэш новостей;
+- глобальный кэш новостей, без внешнего ключа на пользователя;
 - unique по hash канонического URL;
-- индекс `{ publishedAt: -1, topics: 1, language: 1 }`.
+- индекс `(publishedAt DESC, language)`;
+- GIN-индекс по массиву тем.
 
 `push_subscriptions`:
 
 - Web Push endpoint и зашифрованные ключи;
+- внешний ключ на `users` с `ON DELETE CASCADE`;
 - unique по hash endpoint;
-- индекс `{ userId: 1, revokedAt: 1 }`.
+- индекс `(userId, revokedAt)`.
 
 `scheduled_jobs`:
 
 - тип, payload, `runAt`, status, attempts;
 - lease-поля `lockedAt`, `lockedBy`, `lockExpiresAt`;
+- `userId` необязателен: задачи планировщика и heartbeat пользователя не имеют;
+- внешний ключ на `users` с `ON DELETE CASCADE` только для строк с пользователем;
 - unique `idempotencyKey`;
-- индекс `{ status: 1, runAt: 1 }`;
-- отдельный TTL index по `deleteAt` для завершённых задач.
+- индекс `(status, runAt)`;
+- partial index по `runAt` для `status = pending`;
+- индекс по `deleteAt` для очистки завершённых задач.
 
 `notification_deliveries`:
 
 - канал, status, attempts, provider message ID;
+- внешний ключ на `users` с `ON DELETE CASCADE`;
 - unique `idempotencyKey`;
-- индекс `{ userId: 1, createdAt: -1 }`;
-- TTL index по `deleteAt` с `expireAfterSeconds: 0`: документ удаляется в записанный момент. Срок журнала доставки по умолчанию — 30 дней от `createdAt`. История таймеров и рутин не получает TTL и хранится до физической очистки аккаунта, см. раздел 8.9.
+- индекс `(userId, createdAt DESC)`;
+- индекс по `deleteAt`. Срок журнала доставки по умолчанию — 30 дней от `createdAt`, его записывает приложение. История таймеров и рутин автоматического срока не получает и живёт до физической очистки аккаунта, см. раздел 8.9.
 
 `audit_events`:
 
 - события безопасности: вход, выход, привязка и отвязка интеграции, удаление аккаунта;
-- в документе только `userId`, действие, цель (`google`, `google_calendar`, `telegram`) и даты. Токены, cookie, адреса и payload не пишутся;
-- `userId` есть у событий живого аккаунта. После очистки аккаунта остаётся одна запись `account_deleted` с `userId: null`;
-- индекс `{ userId: 1, createdAt: -1 }`;
-- TTL по `deleteAt`, 90 дней от `createdAt`.
+- в строке только `userId`, действие, цель (`google`, `google_calendar`, `telegram`) и даты. Токены, cookie, адреса и payload не пишутся;
+- `userId` есть у событий живого аккаунта и удаляется вместе с ним. После очистки остаётся одна запись `account_deleted` с `userId: null` и без внешнего ключа;
+- индекс `(userId, createdAt DESC)`;
+- индекс по `deleteAt`. Срок журнала — 90 дней от `createdAt`.
 
-Ограничения TTL и compound indexes определяются возможностями выбранного хранилища из [TECHNOLOGIES.md](./TECHNOLOGIES.md).
+PostgreSQL не удаляет строки по TTL-индексу. Индексы по `expiresAt` и `deleteAt` обслуживают выборку worker. Состав индексов и ограничения зафиксированы в [TECHNOLOGIES.md](./TECHNOLOGIES.md).
 
-### 8.3. Embedding и references
+### 8.3. Нормализация
 
-Встраиваются:
+Колонками `users` хранятся:
 
-- небольшой ограниченный список widget preferences;
-- настройки темы и локали пользователя;
-- компактные значения timer preset.
+- тема, локаль, часовой пояс и формат времени;
+- округлённая локация погоды.
 
-Хранятся отдельно:
+Отдельными таблицами хранятся:
 
+- настройки виджетов;
+- пресеты таймера;
 - история рутин;
 - события календаря;
 - новости;
@@ -668,66 +694,77 @@ modules/routines/
 - уведомления;
 - фоновые задачи.
 
-Неограниченно растущие массивы внутри `User` запрещены.
+`Json` допустим только для ограниченного объекта настроек, который перед записью проверяет runtime-схема. Неограниченный список внутри строки `users` запрещён.
 
 ### 8.4. Транзакции
 
-Транзакции используются только для операций, где требуется атомарное изменение нескольких документов:
+Интерактивная транзакция Prisma используется только там, где одна операция меняет несколько строк:
 
-- запуск таймера + создание scheduled job;
+- запуск таймера и создание scheduled job;
 - критичное завершение OAuth-привязки;
-- удаление интеграции + отмена связанных задач.
+- удаление интеграции и отмена связанных задач;
+- пакетное сохранение порядка виджетов;
+- физическая очистка аккаунта.
 
-Обычные обновления одного документа используют атомарные операции хранилища без транзакции.
+Обычное обновление одной строки транзакцию не открывает. Уровень изоляции — `READ COMMITTED`, уровень PostgreSQL по умолчанию.
 
 ### 8.5. Шифрование credentials
 
-Access token, refresh token, credentials интеграций и ключи Web Push шифруются в приложении до записи. Алгоритм — AES-256-GCM. Ключ — `DATA_ENCRYPTION_KEY`, 32 байта в base64 или hex, отдельно от MongoDB.
+Access token, refresh token, credentials интеграций и ключи Web Push шифруются в приложении до записи. Алгоритм — AES-256-GCM. Ключ — `DATA_ENCRYPTION_KEY`, 32 байта в base64 или hex, отдельно от PostgreSQL.
 
 В поле хранится строка `enc:v1:<iv>.<tag>.<ciphertext>` в base64url. Дополнительные аутентифицированные данные привязаны к назначению поля: `auth_accounts.access_token`, `auth_accounts.refresh_token`, `integrations.credentials`, `push_subscriptions.keys`, `one_time_tokens.payload`. Ciphertext одного поля нельзя подставить в другое. Открытый секрет в базу и логи не попадает.
 
 ### 8.6. Мягкое удаление
 
-`users`, `routine_rules` и `integrations` при пользовательском удалении не стираются физически. Операция ставит `deletedAt` и `updatedAt`. Повтор идемпотентен. Undo снова записывает `deletedAt: null`, пока живой документ с тем же уникальным ключом не занял место.
+`users`, `routine_rules` и `integrations` при пользовательском удалении не стираются физически. Операция ставит `deletedAt` и `updatedAt`. Повтор идемпотентен. Undo снова записывает `deletedAt: null`, пока живая строка с тем же уникальным ключом не заняла место.
 
-Выборки живых документов фильтруют `deletedAt: null`. Физическая очистка аккаунта описана в разделе 8.9.
+Выборки живых строк фильтруют `deletedAt: null`. Физическая очистка аккаунта описана в разделе 8.9.
+
+Уникальность живых строк задаёт partial unique index в SQL миграции: `WHERE deleted_at IS NULL`. Декларативный `@@unique` Prisma ORM 7 такое условие не выражает, а уникальный индекс PostgreSQL считает разные `NULL` различными, поэтому пара `(userId, type, deletedAt)` две живые строки не запрещает.
+
+Следующая миграция, которую предлагает `prisma migrate dev`, проверяется до коммита. Если Prisma генерирует `DROP INDEX` для partial index, эта команда из SQL удаляется. Integration-тест читает `pg_indexes` и подтверждает, что частичные индексы на месте.
 
 ### 8.7. Версионированные миграции
 
-Миграции лежат в `apps/api/src/infrastructure/mongodb/migrations`. Номера сплошные, начиная с 1. `up` идемпотентен. Команда `npm run db:migrate --workspace @dashboard/api` применяет только ещё не записанные версии и фиксирует их в `schema_migrations` (`version`, `name`, `appliedAt`). Уникальный индекс по `version` не даёт применить одну версию дважды.
+Источник схемы — `apps/api/prisma/schema.prisma`. SQL миграций лежит в `apps/api/prisma/migrations`. Prisma записывает применённые миграции в `_prisma_migrations`.
 
-Первая миграция создаёт коллекции с валидаторами и индексы каталога на момент запуска. Вторая миграция `one-time-tokens` идемпотентно добавляет `one_time_tokens` для баз, которые уже применили версию 1. Третья миграция `external-adapters` добавляет `calendar_events`, необязательное `users.weatherLocation` и назначения `calendar_oauth` и `telegram_link` у `one_time_tokens`. Четвёртая миграция `background-jobs` создаёт `scheduled_jobs`, обновляет валидаторы `users` и `integrations` и добавляет индексы очереди, срока таймера, напоминаний рутин, отозванных push-подписок и подключённых интеграций. Пятая миграция `security-audit` создаёт `audit_events` и её индексы. Новая миграция не удаляет поля в том же выпуске, где код перестаёт их читать.
+Команды workspace `@dashboard/api`:
+
+- `db:generate` — `prisma generate`; клиент собирается до typecheck и production build;
+- `db:migrate:dev` — `prisma migrate dev`, только локальная разработка;
+- `db:migrate` — `prisma migrate deploy`, CI и production.
+
+Первая миграция создаёт таблицы, внешние ключи, обычные индексы и partial unique indexes каталога. Новая миграция не удаляет колонку в том же выпуске, где код перестаёт её читать. Сгенерированный клиент импортируется только внутри `apps/api`.
 
 ### 8.8. Проверка запросов
 
-Основные чтения сессии, дашборда, рутин, таймера, новостей, интеграций и уведомлений собраны в каталоге запросов. У каждого unique- и query-индекса есть один запрос. Команда `npm run db:check --workspace @dashboard/api` выполняет `explain` с `executionStats`.
+Основные чтения сессии, дашборда, рутин, таймера, новостей, интеграций и уведомлений собраны в каталоге запросов. У каждого unique- и query-индекса есть один запрос. Команда `npm run db:check --workspace @dashboard/api` выполняет `EXPLAIN (ANALYZE, BUFFERS)`.
 
-План принимается, только если победивший план читает ожидаемый индекс (`IXSCAN`), не сканирует коллекцию целиком и не сортирует отдельно там, где порядок уже задан индексом. Запросы к частичным индексам включают их фильтр: `deletedAt: null` или `completedAt: null`.
+План принимается, если он читает ожидаемый индекс (`Index Scan`, `Index Only Scan` или `Bitmap Index Scan`) и не делает отдельную сортировку там, где порядок уже задан индексом. Запросы к частичным индексам включают их фильтр: `deletedAt IS NULL` или `completedAt IS NULL`.
 
-На коллекции меньше 32 документов планировщик может честно выбрать полный просмотр. Тогда проверка отдельно подтверждает, что заданный индекс способен выполнить запрос. Начиная с 32 документов должен победить сам индекс.
+На малом числе строк планировщик может выбрать `Seq Scan`. Тогда проверка подтверждает, что индекс есть в `pg_indexes`, и повторяет план с `enable_seqscan = off`. В этом режиме должен использоваться заданный индекс.
 
 ### 8.9. Целостность, очистка аккаунта и сроки хранения
 
-Проверка целостности сверяет ссылки и не загружает секреты: в выборку попадают только идентификаторы, тип и позиция виджета, даты журнала доставки.
+Внешние ключи не дают строке ссылаться на отсутствующего пользователя, отсутствующее правило или чужую интеграцию. Составные ключи `routine_occurrences` и `calendar_events` дополнительно требуют, чтобы `userId` совпадал с владельцем родителя. Проверка целостности секреты не читает: в выборку попадают идентификаторы, тип и позиция виджета, даты журнала доставки.
 
 Нарушением считается:
 
-- документ пользовательской коллекции ссылается на отсутствующего пользователя;
-- экземпляр рутины ссылается на отсутствующее правило или на правило другого пользователя;
-- в настройках дашборда повторяются тип или позиция виджета;
+- повторяются тип или позиция виджета одного пользователя;
 - у записи `notification_deliveries` нет `deleteAt` либо срок не равен 30 дням от `createdAt`;
-- событие календаря ссылается на отсутствующую интеграцию или на интеграцию другого пользователя.
+- у записи `audit_events` нет `deleteAt` либо срок не равен 90 дням от `createdAt`;
+- обязательный partial unique index отсутствует.
 
 Сроки:
 
-- `sessions` удаляет TTL по `expiresAt`;
-- `one_time_tokens` удаляет TTL по `expiresAt` и не принадлежит пользователю;
+- worker удаляет `sessions` с `expiresAt <= now()`;
+- worker удаляет `one_time_tokens` с `expiresAt <= now()`; таблица пользователю не принадлежит;
 - журнал доставки живёт 30 дней;
 - журнал аудита живёт 90 дней;
-- завершённые и проваленные задачи очереди удаляет TTL по `scheduled_jobs.deleteAt`;
-- `timer_sessions`, `routine_rules`, `routine_occurrences` и `calendar_events` живут до очистки аккаунта. TTL на них не ставится.
+- завершённые и проваленные задачи очереди worker удаляет по `scheduled_jobs.deleteAt`;
+- `timer_sessions`, `timer_presets`, `routine_rules`, `routine_occurrences` и `calendar_events` живут до очистки аккаунта.
 
-`purgeAccount` в одной транзакции удаляет пользователя и документы с его `userId` из `auth_accounts`, `sessions`, `dashboard_configs`, `routine_rules`, `routine_occurrences`, `timer_sessions`, `integrations`, `calendar_events`, `push_subscriptions`, `notification_deliveries`, `scheduled_jobs` и `audit_events`. Задачи без пользователя (`userId: null`) — lock планировщика и heartbeat — не удаляются. Запись `account_deleted` с пустым `userId` тоже остаётся и удаляется только TTL. `news_items` — общий кэш, он не удаляется. `one_time_tokens` тоже не удаляется: срок жизни задаёт TTL. Живой аккаунт (`deletedAt: null`) не удаляется. Повтор после очистки ничего не стирает.
+`purgeAccount` выполняется в одной транзакции и только для строки с уже установленным `deletedAt`. Удаление `users` каскадом стирает `auth_accounts`, `sessions`, `widget_preferences`, `timer_presets`, `routine_rules`, `routine_occurrences`, `timer_sessions`, `integrations`, `calendar_events`, `push_subscriptions`, `notification_deliveries`, пользовательские `scheduled_jobs` и `audit_events` этого пользователя. Задачи без пользователя (`userId: null`) — lock планировщика и heartbeat — не удаляются. После удаления пользователя транзакция добавляет `account_deleted` с пустым `userId`; эту строку позже удаляет worker. `news_items` — общий кэш, он не удаляется. `one_time_tokens` тоже не удаляется: срок жизни задаёт `expiresAt`. Живой аккаунт (`deletedAt: null`) не удаляется. Повтор после очистки ничего не стирает.
 
 `DELETE /api/v1/account` вызывает очистку только для пользователя текущей сессии и только после мягкого удаления. Если очистка не удалась, мягкое удаление возвращается, а клиент получает 503. Отдельной команды очистки в CLI нет.
 
@@ -735,25 +772,47 @@ Access token, refresh token, credentials интеграций и ключи Web 
 
 ### 9.1. Persistent queue на MVP
 
-Очередь использует основное persistent store, чтобы не добавлять отдельный инфраструктурный сервис до появления измеримой необходимости. Выбор текущей и возможной будущей реализации зафиксирован в [TECHNOLOGIES.md](./TECHNOLOGIES.md).
+Очередь использует PostgreSQL, чтобы не добавлять отдельный инфраструктурный сервис до появления измеримой необходимости. Выбор текущей и возможной будущей реализации зафиксирован в [TECHNOLOGIES.md](./TECHNOLOGIES.md).
 
 Взаимодействие скрывается за интерфейсом `JobQueue`, поэтому реализацию можно заменить без изменения доменных сервисов.
 
 ### 9.2. Получение задачи worker
 
-Worker атомарно захватывает следующую доступную задачу:
+Worker атомарно захватывает следующую доступную задачу одним параметризованным запросом Prisma. В SQL ниже указаны физические имена колонок. Статус хранится текстом:
+
+```sql
+UPDATE scheduled_jobs
+SET status = 'processing',
+    locked_by = $worker,
+    locked_at = now(),
+    lock_expires_at = $leaseUntil
+WHERE id = (
+  SELECT id
+  FROM scheduled_jobs
+  WHERE status = 'pending'
+    AND run_at <= now()
+  ORDER BY run_at
+  FOR UPDATE SKIP LOCKED
+  LIMIT 1
+)
+RETURNING *;
+```
+
+Условный `UPDATE` делает четыре шага одной операцией:
 
 - выбирает `pending` задачу с `runAt <= now`;
 - устанавливает `status = processing`;
 - записывает `lockedBy` и срок lease;
-- возвращает захваченный документ.
+- возвращает захваченную строку.
+
+`SKIP LOCKED` позволяет нескольким worker не брать одну и ту же строку. Пустой результат означает, что доступных задач нет.
 
 После выполнения:
 
 - успех → `completed`;
 - временная ошибка → новый `runAt` с exponential backoff;
 - превышение retries → `failed`;
-- завершённый документ получает `deleteAt`.
+- завершённая строка получает `deleteAt`.
 
 Если worker завершился аварийно, задача с истёкшим lease возвращается в `pending`.
 
@@ -774,6 +833,7 @@ Unique index не позволяет создать повторную дост�
 - восстановительная Calendar sync — по расписанию;
 - поиск истёкших таймеров — короткий интервал как страховочный механизм;
 - очистка отозванных подписок — ежедневно;
+- удаление просроченных сессий, одноразовых токенов, журналов доставки, аудита и завершённых задач — не реже одного раза в час;
 - возврат задач с истёкшим lease — постоянно;
 - проверка reminder рутин — согласно локальному времени пользователя.
 
@@ -843,7 +903,7 @@ sequenceDiagram
 1. Browser получает координаты после согласия.
 2. Backend округляет их до двух знаков и хранит в `users.weatherLocation`. В публичный профиль координаты не попадают.
 3. Ключ кэша строится по округлённым координатам и единице температуры.
-4. Свежий ответ живёт 15 минут в памяти процесса. Отдельной коллекции погоды нет.
+4. Свежий ответ живёт 15 минут в памяти процесса. Отдельной таблицы погоды нет.
 5. Если Open-Meteo недоступен, отдаётся устаревший снимок не старше 6 часов. Иначе секция получает статус ошибки и не роняет дашборд.
 
 ### 10.5. AI-новости
@@ -852,7 +912,7 @@ sequenceDiagram
 2. Загрузка идёт только на allowlist-хосты, без следования редиректам. У каждого хоста свой предохранитель.
 3. Adapter убирает HTML, нормализует URL, убирает дубли и назначает темы.
 4. Новости upsert-ятся в `news_items` по hash канонического URL.
-5. API фильтрует готовую коллекцию по языку, теме, лимиту и режиму источников. Если обновление не удалось, остаётся прошлый снимок. Worker дополнительно обновляет ленту каждые 15 минут.
+5. API фильтрует сохранённые строки по языку, теме, лимиту и режиму источников. Если обновление не удалось, остаётся прошлый снимок. Worker дополнительно обновляет ленту каждые 15 минут.
 
 ## 11. Авторизация и сессия
 
@@ -875,7 +935,7 @@ OAuth state входа, state календаря и одноразовая сс�
 
 - короткоживущие;
 - хранятся в виде hash;
-- автоматически удаляются TTL index.
+- автоматически удаляются worker по `expiresAt`.
 
 Для мутаций с cookie backend проверяет, что `Origin` равен `APP_ORIGIN`, и заголовок `X-CSRF-Token`. Токен — HMAC сырого session token на `SESSION_SECRET`. `GET /api/v1/auth/google`, `GET /api/v1/auth/google/callback` и `GET /api/v1/integrations/google/callback` CSRF не требуют: это переход браузера, а адрес возврата не берётся из запроса. Внешние webhook имеют отдельные правила.
 
@@ -900,7 +960,7 @@ OAuth state входа, state календаря и одноразовая сс�
 - frontend dev server;
 - HTTP API с watch mode;
 - worker с watch mode;
-- локальный кластер хранилища через `compose.dev.yml`.
+- локальный PostgreSQL 18 через `compose.dev.yml`.
 
 Reverse proxy в локальной разработке необязателен. Frontend dev server может проксировать `/api/v1` в backend, чтобы browser продолжал работать с same-origin URL.
 
@@ -1021,8 +1081,8 @@ Worker:
 - `NODE_ENV`;
 - `PORT`;
 - `APP_ORIGIN`;
-- `MONGODB_URI`;
-- `MONGODB_DB_NAME`;
+- `DATABASE_URL`;
+- `DIRECT_DATABASE_URL` — прямое соединение для `prisma migrate`, если runtime-адрес ведёт в transaction-mode пулер; на MVP может совпадать с `DATABASE_URL`;
 - `SESSION_SECRET`;
 - `DATA_ENCRYPTION_KEY`;
 - `GOOGLE_CLIENT_ID`;
@@ -1051,13 +1111,13 @@ Pipeline:
 3. lint;
 4. статическая проверка типов;
 5. unit tests;
-6. integration tests с production-совместимым кластером хранилища;
+6. integration tests с PostgreSQL 18;
 7. build contracts, API и web;
 8. E2E для критичных сценариев;
 9. сборка versioned container images;
 10. security/dependency scan;
 11. публикация images;
-12. запуск migration/index scripts;
+12. `prisma migrate deploy`;
 13. обновление Compose services;
 14. health checks;
 15. автоматический rollback при неуспешном health check.
@@ -1066,11 +1126,11 @@ Container images помечаются immutable tag по commit SHA. `latest` н
 
 Миграции хранилища:
 
-- имеют номер версии;
-- идемпотентны;
-- записываются в `schema_migrations`;
-- отдельно создают/проверяют индексы;
-- не удаляют поля в том же deployment, где код перестаёт их читать.
+- хранятся в `apps/api/prisma/migrations`;
+- применяются командой `prisma migrate deploy`;
+- учитываются в `_prisma_migrations`;
+- создают и проверяют индексы, включая partial unique indexes;
+- не удаляют колонки в том же deployment, где код перестаёт их читать.
 
 ## 15. Наблюдаемость
 
@@ -1180,8 +1240,8 @@ Frontend и backend используют единый release/version identifier
 - размещать бизнес-логику в UI components;
 - создавать второй доменный backend внутри frontend-приложения;
 - вызывать внешний API из браузера с секретным ключом;
-- использовать внутренние документы хранилища как API DTO;
-- создавать неограниченные массивы в пользовательском документе;
+- использовать модели Prisma и строки таблиц как API DTO;
+- хранить неограниченные списки массивом или JSON внутри строки пользователя;
 - запускать таймеры через долгоживущий `setTimeout` как источник истины;
 - выполнять тяжёлую работу внутри webhook;
 - добавлять отдельный cache/queue service, брокер сообщений или микросервис без измеримой причины;
@@ -1215,9 +1275,9 @@ Frontend и backend используют единый release/version identifier
 2. Настроить корневые workspaces и общие lint/type configs.
 3. Добавить `packages/contracts`.
 4. Создать backend app factory, health endpoints и error middleware.
-5. Подключить единый storage client и repository infrastructure.
+5. Подключить Prisma Client, применить миграции и repository infrastructure.
 6. Реализовать auth/session end-to-end.
-7. Реализовать `dashboard_configs` и базовый dashboard.
+7. Реализовать `widget_preferences` и базовый dashboard.
 8. Добавить routines и timer.
 9. Добавить `scheduled_jobs` и worker.
 10. Подключать внешние интеграции по одной.
@@ -1227,5 +1287,8 @@ Frontend и backend используют единый release/version identifier
 ## 22. Источники
 
 - [Технологии проекта](./TECHNOLOGIES.md)
+- [Prisma ORM: PostgreSQL](https://www.prisma.io/docs/orm/overview/databases/postgresql)
+- [Prisma Migrate](https://www.prisma.io/docs/orm/prisma-migrate)
+- [PostgreSQL 18: Documentation](https://www.postgresql.org/docs/18/index.html)
 - [Google Calendar API: Synchronize resources](https://developers.google.com/workspace/calendar/api/guides/sync)
 

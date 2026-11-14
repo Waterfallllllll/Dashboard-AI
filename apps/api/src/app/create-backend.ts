@@ -1,6 +1,12 @@
 import { parseObjectId } from "../shared/object-id.js";
 import { readApiEnv, type ApiRuntime } from "../config/env.js";
 import { createCredentialCipher, readDataEncryptionKey } from "../infrastructure/crypto/index.js";
+import {
+  connectDatabase,
+  disconnectPrisma,
+  getPrismaClient
+} from "../infrastructure/db/prisma-client.js";
+import type { PrismaClient } from "../generated/prisma/client.js";
 import { MongoJobQueue } from "../infrastructure/jobs/mongo-job-queue.js";
 import type { Logger } from "../infrastructure/logging/logger.js";
 import { createLogger } from "../infrastructure/logging/logger.js";
@@ -9,7 +15,8 @@ import {
   closeMongo,
   connectMongo,
   purgeAccount,
-  readMongoConfig
+  readMongoConfig,
+  type MongoConfig
 } from "../infrastructure/mongodb/index.js";
 import { MongoAuthRepository } from "../modules/auth/auth.repository.js";
 import { AuthService } from "../modules/auth/auth.service.js";
@@ -44,6 +51,7 @@ export type Backend = {
   readonly logger: Logger;
   readonly client: MongoClient;
   readonly dbName: string;
+  readonly prisma: PrismaClient;
   readonly personal: PersonalServices;
   readonly external: ExternalServices;
   readonly authService: AuthService;
@@ -59,8 +67,19 @@ export type Backend = {
 export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promise<Backend> {
   const runtime = readApiEnv(env);
   const logger = createLogger(runtime.config.logLevel);
-  const mongo = readMongoConfig(env);
-  const client = await connectMongo(mongo);
+  const prisma = getPrismaClient(env);
+  await connectDatabase(prisma);
+
+  let mongo: MongoConfig;
+  let client: MongoClient;
+
+  try {
+    mongo = readMongoConfig(env);
+    client = await connectMongo(mongo);
+  } catch (error) {
+    await disconnectPrisma();
+    throw error;
+  }
   const db = client.db(mongo.dbName);
   const cipher = createCredentialCipher(readDataEncryptionKey(env));
   const jobs = new MongoJobQueue(db);
@@ -152,6 +171,7 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
     logger,
     client,
     dbName: mongo.dbName,
+    prisma,
     personal,
     external,
     authService,
@@ -161,7 +181,13 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
     jobs,
     metrics: createMetrics(jobs, () => notificationRepository.countDeliveries()),
     renewWatches: () => renewDueWatches(integrationsRepository, gateway, runtime, external),
-    close: () => closeMongo(client)
+    close: async () => {
+      try {
+        await disconnectPrisma();
+      } finally {
+        await closeMongo(client);
+      }
+    }
   };
 }
 

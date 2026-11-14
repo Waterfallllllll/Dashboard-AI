@@ -9,7 +9,7 @@ globs: "**/apps/api/**/*.ts"
 Модульный монолит. Слойность:
 
 ```text
-route → controller → service → repository → MongoDB
+route → controller → service → repository → PostgreSQL (Prisma Client)
                       ↘ integration → внешний API
                       ↘ JobQueue → persistent queue
 ```
@@ -22,6 +22,6 @@ route → controller → service → repository → MongoDB
 
 Dashboard-агрегат собирает секции через `Promise.allSettled`: падение календаря не должно давать 500 на весь дашборд.
 
-Очередь задач на MVP — MongoDB за интерфейсом `JobQueue` (lease, idempotency key, TTL). Worker захватывает задачу атомарно.
+Очередь задач на MVP — PostgreSQL за интерфейсом `JobQueue` (lease, idempotency key, срок `deleteAt`). Worker захватывает задачу атомарно. Доступ к таблицам только через Prisma Client.
 
 Пример модуля: `apps/api/src/modules/routines/`.

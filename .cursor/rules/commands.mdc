@@ -9,7 +9,7 @@ alwaysApply: false
 
 ```bash
 npm ci
-npm run infra:up          # локальная MongoDB replica set
+npm run infra:up          # локальный PostgreSQL 18; прежний драйвер ещё поднимает свой экземпляр
 npm run dev               # web + api + worker
 npm run lint
 npm run typecheck
@@ -20,4 +20,4 @@ npm run build
 
 Локальный `.env` создаётся из `@.env.example`. Секреты в `.env` не коммить.
 
-Integration-тесты хранилища — только против реального MongoDB replica set, не против несовместимого in-memory API.
+Integration-тесты нового хранилища — только против реального PostgreSQL 18. Prisma Client в них не подменяется моком. Клиент собирается командой `npm run db:generate --workspace @dashboard/api`.
