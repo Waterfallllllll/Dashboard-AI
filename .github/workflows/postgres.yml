@@ -44,5 +44,8 @@ jobs:
       - name: Generate Prisma Client
         run: npm run db:generate --workspace @dashboard/api
 
-      - name: Connect and run SELECT 1
-        run: npx vitest run apps/api/src/infrastructure/db/prisma-client.integration.test.ts
+      - name: Apply Prisma migrations
+        run: npm run db:migrate --workspace @dashboard/api
+
+      - name: Check schema, indexes and constraints
+        run: npx vitest run apps/api/src/infrastructure/db/prisma-client.integration.test.ts apps/api/src/infrastructure/db/migration.integration.test.ts

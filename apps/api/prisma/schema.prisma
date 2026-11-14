@@ -1,6 +1,7 @@
 // Схема Evergreen Dashboard. Частичные индексы (WHERE deleted_at IS NULL,
-// WHERE completed_at IS NULL, WHERE status = 'pending') Prisma ORM 7 не выражает:
-// их добавляет SQL-миграция. Здесь перечислены модели, связи и обычные индексы.
+// WHERE completed_at IS NULL, WHERE status = 'pending') и CHECK ciphertext
+// Prisma ORM 7 не выражает: их добавляет миграция 20261114202100_initial.
+// Здесь перечислены модели, связи и обычные индексы.
 
 generator client {
   provider = "prisma-client"
@@ -202,7 +203,7 @@ enum AuditTarget {
 
 /// Профиль. Внешний идентификатор провайдера здесь не хранится.
 model User {
-  id        String    @id @default(uuid()) @db.Uuid
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   displayName String  @map("display_name") @db.VarChar(120)
   avatarUrl   String? @map("avatar_url") @db.VarChar(2048)
   locale      String  @db.VarChar(35)
@@ -239,7 +240,7 @@ model User {
 
 /// OAuth и Telegram. accessToken и refreshToken — ciphertext enc:v1.
 model AuthAccount {
-  id           String       @id @default(uuid()) @db.Uuid
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId       String       @map("user_id") @db.Uuid
   provider     AuthProvider
   providerUserId String     @map("provider_user_id") @db.VarChar(128)
@@ -259,7 +260,7 @@ model AuthAccount {
 
 /// В базе только SHA-256 hash cookie-токена.
 model Session {
-  id        String    @id @default(uuid()) @db.Uuid
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId    String    @map("user_id") @db.Uuid
   tokenHash String    @map("token_hash") @db.VarChar(128)
   expiresAt DateTime  @map("expires_at") @db.Timestamptz
@@ -276,7 +277,7 @@ model Session {
 /// Одноразовый state входа, календаря и ссылка Telegram. Строки пользователя нет.
 /// payload — ciphertext enc:v1.
 model OneTimeToken {
-  id        String              @id @default(uuid()) @db.Uuid
+  id        String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tokenHash String              @map("token_hash") @db.VarChar(128)
   purpose   OneTimeTokenPurpose
   payload   String              @db.Text
@@ -291,7 +292,7 @@ model OneTimeToken {
 
 /// Одна строка на пару пользователь + тип виджета. settings — ограниченный Json.
 model WidgetPreference {
-  id         String     @id @default(uuid()) @db.Uuid
+  id         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId     String     @map("user_id") @db.Uuid
   widgetType WidgetType @map("widget_type")
   enabled    Boolean
@@ -309,7 +310,7 @@ model WidgetPreference {
 }
 
 model RoutineRule {
-  id                String         @id @default(uuid()) @db.Uuid
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId            String         @map("user_id") @db.Uuid
   title             String         @db.VarChar(120)
   description       String?        @db.VarChar(500)
@@ -333,7 +334,7 @@ model RoutineRule {
 }
 
 model RoutineOccurrence {
-  id            String           @id @default(uuid()) @db.Uuid
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   routineRuleId String           @map("routine_rule_id") @db.Uuid
   userId        String           @map("user_id") @db.Uuid
   localDate     DateTime         @map("local_date") @db.Date
@@ -351,7 +352,7 @@ model RoutineOccurrence {
 
 /// Один пресет длительностей на пользователя.
 model TimerPreset {
-  id                String    @id @default(uuid()) @db.Uuid
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId            String    @unique(map: "timer_presets_user") @map("user_id") @db.Uuid
   mode              TimerMode
   workMinutes       Int       @map("work_minutes")
@@ -366,7 +367,7 @@ model TimerPreset {
 
 /// История и текущая сессия. Одна незавершённая сессия на пользователя — частичный unique миграции.
 model TimerSession {
-  id                String         @id @default(uuid()) @db.Uuid
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId            String         @map("user_id") @db.Uuid
   mode              TimerMode
   workMinutes       Int            @map("work_minutes")
@@ -389,7 +390,7 @@ model TimerSession {
 
 /// Google Calendar и Telegram. credentials — ciphertext enc:v1.
 model Integration {
-  id               String            @id @default(uuid()) @db.Uuid
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId           String            @map("user_id") @db.Uuid
   type             IntegrationType
   status           IntegrationStatus
@@ -414,7 +415,7 @@ model Integration {
 }
 
 model CalendarEvent {
-  id              String              @id @default(uuid()) @db.Uuid
+  id              String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   integrationId   String              @map("integration_id") @db.Uuid
   userId          String              @map("user_id") @db.Uuid
   externalEventId String              @map("external_event_id") @db.VarChar(1024)
@@ -438,7 +439,7 @@ model CalendarEvent {
 
 /// Общий кэш новостей, без владельца. contentHash — hash канонического URL.
 model NewsItem {
-  id           String   @id @default(uuid()) @db.Uuid
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   source       String   @db.VarChar(256)
   title        String   @db.VarChar(512)
   excerpt      String   @db.VarChar(2000)
@@ -458,7 +459,7 @@ model NewsItem {
 
 /// keys — ciphertext enc:v1. Уникален hash endpoint, не сам адрес.
 model PushSubscription {
-  id           String    @id @default(uuid()) @db.Uuid
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId       String    @map("user_id") @db.Uuid
   endpointHash String    @map("endpoint_hash") @db.VarChar(128)
   endpoint     String    @db.Text
@@ -476,7 +477,7 @@ model PushSubscription {
 
 /// Очередь. userId пустой у задач планировщика и heartbeat. payload без секретов.
 model ScheduledJob {
-  id              String           @id @default(uuid()) @db.Uuid
+  id              String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   type            ScheduledJobType
   payload         Json
   runAt           DateTime         @map("run_at") @db.Timestamptz
@@ -505,7 +506,7 @@ model ScheduledJob {
 }
 
 model NotificationDelivery {
-  id                String                @id @default(uuid()) @db.Uuid
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId            String                @map("user_id") @db.Uuid
   eventType         NotificationEventType @map("event_type")
   channel           NotificationChannel
@@ -528,7 +529,7 @@ model NotificationDelivery {
 
 /// Журнал безопасности. После очистки аккаунта остаётся account_deleted с пустым userId.
 model AuditEvent {
-  id        String       @id @default(uuid()) @db.Uuid
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId    String?      @map("user_id") @db.Uuid
   action    AuditAction
   target    AuditTarget?

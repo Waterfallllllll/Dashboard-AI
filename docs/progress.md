@@ -179,4 +179,13 @@
 - Изменены `apps/api`, `infra/compose.dev.yml`, `.env.example`, `.github/workflows/postgres.yml`, правила ESLint и `.cursor/rules`, `docs/architecture.md`.
 - Проверки: `npm run lint` проходит. Vitest 235 passed / 10 skipped. Девять прежних integration-тестов и новый `SELECT 1` пропущены: Docker на этой машине не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
 
+## 2026-11-14 — Первая миграция Prisma
+
+- Добавлена версионированная миграция `apps/api/prisma/migrations/20261114202100_initial`. Она создаёт таблицы, внешние ключи с `ON DELETE CASCADE`, unique и query-индексы, колонки мягкого удаления и текстовые поля ciphertext.
+- Частичные индексы, которые Prisma Schema не выражает, добавлены в SQL: живые рутины, одна незавершённая сессия таймера, одна живая интеграция каждого типа и очередь задач со статусом `pending`. CHECK принимает в полях секретов только `enc:v1` либо NULL, если колонка необязательна.
+- Первичный ключ в базе получает `DEFAULT gen_random_uuid()`. CI применяет миграцию через `prisma migrate deploy` и проверяет индексы и ограничения.
+- Новые переменные окружения не добавлялись.
+- Изменены `apps/api/prisma`, `apps/api/src/infrastructure/db`, `.github/workflows/postgres.yml`, `.gitattributes`, `docs/architecture.md`.
+- Проверки: `npm run lint` проходит. Vitest 238 passed / 15 skipped. Пять новых integration-тестов миграции, прежние девять и `SELECT 1` пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
+
 

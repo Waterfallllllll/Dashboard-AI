@@ -595,8 +595,8 @@ modules/routines/
 - шаблоны повторений;
 - внешний ключ на `users` с `ON DELETE CASCADE`;
 - unique `(id, userId)` для составной ссылки из экземпляров;
-- индекс `(userId, status)` по живым строкам (`deletedAt IS NULL`);
-- индекс `(userId, startDate)` по живым строкам (`deletedAt IS NULL`).
+- индекс `routine_rules_user_status` по `(userId, status)` для живых строк (`deletedAt IS NULL`);
+- индекс `routine_rules_user_start_date` по `(userId, startDate)` для живых строк (`deletedAt IS NULL`).
 
 `routine_occurrences`:
 
@@ -616,7 +616,7 @@ modules/routines/
 - история и текущая сессия;
 - внешний ключ на `users` с `ON DELETE CASCADE`;
 - индекс `(userId, startedAt DESC)`;
-- partial unique `(userId)` при `completedAt IS NULL`: не больше одной незавершённой сессии.
+- partial unique `timer_sessions_one_active_user` по `(userId)` при `completedAt IS NULL`: не больше одной незавершённой сессии.
 
 `integrations`:
 
@@ -624,7 +624,7 @@ modules/routines/
 - credentials шифруются на уровне приложения;
 - внешний ключ на `users` с `ON DELETE CASCADE`;
 - unique `(id, userId)` для составной ссылки из событий календаря;
-- unique `(userId, type)` по живым строкам (`deletedAt IS NULL`).
+- partial unique `integrations_user_type` по `(userId, type)` для живых строк (`deletedAt IS NULL`).
 
 `calendar_events`:
 
@@ -655,7 +655,7 @@ modules/routines/
 - внешний ключ на `users` с `ON DELETE CASCADE` только для строк с пользователем;
 - unique `idempotencyKey`;
 - индекс `(status, runAt)`;
-- partial index по `runAt` для `status = pending`;
+- partial index `scheduled_jobs_pending_run_at` по `runAt` для `status = pending`;
 - индекс по `deleteAt` для очистки завершённых задач.
 
 `notification_deliveries`:
@@ -714,15 +714,17 @@ Access token, refresh token, credentials интеграций и ключи Web 
 
 В поле хранится строка `enc:v1:<iv>.<tag>.<ciphertext>` в base64url. Дополнительные аутентифицированные данные привязаны к назначению поля: `auth_accounts.access_token`, `auth_accounts.refresh_token`, `integrations.credentials`, `push_subscriptions.keys`, `one_time_tokens.payload`. Ciphertext одного поля нельзя подставить в другое. Открытый секрет в базу и логи не попадает.
 
+Первая миграция добавляет CHECK на эти колонки: значение либо NULL, если колонка необязательна, либо ciphertext `enc:v1` не длиннее 8192 символов. Имена ограничений: `auth_accounts_access_token_ciphertext`, `auth_accounts_refresh_token_ciphertext`, `integrations_credentials_ciphertext`, `push_subscriptions_keys_ciphertext`, `one_time_tokens_payload_ciphertext`. Проверка формата не заменяет ключ приложения и не подтверждает, что ciphertext расшифровывается.
+
 ### 8.6. Мягкое удаление
 
 `users`, `routine_rules` и `integrations` при пользовательском удалении не стираются физически. Операция ставит `deletedAt` и `updatedAt`. Повтор идемпотентен. Undo снова записывает `deletedAt: null`, пока живая строка с тем же уникальным ключом не заняла место.
 
 Выборки живых строк фильтруют `deletedAt: null`. Физическая очистка аккаунта описана в разделе 8.9.
 
-Уникальность живых строк задаёт partial unique index в SQL миграции: `WHERE deleted_at IS NULL`. Декларативный `@@unique` Prisma ORM 7 такое условие не выражает, а уникальный индекс PostgreSQL считает разные `NULL` различными, поэтому пара `(userId, type, deletedAt)` две живые строки не запрещает.
+Уникальность живых строк задаёт partial unique index в SQL миграции: `WHERE deleted_at IS NULL`. Декларативный `@@unique` Prisma ORM 7 такое условие не выражает, а уникальный индекс PostgreSQL считает разные `NULL` различными, поэтому пара `(userId, type, deletedAt)` две живые строки не запрещает. Имена индексов перечислены в разделе 8.2: `routine_rules_user_status`, `routine_rules_user_start_date`, `timer_sessions_one_active_user`, `integrations_user_type`, `scheduled_jobs_pending_run_at`.
 
-Следующая миграция, которую предлагает `prisma migrate dev`, проверяется до коммита. Если Prisma генерирует `DROP INDEX` для partial index, эта команда из SQL удаляется. Integration-тест читает `pg_indexes` и подтверждает, что частичные индексы на месте.
+Следующая миграция, которую предлагает `prisma migrate dev`, проверяется до коммита. Если Prisma генерирует `DROP INDEX` для partial index или `DROP CONSTRAINT` для проверки ciphertext, эта команда из SQL удаляется. Integration-тест читает `pg_indexes` и `pg_constraint` и подтверждает, что частичные индексы и проверки на месте.
 
 ### 8.7. Версионированные миграции
 
@@ -734,7 +736,7 @@ Access token, refresh token, credentials интеграций и ключи Web 
 - `db:migrate:dev` — `prisma migrate dev`, только локальная разработка;
 - `db:migrate` — `prisma migrate deploy`, CI и production.
 
-Первая миграция создаёт таблицы, внешние ключи, обычные индексы и partial unique indexes каталога. Новая миграция не удаляет колонку в том же выпуске, где код перестаёт её читать. Сгенерированный клиент импортируется только внутри `apps/api`.
+Первая миграция — `apps/api/prisma/migrations/20261114202100_initial`. Она создаёт таблицы, внешние ключи с `ON DELETE CASCADE`, unique, query-индексы, partial indexes, поля ciphertext и колонки `deleted_at`. Первичный ключ получает `DEFAULT gen_random_uuid()`. Новая миграция не удаляет колонку в том же выпуске, где код перестаёт её читать. Сгенерированный клиент импортируется только внутри `apps/api`.
 
 ### 8.8. Проверка запросов
 
@@ -753,7 +755,8 @@ Access token, refresh token, credentials интеграций и ключи Web 
 - повторяются тип или позиция виджета одного пользователя;
 - у записи `notification_deliveries` нет `deleteAt` либо срок не равен 30 дням от `createdAt`;
 - у записи `audit_events` нет `deleteAt` либо срок не равен 90 дням от `createdAt`;
-- обязательный partial unique index отсутствует.
+- обязательный partial unique index отсутствует;
+- обязательная проверка формата ciphertext отсутствует.
 
 Сроки:
 
