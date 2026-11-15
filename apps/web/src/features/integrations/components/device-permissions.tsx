@@ -5,7 +5,7 @@ import {
   weatherLocationResponseSchema,
   weatherPlacesResponseSchema
 } from "@dashboard/contracts";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import {
   getDeviceLocationServerSnapshot,
@@ -29,6 +29,8 @@ import {
 import { browserApi } from "@/lib/api/browser-api-client";
 import { getCsrfToken } from "@/lib/api/csrf-memory";
 
+import { devicePreferencesFromApi } from "../model/device-preferences";
+
 import styles from "./device-permissions.module.scss";
 
 export function DevicePermissions() {
@@ -48,7 +50,33 @@ export function DevicePermissions() {
   );
   const [permission, setPermission] = useState<BrowserPermission>("default");
   const [saveError, setSaveError] = useState("");
+  const preferencesTouched = useRef(false);
   const place = locationLabel(location);
+
+  useEffect(() => {
+    if (!getCsrfToken()) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      const result = await browserApi({
+        path: "/api/v1/notifications/preferences",
+        schema: notificationPreferencesResponseSchema
+      });
+
+      if (!result.ok || cancelled || preferencesTouched.current) {
+        return;
+      }
+
+      saveNotificationPreferences(devicePreferencesFromApi(result.data.data));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function detectPlace() {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -68,16 +96,23 @@ export function DevicePermissions() {
       }
 
       setSaveError("");
-      setLocationMessage(
-        "Сохранили координаты с точностью около километра. Прогноз останется демонстрационным, пока не подключён API погоды."
-      );
-      if (next.kind === "coordinates") {
-        void syncCoordinates(
+
+      if (next.kind === "coordinates" && getCsrfToken()) {
+        setLocationMessage("Сохраняем место в аккаунте…");
+        const saved = await syncCoordinates(
           next.latitude,
           next.longitude,
           `${next.latitude.toFixed(2)}, ${next.longitude.toFixed(2)}`
         );
+        setLocationMessage(
+          saved
+            ? "Сохранили координаты с точностью около километра. Прогноз на дашборде возьмёт это место."
+            : "Координаты сохранены на этом устройстве. Сервер место не принял."
+        );
+        return;
       }
+
+      setLocationMessage("Сохранили координаты с точностью около километра на этом устройстве.");
     } catch (error) {
       const denied =
         typeof error === "object" && error !== null && "code" in error && error.code === 1;
@@ -104,13 +139,24 @@ export function DevicePermissions() {
 
     setSaveError("");
     setCity("");
-    setLocationMessage(
-      `Город «${nextCity}» сохранён. Прогноз погоды останется демонстрационным до API.`
-    );
-    void syncCity(nextCity);
+
+    if (!getCsrfToken()) {
+      setLocationMessage(`Город «${nextCity}» сохранён на этом устройстве.`);
+      return;
+    }
+
+    setLocationMessage("Сохраняем город в аккаунте…");
+    void syncCity(nextCity).then((saved) => {
+      setLocationMessage(
+        saved
+          ? `Город «${nextCity}» сохранён в аккаунте.`
+          : "Город сохранён на этом устройстве. Сервер не принял это название."
+      );
+    });
   }
 
   function updatePreferences(next: NotificationPreferences) {
+    preferencesTouched.current = true;
     saveNotificationPreferences(next);
     void syncNotificationPreferences(next);
   }
@@ -127,8 +173,7 @@ export function DevicePermissions() {
       <header>
         <h2 id="device-permissions-title">Это устройство</h2>
         <p>
-          Место и уведомления запрашиваются только после нажатия. Календарь и Telegram по-прежнему
-          ждут API.
+          Место и уведомления запрашиваются только после нажатия. При входе они сохраняются в аккаунте.
         </p>
       </header>
 
@@ -282,22 +327,24 @@ function permissionMessage(permission: BrowserPermission): string {
   }
 }
 
-async function syncCoordinates(latitude: number, longitude: number, label: string): Promise<void> {
+async function syncCoordinates(latitude: number, longitude: number, label: string): Promise<boolean> {
   if (!getCsrfToken()) {
-    return;
+    return false;
   }
 
-  await browserApi({
+  const saved = await browserApi({
     path: "/api/v1/weather/location",
     method: "PUT",
     schema: weatherLocationResponseSchema,
     body: { latitude, longitude, label }
   });
+
+  return saved.ok;
 }
 
-async function syncCity(city: string): Promise<void> {
+async function syncCity(city: string): Promise<boolean> {
   if (!getCsrfToken() || city.length < 2) {
-    return;
+    return false;
   }
 
   const places = await browserApi({
@@ -308,15 +355,17 @@ async function syncCity(city: string): Promise<void> {
   const place = places.ok ? places.data.data.places[0] : undefined;
 
   if (!place) {
-    return;
+    return false;
   }
 
-  await browserApi({
+  const saved = await browserApi({
     path: "/api/v1/weather/location",
     method: "PUT",
     schema: weatherLocationResponseSchema,
     body: place
   });
+
+  return saved.ok;
 }
 
 async function clearWeatherLocation(): Promise<void> {

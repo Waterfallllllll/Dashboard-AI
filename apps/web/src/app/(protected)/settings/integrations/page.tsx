@@ -1,13 +1,21 @@
 import type { Metadata } from "next";
 
 import { PageScaffold } from "@/components/ui/page-scaffold";
-import { DevicePermissions, IntegrationList } from "@/features/integrations";
+import { DevicePermissions, IntegrationList, parseCalendarReturn } from "@/features/integrations";
 
 export const metadata: Metadata = {
   title: "Интеграции"
 };
 
-export default function IntegrationsPage() {
+type IntegrationsPageProps = Readonly<{
+  searchParams: Promise<{
+    calendar?: string | string[];
+  }>;
+}>;
+
+export default async function IntegrationsPage({ searchParams }: IntegrationsPageProps) {
+  const { calendar } = await searchParams;
+
   return (
     <PageScaffold
       contentVariant="plain"
@@ -15,7 +23,7 @@ export default function IntegrationsPage() {
       eyebrow="Настройки"
       title="Интеграции"
     >
-      <IntegrationList />
+      <IntegrationList calendarReturn={parseCalendarReturn(calendar)} />
       <DevicePermissions />
     </PageScaffold>
   );

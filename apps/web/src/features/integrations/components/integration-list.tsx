@@ -15,6 +15,17 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useSession } from "@/features/session";
 import { browserApi } from "@/lib/api/browser-api-client";
 
+import {
+  calendarReturnMessage,
+  integrationStatusLabel,
+  integrationStatusTone,
+  isAllowedIntegrationUrl,
+  linkExpiryLabel,
+  remoteIntegration,
+  syncSentence,
+  type CalendarReturnStatus
+} from "../model/integration-view";
+
 import styles from "./integration-list.module.scss";
 
 type IntegrationCard = Readonly<{
@@ -27,6 +38,17 @@ type IntegrationCard = Readonly<{
   icon: LucideIcon;
   tone: "neutral" | "warning" | "success";
 }>;
+
+type TelegramLink = Readonly<{
+  url: string;
+  expiresAt: string;
+}>;
+
+type LoadState = "idle" | "loading" | "ready" | "error";
+
+const GOOGLE_HOSTS = ["accounts.google.com"] as const;
+const TELEGRAM_HOSTS = ["t.me", "telegram.me"] as const;
+const TELEGRAM_POLL_MS = 4_000;
 
 const integrations: readonly IntegrationCard[] = [
   {
@@ -71,34 +93,252 @@ const integrations: readonly IntegrationCard[] = [
   }
 ];
 
-export function IntegrationList() {
+type IntegrationListProps = Readonly<{
+  calendarReturn?: CalendarReturnStatus | null;
+}>;
+
+export function IntegrationList({ calendarReturn = null }: IntegrationListProps) {
   const session = useSession();
   const [remote, setRemote] = useState<readonly IntegrationSummary[]>([]);
-  const [message, setMessage] = useState("");
+  const [loadedKey, setLoadedKey] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
   const [pending, setPending] = useState("");
+  const [telegramLink, setTelegramLink] = useState<TelegramLink | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const timeZone = session?.user.timezone ?? "UTC";
+  const loadState: LoadState = !session
+    ? "idle"
+    : loadedKey === reloadKey
+      ? loadError
+        ? "error"
+        : "ready"
+      : "loading";
 
   useEffect(() => {
     if (!session) {
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
+    const requestKey = reloadKey;
 
     void (async () => {
       const result = await browserApi({
         path: "/api/v1/integrations",
-        schema: integrationListResponseSchema
+        schema: integrationListResponseSchema,
+        signal: controller.signal
       });
 
-      if (!cancelled && result.ok) {
-        setRemote(result.data.data.integrations);
+      if (controller.signal.aborted) {
+        return;
       }
+
+      if (!result.ok) {
+        setLoadError(result.message);
+        setLoadedKey(requestKey);
+        return;
+      }
+
+      setRemote(result.data.data.integrations);
+      setLoadError("");
+      setLoadedKey(requestKey);
     })();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
-  }, [session]);
+  }, [session, reloadKey]);
+
+  useEffect(() => {
+    if (!session || !telegramLink) {
+      return;
+    }
+
+    const controller = new AbortController();
+    let timer = 0;
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled) {
+        return;
+      }
+
+      if (document.visibilityState === "hidden") {
+        timer = window.setTimeout(() => {
+          void poll();
+        }, TELEGRAM_POLL_MS);
+        return;
+      }
+
+      if (Date.now() >= Date.parse(telegramLink.expiresAt)) {
+        setTelegramLink(null);
+        setActionMessage("Ссылка для привязки истекла. Запросите новую.");
+        return;
+      }
+
+      const result = await browserApi({
+        path: "/api/v1/integrations",
+        schema: integrationListResponseSchema,
+        signal: controller.signal
+      });
+
+      if (cancelled || controller.signal.aborted) {
+        return;
+      }
+
+      if (!result.ok) {
+        timer = window.setTimeout(() => {
+          void poll();
+        }, TELEGRAM_POLL_MS);
+        return;
+      }
+
+      setRemote(result.data.data.integrations);
+      setLoadError("");
+
+      const linked = result.data.data.integrations.some(
+        (item) => item.type === "telegram" && item.status === "connected"
+      );
+
+      if (linked) {
+        setTelegramLink(null);
+        setActionMessage("Telegram подключён.");
+        return;
+      }
+
+      timer = window.setTimeout(() => {
+        void poll();
+      }, TELEGRAM_POLL_MS);
+    };
+
+    timer = window.setTimeout(() => {
+      void poll();
+    }, TELEGRAM_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [session, telegramLink]);
+
+  const calendarSummary = remoteIntegration("google-calendar", remote);
+  const calendarNotice =
+    calendarReturn === "connected" && loadState === "ready" && calendarSummary?.status !== "connected"
+      ? null
+      : calendarReturnMessage(session ? calendarReturn : null);
+  const liveMessage = actionMessage || loadError || calendarNotice;
+
+  async function runAction(id: string, connected: boolean): Promise<void> {
+    setPending(id);
+    setActionMessage("");
+
+    try {
+      if (id === "location") {
+        document.getElementById("weather-city")?.focus();
+        return;
+      }
+
+      if (id === "browser-notifications") {
+        document.getElementById("web-push-enable")?.focus();
+        return;
+      }
+
+      if (id === "google-calendar") {
+        if (connected) {
+          await disconnect("/api/v1/integrations/google");
+          return;
+        }
+
+        await beginGoogle();
+        return;
+      }
+
+      if (id === "telegram") {
+        if (connected) {
+          await disconnect("/api/v1/integrations/telegram");
+          return;
+        }
+
+        await beginTelegram();
+      }
+    } finally {
+      setPending("");
+    }
+  }
+
+  async function beginGoogle(): Promise<void> {
+    const result = await browserApi({
+      path: "/api/v1/integrations/google/connect",
+      method: "POST",
+      schema: googleConnectResponseSchema,
+      idempotencyKey: crypto.randomUUID()
+    });
+
+    if (!result.ok) {
+      setActionMessage(result.message);
+      return;
+    }
+
+    if (!isAllowedIntegrationUrl(result.data.data.url, GOOGLE_HOSTS)) {
+      setActionMessage("Сервер вернул неожиданный адрес. Переход отменён.");
+      return;
+    }
+
+    window.location.assign(result.data.data.url);
+  }
+
+  async function beginTelegram(): Promise<void> {
+    const result = await browserApi({
+      path: "/api/v1/integrations/telegram/link",
+      method: "POST",
+      schema: telegramLinkResponseSchema,
+      idempotencyKey: crypto.randomUUID()
+    });
+
+    if (!result.ok) {
+      setActionMessage(result.message);
+      return;
+    }
+
+    if (!isAllowedIntegrationUrl(result.data.data.url, TELEGRAM_HOSTS)) {
+      setActionMessage("Сервер вернул неожиданный адрес. Переход отменён.");
+      return;
+    }
+
+    setTelegramLink({
+      url: result.data.data.url,
+      expiresAt: result.data.data.expiresAt
+    });
+    setActionMessage("Откройте бота и подтвердите привязку. Эта страница обновит статус сама.");
+  }
+
+  async function disconnect(
+    path: "/api/v1/integrations/google" | "/api/v1/integrations/telegram"
+  ): Promise<void> {
+    const removed = await browserApi({
+      path,
+      method: "DELETE",
+      schema: integrationDeletionResponseSchema
+    });
+    setActionMessage(removed.ok ? "Интеграция отключена." : removed.message);
+
+    if (!removed.ok) {
+      return;
+    }
+
+    setTelegramLink(null);
+    const list = await browserApi({
+      path: "/api/v1/integrations",
+      schema: integrationListResponseSchema
+    });
+
+    if (list.ok) {
+      setRemote(list.data.data.integrations);
+      setLoadError("");
+    }
+  }
 
   return (
     <div className={styles.wrapper}>
@@ -113,12 +353,48 @@ export function IntegrationList() {
         </div>
       </aside>
 
-      <ul className={styles.grid} role="list">
+      {liveMessage ? (
+        <p role={loadError && !actionMessage ? "alert" : "status"}>{liveMessage}</p>
+      ) : null}
+      {loadError ? (
+        <button
+          className={styles.retry}
+          onClick={() => {
+            setReloadKey((value) => value + 1);
+          }}
+          type="button"
+        >
+          Повторить загрузку
+        </button>
+      ) : null}
+
+      <ul aria-busy={loadState === "loading"} className={styles.grid} role="list">
         {integrations.map((card) => {
           const Icon = card.icon;
-          const connected = isConnected(card.id, remote);
-          const status = session && connected ? "Подключено" : card.status;
-          const tone = session && connected ? "success" : card.tone;
+          const summary = remoteIntegration(card.id, remote);
+          const tracksApi = card.id === "google-calendar" || card.id === "telegram";
+          const checking =
+            Boolean(session) && tracksApi && (loadState === "idle" || loadState === "loading");
+          const connected = Boolean(session) && summary?.status === "connected";
+          const status = checking
+            ? integrationStatusLabel("checking")
+            : session && summary
+              ? integrationStatusLabel(summary.status)
+              : card.status;
+          const tone = checking
+            ? integrationStatusTone("checking")
+            : session && summary
+              ? integrationStatusTone(summary.status)
+              : card.tone;
+          const synced = session && summary ? syncSentence(summary.lastSyncAt, timeZone) : null;
+          const detail =
+            session && summary?.status === "revoked"
+              ? "Доступ отозван. Подключите интеграцию снова, остальные данные сохранятся."
+              : synced
+                ? `${card.detail} ${synced}`
+                : card.detail;
+          const waitingForTelegram = card.id === "telegram" && telegramLink !== null;
+          const expiry = telegramLink ? linkExpiryLabel(telegramLink.expiresAt, timeZone) : null;
 
           return (
             <li className={styles.card} key={card.title}>
@@ -134,40 +410,55 @@ export function IntegrationList() {
                 <p>{card.description}</p>
               </div>
 
-              <p className={styles.detail}>{card.detail}</p>
+              <p className={styles.detail}>{detail}</p>
 
               <div className={styles.cardFooter}>
                 <button
                   aria-describedby={`${card.id}-availability`}
-                  disabled={!session || pending === card.id}
+                  disabled={!session || pending === card.id || checking || waitingForTelegram}
                   onClick={() => {
-                    void runAction(card.id, connected, setMessage, setPending, setRemote);
+                    void runAction(card.id, connected);
                   }}
                   type="button"
                 >
-                  {session && connected ? disconnectLabel(card.id) : card.action}
+                  {actionLabel(card, connected, pending === card.id, waitingForTelegram)}
                 </button>
+                {waitingForTelegram && telegramLink ? (
+                  <a href={telegramLink.url} rel="noopener noreferrer" target="_blank">
+                    Открыть бота в Telegram
+                  </a>
+                ) : null}
                 <span id={`${card.id}-availability`}>
-                  {session ? "Запрос уходит на сервер только после нажатия." : "Доступно после подключения API"}
+                  {availabilityText(Boolean(session), card.id, waitingForTelegram, expiry)}
                 </span>
               </div>
             </li>
           );
         })}
       </ul>
-      {message ? <p role="status">{message}</p> : null}
     </div>
   );
 }
 
-function isConnected(id: string, remote: readonly IntegrationSummary[]): boolean {
-  const type = id === "google-calendar" ? "google_calendar" : id === "telegram" ? "telegram" : null;
-
-  if (!type) {
-    return false;
+function actionLabel(
+  card: IntegrationCard,
+  connected: boolean,
+  isPending: boolean,
+  waitingForTelegram: boolean
+): string {
+  if (isPending) {
+    return "Подключаем…";
   }
 
-  return remote.some((item) => item.type === type && item.status === "connected");
+  if (waitingForTelegram) {
+    return "Ждём подтверждения";
+  }
+
+  if (connected) {
+    return disconnectLabel(card.id);
+  }
+
+  return card.action;
 }
 
 function disconnectLabel(id: string): string {
@@ -182,111 +473,29 @@ function disconnectLabel(id: string): string {
   return "Открыть настройки";
 }
 
-async function runAction(
+function availabilityText(
+  signedIn: boolean,
   id: string,
-  connected: boolean,
-  setMessage: (value: string) => void,
-  setPending: (value: string) => void,
-  setRemote: (value: readonly IntegrationSummary[]) => void
-): Promise<void> {
-  setPending(id);
-  setMessage("");
-
-  try {
-    if (id === "location") {
-      document.getElementById("weather-city")?.focus();
-      return;
-    }
-
-    if (id === "browser-notifications") {
-      document.getElementById("web-push-enable")?.focus();
-      return;
-    }
-
-    if (id === "google-calendar") {
-      await connectOrDisconnect(
-        connected,
-        "/api/v1/integrations/google/connect",
-        "/api/v1/integrations/google",
-        ["accounts.google.com"],
-        setMessage,
-        setRemote
-      );
-      return;
-    }
-
-    if (id === "telegram") {
-      await connectOrDisconnect(
-        connected,
-        "/api/v1/integrations/telegram/link",
-        "/api/v1/integrations/telegram",
-        ["t.me", "telegram.me"],
-        setMessage,
-        setRemote
-      );
-    }
-  } finally {
-    setPending("");
-  }
-}
-
-async function connectOrDisconnect(
-  connected: boolean,
-  connectPath: "/api/v1/integrations/google/connect" | "/api/v1/integrations/telegram/link",
-  deletePath: "/api/v1/integrations/google" | "/api/v1/integrations/telegram",
-  hosts: readonly string[],
-  setMessage: (value: string) => void,
-  setRemote: (value: readonly IntegrationSummary[]) => void
-): Promise<void> {
-  if (connected) {
-    const removed = await browserApi({
-      path: deletePath,
-      method: "DELETE",
-      schema: integrationDeletionResponseSchema
-    });
-    setMessage(removed.ok ? "Интеграция отключена." : removed.message);
-
-    if (removed.ok) {
-      const list = await browserApi({
-        path: "/api/v1/integrations",
-        schema: integrationListResponseSchema
-      });
-
-      if (list.ok) {
-        setRemote(list.data.data.integrations);
-      }
-    }
-
-    return;
+  waitingForTelegram: boolean,
+  expiry: string | null
+): string {
+  if (!signedIn) {
+    return "Доступно после подключения API";
   }
 
-  const schema =
-    connectPath.endsWith("/link") ? telegramLinkResponseSchema : googleConnectResponseSchema;
-  const result = await browserApi({
-    path: connectPath,
-    method: "POST",
-    schema,
-    idempotencyKey: crypto.randomUUID()
-  });
-
-  if (!result.ok) {
-    setMessage(result.message);
-    return;
+  if (waitingForTelegram) {
+    return expiry
+      ? `Подтвердите привязку в боте. Ссылка действует до ${expiry}.`
+      : "Подтвердите привязку в боте.";
   }
 
-  if (!isAllowedRedirect(result.data.data.url, hosts)) {
-    setMessage("Сервер вернул неожиданный адрес. Переход отменён.");
-    return;
+  if (id === "location") {
+    return "Откроет поле города ниже.";
   }
 
-  window.location.assign(result.data.data.url);
-}
-
-function isAllowedRedirect(url: string, hosts: readonly string[]): boolean {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" && hosts.includes(parsed.hostname);
-  } catch {
-    return false;
+  if (id === "browser-notifications") {
+    return "Откроет настройки уведомлений ниже.";
   }
+
+  return "Запрос уходит на сервер только после нажатия.";
 }

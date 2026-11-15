@@ -234,4 +234,12 @@
 - Изменены `apps/web/next.config.ts`, `apps/web/src/lib/api`, `apps/web/src/lib/session`, `apps/web/src/lib/dashboard`, `apps/web/src/features/session` и страницы входа, дашборда, профиля, интеграций, рутин, таймера и уведомлений.
 - Проверки: `npm run lint` проходит. Vitest 263 passed / 27 skipped. Integration-тесты базы пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. Playwright 37 passed / 5 skipped. `npm run build` проходит; `/login`, `/dashboard` и страницы настроек динамические. В браузере без API на порту 4000 проверены вход, дашборд, профиль, интеграции и рутины на широкой и узкой ширине: мок-данные на месте, вход и подключение интеграций недоступны, предпочтения сохраняются в браузере, ошибок в консоли нет. Живой вход не проверялся.
 
+## 2026-11-16 — Страница интеграций читает живой статус
+
+- При сессии карточки Google Calendar и Telegram берут статус `disconnected`, `connected` или `revoked` и время последней синхронизации из `GET /api/v1/integrations`. Подключение календаря по-прежнему уходит на allowlist-адрес Google. Telegram остаётся на странице: ссылка открывается только на `https://t.me` или `https://telegram.me`, токен не попадает в текст статуса, страница сама опрашивает список до подтверждения или истечения ссылки.
+- Возврат `?calendar=connected|cancelled|error` показывает фиксированную фразу и только вошедшему пользователю. Настройки уведомлений при сессии подгружаются из `GET /api/v1/notifications/preferences`. Город и координаты по-прежнему пишутся в `/api/v1/weather/location`, а сообщение отличает сохранение в аккаунте от локального.
+- Новых переменных окружения нет.
+- Изменены `apps/web/src/features/integrations`, `apps/web/src/app/(protected)/settings/integrations/page.tsx`.
+- Проверки: `npm run lint` проходит. Vitest 272 passed / 27 skipped. Integration-тесты базы пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. Playwright 37 passed / 5 skipped. `npm run build` проходит, `/settings/integrations` динамический. В браузере без сессии на `localhost:3000` проверены широкая и узкая ширина: кнопки подключения недоступны, ложный баннер `calendar=connected` не появляется, город сохраняется и удаляется локально, ошибок в консоли нет. Живой OAuth Google и бот Telegram не проверялись.
+
 

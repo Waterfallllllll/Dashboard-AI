@@ -88,6 +88,31 @@
   font: var(--text-body-sm);
 }
 
+.retry {
+  margin: 0;
+}
+
+.retry,
+.cardFooter button,
+.cardFooter a {
+  min-block-size: var(--size-touch);
+  justify-self: start;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  padding-inline: var(--space-lg);
+  background: var(--color-card);
+  color: var(--color-text);
+  font: var(--text-label-lg);
+}
+
+.cardFooter a {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  color: var(--color-link);
+  text-decoration: none;
+}
+
 .cardFooter {
   display: grid;
   gap: var(--space-sm);
@@ -95,19 +120,8 @@
   border-block-start: 1px solid var(--color-border-subtle);
   padding-block-start: var(--space-lg);
 
-  button {
-    min-block-size: var(--size-touch);
-    justify-self: start;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-full);
-    padding-inline: var(--space-lg);
-    background: var(--color-card);
-    color: var(--color-text);
-    font: var(--text-label-lg);
-
-    &:disabled {
-      opacity: 0.58;
-    }
+  button:disabled {
+    opacity: 0.58;
   }
 
   span {
