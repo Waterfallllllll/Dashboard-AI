@@ -32,14 +32,16 @@ export class WebhookService {
     private readonly now: () => Date = () => new Date()
   ) {}
 
-  async acceptTelegram(update: TelegramUpdate): Promise<void> {
-    if (!this.telegramSecret) {
-      throw new ApiError({ code: API_ERROR_CODES.unavailable });
-    }
+  authorizeTelegram(secret: string | undefined): void {
+    requireConfiguredSecret(this.telegramSecret, secret);
+  }
 
-    if (!secretsMatch(this.telegramSecret, update.secret ?? "")) {
-      throw new ApiError({ code: API_ERROR_CODES.unauthenticated });
-    }
+  authorizeGoogle(token: string | undefined): void {
+    requireConfiguredSecret(this.googleToken, token);
+  }
+
+  async acceptTelegram(update: TelegramUpdate): Promise<void> {
+    this.authorizeTelegram(update.secret);
 
     const token = update.text ? START_COMMAND.exec(update.text.trim())?.[1] : undefined;
 
@@ -51,13 +53,7 @@ export class WebhookService {
   }
 
   async acceptGoogleCalendar(notice: GoogleCalendarNotice): Promise<void> {
-    if (!this.googleToken) {
-      throw new ApiError({ code: API_ERROR_CODES.unavailable });
-    }
-
-    if (!secretsMatch(this.googleToken, notice.token ?? "")) {
-      throw new ApiError({ code: API_ERROR_CODES.unauthenticated });
-    }
+    this.authorizeGoogle(notice.token);
 
     if (notice.resourceState === "sync" || !notice.channelId || notice.channelId.length > 128) {
       return;
@@ -73,6 +69,16 @@ export class WebhookService {
       userId: null,
       maxAttempts: this.maxAttempts
     });
+  }
+}
+
+function requireConfiguredSecret(expected: string | null, provided: string | undefined): void {
+  if (!expected) {
+    throw new ApiError({ code: API_ERROR_CODES.unavailable });
+  }
+
+  if (!secretsMatch(expected, provided ?? "")) {
+    throw new ApiError({ code: API_ERROR_CODES.unauthenticated });
   }
 }
 

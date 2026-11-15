@@ -11,13 +11,15 @@ export function createWebhookRouter(webhooks: WebhookService) {
   router.post(
     "/telegram",
     asyncHandler(async (req, res) => {
+      const secret = req.header("x-telegram-bot-api-secret-token");
+      webhooks.authorizeTelegram(secret);
       const body = readRecord(req.body);
       const message = readRecord(body.message);
       const from = readRecord(message.from);
       const text = message.text;
       const fromId = from.id;
       await webhooks.acceptTelegram({
-        secret: req.header("x-telegram-bot-api-secret-token"),
+        secret,
         text: typeof text === "string" ? text : undefined,
         telegramUserId: typeof fromId === "number" ? String(fromId) : undefined
       });
@@ -30,8 +32,10 @@ export function createWebhookRouter(webhooks: WebhookService) {
   router.post(
     "/google-calendar",
     asyncHandler(async (req, res) => {
+      const token = req.header("x-goog-channel-token");
+      webhooks.authorizeGoogle(token);
       await webhooks.acceptGoogleCalendar({
-        token: req.header("x-goog-channel-token"),
+        token,
         channelId: req.header("x-goog-channel-id"),
         resourceState: req.header("x-goog-resource-state")
       });

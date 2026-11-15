@@ -215,4 +215,13 @@
 - Изменены `apps/api/prisma`, `apps/api/src/worker-main.ts`, `apps/api/src/infrastructure/db/expired-rows.ts`, `apps/api/src/infrastructure/jobs`, `docs/architecture.md`.
 - Проверки: `npm run lint` проходит. Vitest 256 passed / 20 skipped. Новый integration-тест очистки и прежние integration-тесты пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. CI прогонит очистку на PostgreSQL 18. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
 
+## 2026-11-15 — Тесты бизнес-логики и усиление безопасности
+
+- На PostgreSQL 18 проверены вход, сессия и ciphertext refresh token, дневной экземпляр рутины с изоляцией пользователей, одна активная сессия таймера, идемпотентная доставка Web Push, сброс курсора календаря после 410, захват очереди и повтор webhook. Сбой погоды и новостей оставляет остальные секции дашборда доступными.
+- Webhook Telegram и Google Calendar сверяет секрет до чтения тела или канала. Локальный PostgreSQL слушает только `127.0.0.1`. Nginx скрывает версию и отдаёт `nosniff`, `no-referrer` и запрет фреймов.
+- `body-parser` поднят до 2.4.0: закрыт отказ в обслуживании сжатым телом запроса. CI после миграций запускает новый integration-тест и `npm audit --omit=dev --audit-level=high`.
+- Новых переменных окружения нет.
+- Изменены `apps/api/src/modules/notifications/webhook.service.ts`, `webhook.routes.ts`, `business-flows.integration.test.ts`, `webhook-authorization.unit.test.ts`, `infra/nginx/default.conf`, `infra/compose.dev.yml`, `.github/workflows/postgres.yml`, `package-lock.json`.
+- Проверки: `npm run lint` проходит. Новый набор на PostgreSQL 18.6: 7 тестов зелёные. Webhook и HTTP входа: 12 тестов зелёные. `npm run build` проходит для contracts, API и web. Playwright: 37 passed / 5 skipped. Порт 3000 был занят другим приложением, поэтому сценарии открывались на `localhost:3010`.
+
 
