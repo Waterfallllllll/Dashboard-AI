@@ -5,7 +5,8 @@ import { createBackend } from "./app/create-backend.js";
 import { runWorkerCycle } from "./infrastructure/jobs/worker-cycle.js";
 import { ProviderUnavailableError } from "./infrastructure/http/provider-guard.js";
 import { localDateInTimeZone } from "./shared/local-date.js";
-import { notificationDeleteAt } from "./infrastructure/mongodb/retention.js";
+import { purgeExpiredRows } from "./infrastructure/db/expired-rows.js";
+import { notificationDeleteAt } from "./infrastructure/db/retention.js";
 
 try {
   const backend = await createBackend();
@@ -32,6 +33,20 @@ try {
           backend.runtime.worker.retentionDays
         ).getTime(),
         maxAttempts: backend.runtime.worker.maxAttempts,
+        onJob: (event) => {
+          backend.logger.info(
+            {
+              workerId,
+              jobId: event.id,
+              jobType: event.type,
+              attempt: event.attempt,
+              outcome: event.outcome,
+              durationMs: event.durationMs,
+              ...(event.userId ? { userId: event.userId } : {})
+            },
+            "Задача worker"
+          );
+        },
         handlers: {
           timerDue: (userId, sessionId) => backend.personal.timers.handleDue(userId, sessionId),
           deliver: (job) => backend.notificationsService.deliver(job),
@@ -91,7 +106,11 @@ try {
               backend.runtime.worker.maxAttempts
             ),
           purgePush: () => backend.notificationsService.purgeRevoked(),
-          renewWatches: () => backend.renewWatches()
+          renewWatches: () => backend.renewWatches(),
+          purgeExpired: async () => {
+            const removed = await purgeExpiredRows(backend.prisma, new Date());
+            backend.logger.info({ removed }, "Удалены просроченные строки");
+          }
         }
       });
       backend.logger.info({ workerId, result, durationMs: Date.now() - started }, "Цикл worker");

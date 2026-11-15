@@ -10,6 +10,15 @@ import type { JobQueue } from "./memory-job-queue.js";
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;
 
+export type WorkerJobEvent = {
+  readonly id: string;
+  readonly type: ClaimedJob["type"];
+  readonly attempt: number;
+  readonly outcome: JobSignal["kind"];
+  readonly durationMs: number;
+  readonly userId?: string;
+};
+
 export type WorkerHandlers = {
   timerDue(userId: string, sessionId: string): Promise<JobSignal>;
   deliver(job: ClaimedJob): Promise<JobSignal>;
@@ -19,6 +28,7 @@ export type WorkerHandlers = {
   scanRoutines(): Promise<void>;
   purgePush(): Promise<void>;
   renewWatches(): Promise<void>;
+  purgeExpired?(): Promise<void>;
 };
 
 export function periodicJobs(now: Date, maxAttempts: number): readonly ScheduleJob[] {
@@ -28,7 +38,8 @@ export function periodicJobs(now: Date, maxAttempts: number): readonly ScheduleJ
     slot("scan-routine-reminders", now, MINUTE_MS, maxAttempts),
     slot("sync-calendar", now, 30 * MINUTE_MS, maxAttempts),
     slot("purge-revoked-push", now, DAY_MS, maxAttempts),
-    slot("renew-calendar-watch", now, DAY_MS, maxAttempts)
+    slot("renew-calendar-watch", now, DAY_MS, maxAttempts),
+    slot("purge-expired", now, 60 * MINUTE_MS, maxAttempts)
   ];
 }
 
@@ -40,6 +51,7 @@ export async function runWorkerCycle(input: {
   readonly retentionMs: number;
   readonly maxAttempts: number;
   readonly handlers: WorkerHandlers;
+  readonly onJob?: (event: WorkerJobEvent) => void;
 }): Promise<"idle" | "processed"> {
   const now = input.now;
   await input.jobs.touchHeartbeat(input.workerId, now);
@@ -64,6 +76,7 @@ export async function runWorkerCycle(input: {
   }
 
   const deleteAt = new Date(now.getTime() + input.retentionMs);
+  const started = Date.now();
   let signal: JobSignal;
 
   try {
@@ -71,6 +84,15 @@ export async function runWorkerCycle(input: {
   } catch {
     signal = { kind: "retry", code: "unexpected" };
   }
+
+  input.onJob?.({
+    id: claimed.id,
+    type: claimed.type,
+    attempt: claimed.attempts,
+    outcome: signal.kind,
+    durationMs: Date.now() - started,
+    ...(claimed.userId ? { userId: claimed.userId } : {})
+  });
 
   if (signal.kind === "reschedule") {
     await input.jobs.reschedule(claimed.id, input.workerId, signal.runAt, now);
@@ -119,6 +141,13 @@ async function dispatch(job: ClaimedJob, handlers: WorkerHandlers): Promise<JobS
       return { kind: "done" };
     case "renew-calendar-watch":
       await handlers.renewWatches();
+      return { kind: "done" };
+    case "purge-expired":
+      if (!handlers.purgeExpired) {
+        return { kind: "fail", code: "purge-unwired" };
+      }
+
+      await handlers.purgeExpired();
       return { kind: "done" };
     case "scheduler-lock":
     case "worker-heartbeat":

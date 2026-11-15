@@ -170,6 +170,7 @@ enum ScheduledJobType {
   renewCalendarWatch   @map("renew-calendar-watch")
   schedulerLock        @map("scheduler-lock")
   workerHeartbeat      @map("worker-heartbeat")
+  purgeExpired         @map("purge-expired")
 
   @@map("scheduled_job_type")
 }

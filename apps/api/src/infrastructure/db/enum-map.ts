@@ -14,7 +14,8 @@ const JOB_TO_PRISMA = {
   "purge-revoked-push": ScheduledJobType.purgeRevokedPush,
   "renew-calendar-watch": ScheduledJobType.renewCalendarWatch,
   "scheduler-lock": ScheduledJobType.schedulerLock,
-  "worker-heartbeat": ScheduledJobType.workerHeartbeat
+  "worker-heartbeat": ScheduledJobType.workerHeartbeat,
+  "purge-expired": ScheduledJobType.purgeExpired
 } as const satisfies Record<JobType, (typeof ScheduledJobType)[keyof typeof ScheduledJobType]>;
 
 export function toTimeFormat(

@@ -207,4 +207,12 @@
 - Изменены `packages/contracts`, `apps/api/src/app/create-backend.ts`, `apps/api/src/main.ts`, репозитории Prisma в `apps/api/src/modules`, `apps/api/src/infrastructure/jobs/prisma-job-queue.ts`.
 - Проверки: `npm run lint` проходит. Vitest 251 passed / 19 skipped. Новый integration-тест репозитория пользователя и прежние integration-тесты пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
 
+## 2026-11-15 — Очистка просроченных строк worker
+
+- Worker раз в час ставит задачу `purge-expired`. Она удаляет просроченные сессии, одноразовые токены, журнал доставки, аудит и завершённые или проваленные задачи пачками по индексу срока. История таймера, рутин и календаря, новости, ожидающие и выполняемые задачи, lock и heartbeat остаются.
+- Повтор той же задачи ничего не стирает. Если обработчик очистки не подключён, задача не помечается успешной. В журнал цикла попадают идентификатор задачи, тип, попытка и длительность, без payload webhook и секретов.
+- Срок хранения задач worker читает из модуля PostgreSQL. Миграция `20261115170000_purge_expired_job` добавляет значение `purge-expired` в тип задачи. Новых переменных окружения нет.
+- Изменены `apps/api/prisma`, `apps/api/src/worker-main.ts`, `apps/api/src/infrastructure/db/expired-rows.ts`, `apps/api/src/infrastructure/jobs`, `docs/architecture.md`.
+- Проверки: `npm run lint` проходит. Vitest 256 passed / 20 skipped. Новый integration-тест очистки и прежние integration-тесты пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. CI прогонит очистку на PostgreSQL 18. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
+
 

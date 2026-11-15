@@ -292,7 +292,8 @@ export type ScheduledJobDocument = {
     | "purge-revoked-push"
     | "renew-calendar-watch"
     | "scheduler-lock"
-    | "worker-heartbeat";
+    | "worker-heartbeat"
+    | "purge-expired";
   payload: {
     sessionId?: string;
     eventType?: "work" | "break" | "routine" | "calendar";
@@ -794,7 +795,8 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
             "purge-revoked-push",
             "renew-calendar-watch",
             "scheduler-lock",
-            "worker-heartbeat"
+            "worker-heartbeat",
+            "purge-expired"
           ]
         },
         payload: {

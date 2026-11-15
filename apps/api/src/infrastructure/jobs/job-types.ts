@@ -6,7 +6,8 @@ export const WORK_JOB_TYPES = [
   "scan-due-timers",
   "scan-routine-reminders",
   "purge-revoked-push",
-  "renew-calendar-watch"
+  "renew-calendar-watch",
+  "purge-expired"
 ] as const;
 
 export const INFRASTRUCTURE_JOB_TYPES = ["scheduler-lock", "worker-heartbeat"] as const;
