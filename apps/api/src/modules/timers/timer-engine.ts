@@ -1,4 +1,10 @@
-import type { TimerPatch, TimerPhase, TimerPreset, TimerSession } from "@dashboard/contracts";
+import {
+  entityIdSchema,
+  type TimerPatch,
+  type TimerPhase,
+  type TimerPreset,
+  type TimerSession
+} from "@dashboard/contracts";
 
 import type { TimerRecord } from "./timers.types.js";
 
@@ -192,7 +198,7 @@ export function decodeTimerCursor(cursor: string): { startedAt: Date; id: string
   const startedAt = new Date(decoded.slice(0, separator));
   const id = decoded.slice(separator + 1);
 
-  if (Number.isNaN(startedAt.getTime()) || !/^[a-f0-9]{24}$/.test(id)) {
+  if (Number.isNaN(startedAt.getTime()) || !entityIdSchema.safeParse(id).success) {
     return null;
   }
 

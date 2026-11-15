@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import { API_ERROR_CODES } from "@dashboard/contracts";
+import { API_ERROR_CODES, entityIdSchema } from "@dashboard/contracts";
 import type { IntegrationList } from "@dashboard/contracts";
 import { z } from "zod";
 
@@ -20,12 +20,12 @@ import type { IntegrationKind, IntegrationsRepository } from "./integrations.rep
 import type { TelegramClient } from "./telegram-client.js";
 
 const calendarPayloadSchema = z.strictObject({
-  userId: z.string().regex(/^[a-f0-9]{24}$/),
+  userId: entityIdSchema,
   codeVerifier: z.string().min(16).max(256)
 });
 
 const telegramPayloadSchema = z.strictObject({
-  userId: z.string().regex(/^[a-f0-9]{24}$/)
+  userId: entityIdSchema
 });
 
 const credentialSchema = z.strictObject({

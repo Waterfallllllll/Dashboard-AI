@@ -8,10 +8,9 @@ import type {
   RoutineRuleCreate,
   RoutineRulePatch
 } from "@dashboard/contracts";
-import { ObjectId } from "mongodb";
-
 import { ApiError } from "../../shared/errors/api-error.js";
 import { idempotencyObjectId } from "../../shared/idempotency-id.js";
+import { newEntityId } from "../../shared/public-id.js";
 import type { Actor } from "../auth/auth.types.js";
 import { isEditProblem, planRuleEdit, type RuleDraft } from "./routine-edit.js";
 import { listFilterStatus, occursOn } from "./routine-schedule.js";
@@ -144,7 +143,7 @@ export class RoutinesService {
     const now = this.now();
     const id = idempotencyKey
       ? idempotencyObjectId(actor.userId, "routine-rule", idempotencyKey)
-      : new ObjectId().toHexString();
+      : newEntityId();
     const record = ruleRecord(id, actor.userId, draftFromCreate(input, timezone), now);
     const inserted = await this.routines.insertRule(record);
 
@@ -183,7 +182,7 @@ export class RoutinesService {
       return { rule: toRuleDto(this.written(actor, saved)), replacedRuleId: null };
     }
 
-    const created = ruleRecord(new ObjectId().toHexString(), actor.userId, plan.created, now);
+    const created = ruleRecord(newEntityId(), actor.userId, plan.created, now);
 
     if (plan.kind === "replace-date") {
       const saved = await this.routines.replaceDate({

@@ -197,4 +197,14 @@
 - Изменены `apps/api/src/infrastructure/db`, `apps/api/package.json`, `.github/workflows/postgres.yml`, `docs/architecture.md`.
 - Проверки: `npm run lint` проходит. Vitest 247 passed / 18 skipped. Три новых integration-теста проверки базы, прежние integration-тесты и `SELECT 1` пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. Планы на пустой базе сверены с PGlite 17.5; CI прогонит те же тесты на PostgreSQL 18. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
 
+## 2026-11-15 — Репозитории через Prisma Client
+
+- Живой API и worker больше не открывают прежнюю базу. Репозитории пользователей, сессий, виджетов, рутин, таймеров, интеграций, календаря, новостей, уведомлений и аудита читают и пишут только через Prisma Client. Очередь захватывает задачу одним `UPDATE ... FOR UPDATE SKIP LOCKED`.
+- `DELETE /api/v1/account` после мягкого удаления вызывает `purgeAccount` на PostgreSQL. Чужой или не-UUID идентификатор для репозитория выглядит как отсутствующая строка.
+- Публичный идентификатор в контракте принимает UUID и прежний 24-символьный ключ, чтобы уже написанные проверки не ломались. В PostgreSQL сохраняется только UUID. Новые сущности и ключ идемпотентности получают UUID.
+- Прежние классы репозиториев оставлены: их integration-тесты по-прежнему описывают старый драйвер и по правилу проекта не редактировались. В процесс API они не входят.
+- Новые переменные окружения не добавлялись.
+- Изменены `packages/contracts`, `apps/api/src/app/create-backend.ts`, `apps/api/src/main.ts`, репозитории Prisma в `apps/api/src/modules`, `apps/api/src/infrastructure/jobs/prisma-job-queue.ts`.
+- Проверки: `npm run lint` проходит. Vitest 251 passed / 19 skipped. Новый integration-тест репозитория пользователя и прежние integration-тесты пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
+
 

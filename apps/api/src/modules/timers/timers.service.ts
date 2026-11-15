@@ -5,11 +5,10 @@ import type {
   TimerSnapshot,
   TimerStart
 } from "@dashboard/contracts";
-import { ObjectId } from "mongodb";
-
 import { ApiError } from "../../shared/errors/api-error.js";
 import type { JobSignal } from "../../infrastructure/jobs/job-types.js";
 import { idempotencyObjectId } from "../../shared/idempotency-id.js";
+import { newEntityId } from "../../shared/public-id.js";
 import { zonedDayBounds } from "../../shared/local-date.js";
 import type { Actor } from "../auth/auth.types.js";
 import {
@@ -81,7 +80,7 @@ export class TimersService {
     const now = this.now();
     const id = idempotencyKey
       ? idempotencyObjectId(actor.userId, "timer-session", idempotencyKey)
-      : new ObjectId().toHexString();
+      : newEntityId();
     const session = createRunningSession({
       id,
       userId: actor.userId,

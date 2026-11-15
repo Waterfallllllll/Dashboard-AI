@@ -24,14 +24,7 @@ try {
     notificationsService: backend.notificationsService,
     webhookService: backend.webhookService,
     metrics: backend.metrics,
-    readyCheck: async () => {
-      try {
-        await backend.client.db(backend.dbName).command({ ping: 1 });
-        return await pingDatabase(backend.prisma);
-      } catch {
-        return false;
-      }
-    }
+    readyCheck: () => pingDatabase(backend.prisma)
   });
   const server = createServer(app);
   server.listen(backend.runtime.config.port, () => {

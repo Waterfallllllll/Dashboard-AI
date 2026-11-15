@@ -1,4 +1,6 @@
-import { auditDeleteAt } from "../../infrastructure/mongodb/retention.js";
+import { entityIdSchema } from "@dashboard/contracts";
+
+import { auditDeleteAt } from "../../infrastructure/db/retention.js";
 import {
   AUDIT_ACTIONS,
   AUDIT_TARGETS,
@@ -10,7 +12,9 @@ import {
 
 export type { AuditEventInput, AuditRecord, AuditRecorder, AuditRepository };
 
-const USER_ID = /^[a-f0-9]{24}$/;
+function isAuditUserId(userId: string): boolean {
+  return entityIdSchema.safeParse(userId).success;
+}
 const ACTIONS = new Set<string>(AUDIT_ACTIONS);
 
 export const noopAudit: AuditRecorder = {
@@ -33,7 +37,7 @@ export class AuditService implements AuditRecorder {
   }
 
   async forgetUser(userId: string): Promise<void> {
-    if (!USER_ID.test(userId)) {
+    if (!isAuditUserId(userId)) {
       throw new Error("Некорректный идентификатор пользователя в журнале аудита");
     }
 
@@ -74,7 +78,7 @@ function assertAuditShape(input: AuditEventInput): void {
     return;
   }
 
-  if (input.userId === null || !USER_ID.test(input.userId)) {
+  if (input.userId === null || !isAuditUserId(input.userId)) {
     throw new Error("Некорректный идентификатор пользователя в журнале аудита");
   }
 

@@ -1,29 +1,23 @@
-import { parseObjectId } from "../shared/object-id.js";
 import { readApiEnv, type ApiRuntime } from "../config/env.js";
 import { createCredentialCipher, readDataEncryptionKey } from "../infrastructure/crypto/index.js";
+import { purgeAccount } from "../infrastructure/db/account-purge.js";
 import {
   connectDatabase,
   disconnectPrisma,
   getPrismaClient
 } from "../infrastructure/db/prisma-client.js";
 import type { PrismaClient } from "../generated/prisma/client.js";
-import { MongoJobQueue } from "../infrastructure/jobs/mongo-job-queue.js";
+import { PrismaJobQueue } from "../infrastructure/jobs/prisma-job-queue.js";
+import type { JobQueue } from "../infrastructure/jobs/memory-job-queue.js";
 import type { Logger } from "../infrastructure/logging/logger.js";
 import { createLogger } from "../infrastructure/logging/logger.js";
 import { createMetrics, type MetricsSource } from "../infrastructure/metrics/app-metrics.js";
-import {
-  closeMongo,
-  connectMongo,
-  purgeAccount,
-  readMongoConfig,
-  type MongoConfig
-} from "../infrastructure/mongodb/index.js";
-import { MongoAuthRepository } from "../modules/auth/auth.repository.js";
+import { PrismaAuthRepository } from "../modules/auth/prisma-auth.repository.js";
 import { AuthService } from "../modules/auth/auth.service.js";
 import { AuditService } from "../modules/audit/audit.service.js";
-import { MongoAuditRepository } from "../modules/audit/audit.repository.js";
+import { PrismaAuditRepository } from "../modules/audit/prisma-audit.repository.js";
 import { createGoogleOAuthClient } from "../modules/auth/google-oauth.js";
-import { MongoCalendarRepository } from "../modules/calendar/calendar.repository.js";
+import { PrismaCalendarRepository } from "../modules/calendar/prisma-calendar.repository.js";
 import { renewCalendarWatches } from "../modules/calendar/calendar-watch.js";
 import {
   createGoogleCalendarGateway,
@@ -31,26 +25,24 @@ import {
 } from "../modules/calendar/google-calendar-gateway.js";
 import { createExternalServices, type ExternalServices } from "../modules/external-services.js";
 import { createCalendarOAuthClient } from "../modules/integrations/google-calendar-oauth.js";
-import { MongoIntegrationsRepository } from "../modules/integrations/integrations.repository.js";
+import { PrismaIntegrationsRepository } from "../modules/integrations/prisma-integrations.repository.js";
+import type { IntegrationsRepository } from "../modules/integrations/integrations.repository.js";
 import { TelegramClient } from "../modules/integrations/telegram-client.js";
-import { MongoNewsRepository } from "../modules/news/news.repository.js";
-import { MongoNotificationRepository } from "../modules/notifications/notifications.repository.js";
+import { PrismaNewsRepository } from "../modules/news/prisma-news.repository.js";
+import { PrismaNotificationRepository } from "../modules/notifications/prisma-notifications.repository.js";
 import { NotificationsService } from "../modules/notifications/notifications.service.js";
 import { WebhookService } from "../modules/notifications/webhook.service.js";
 import { createWebPushTransport } from "../modules/notifications/web-push-sender.js";
 import { createPersonalServices, type PersonalServices } from "../modules/personal-services.js";
-import { MongoRoutinesRepository } from "../modules/routines/routines.repository.js";
-import { MongoTimersRepository } from "../modules/timers/timers.repository.js";
-import { MongoUsersRepository } from "../modules/users/users.repository.js";
+import { PrismaRoutinesRepository } from "../modules/routines/prisma-routines.repository.js";
+import { PrismaTimersRepository } from "../modules/timers/prisma-timers.repository.js";
+import { PrismaUsersRepository } from "../modules/users/prisma-users.repository.js";
 import { UsersService } from "../modules/users/users.service.js";
-import { MongoWidgetsRepository } from "../modules/widgets/widgets.repository.js";
-import type { MongoClient } from "mongodb";
+import { PrismaWidgetsRepository } from "../modules/widgets/prisma-widgets.repository.js";
 
 export type Backend = {
   readonly runtime: ApiRuntime;
   readonly logger: Logger;
-  readonly client: MongoClient;
-  readonly dbName: string;
   readonly prisma: PrismaClient;
   readonly personal: PersonalServices;
   readonly external: ExternalServices;
@@ -58,7 +50,7 @@ export type Backend = {
   readonly usersService: UsersService;
   readonly notificationsService: NotificationsService;
   readonly webhookService: WebhookService;
-  readonly jobs: MongoJobQueue;
+  readonly jobs: JobQueue;
   readonly metrics: MetricsSource;
   readonly renewWatches: () => Promise<void>;
   readonly close: () => Promise<void>;
@@ -69,28 +61,16 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
   const logger = createLogger(runtime.config.logLevel);
   const prisma = getPrismaClient(env);
   await connectDatabase(prisma);
-
-  let mongo: MongoConfig;
-  let client: MongoClient;
-
-  try {
-    mongo = readMongoConfig(env);
-    client = await connectMongo(mongo);
-  } catch (error) {
-    await disconnectPrisma();
-    throw error;
-  }
-  const db = client.db(mongo.dbName);
   const cipher = createCredentialCipher(readDataEncryptionKey(env));
-  const jobs = new MongoJobQueue(db);
-  const users = new MongoUsersRepository(db);
-  const audit = new AuditService(new MongoAuditRepository(db));
-  const integrationsRepository = new MongoIntegrationsRepository(db);
+  const jobs = new PrismaJobQueue(prisma);
+  const users = new PrismaUsersRepository(prisma);
+  const audit = new AuditService(new PrismaAuditRepository(prisma));
+  const integrationsRepository = new PrismaIntegrationsRepository(prisma);
   const personal = createPersonalServices(
     {
-      widgets: new MongoWidgetsRepository(db),
-      routines: new MongoRoutinesRepository(db),
-      timers: new MongoTimersRepository(db)
+      widgets: new PrismaWidgetsRepository(prisma),
+      routines: new PrismaRoutinesRepository(prisma),
+      timers: new PrismaTimersRepository(prisma)
     },
     { jobs, maxAttempts: runtime.worker.maxAttempts }
   );
@@ -109,8 +89,8 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
     timers: personal.timers,
     users,
     integrations: integrationsRepository,
-    news: new MongoNewsRepository(db),
-    events: new MongoCalendarRepository(db),
+    news: new PrismaNewsRepository(prisma),
+    events: new PrismaCalendarRepository(prisma),
     cipher,
     fetchImpl: fetch,
     oauth: createCalendarOAuthClient({
@@ -123,7 +103,7 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
     telegram: runtime.telegram,
     audit
   });
-  const notificationRepository = new MongoNotificationRepository(db, cipher);
+  const notificationRepository = new PrismaNotificationRepository(prisma, cipher);
   const notificationsService = new NotificationsService(
     notificationRepository,
     users,
@@ -139,7 +119,7 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
     runtime.worker.maxAttempts
   );
   const authService = new AuthService(
-    new MongoAuthRepository(db),
+    new PrismaAuthRepository(prisma),
     createGoogleOAuthClient({
       clientId: runtime.googleClientId,
       clientSecret: runtime.googleClientSecret,
@@ -154,13 +134,7 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
   const usersService = new UsersService(
     users,
     async (userId) => {
-      const id = parseObjectId(userId);
-
-      if (!id) {
-        throw new Error("Некорректный идентификатор пользователя");
-      }
-
-      await purgeAccount(db, id);
+      await purgeAccount(prisma, userId);
     },
     () => new Date(),
     audit
@@ -169,8 +143,6 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
   return {
     runtime,
     logger,
-    client,
-    dbName: mongo.dbName,
     prisma,
     personal,
     external,
@@ -181,18 +153,12 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
     jobs,
     metrics: createMetrics(jobs, () => notificationRepository.countDeliveries()),
     renewWatches: () => renewDueWatches(integrationsRepository, gateway, runtime, external),
-    close: async () => {
-      try {
-        await disconnectPrisma();
-      } finally {
-        await closeMongo(client);
-      }
-    }
+    close: () => disconnectPrisma()
   };
 }
 
 async function renewDueWatches(
-  integrations: MongoIntegrationsRepository,
+  integrations: IntegrationsRepository,
   gateway: CalendarWatchGateway,
   runtime: ApiRuntime,
   external: ExternalServices

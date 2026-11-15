@@ -1,6 +1,7 @@
 import { z } from "zod";
 
-const publicIdPattern = /^[a-f0-9]{24}$/;
+const publicIdPattern =
+  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[a-f0-9]{24})$/;
 const localTimePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const localePattern = /^[a-z]{2}(?:-[A-Z]{2})?$/;
 const requestIdPattern = /^[A-Za-z0-9_-]{8,80}$/;
