@@ -15,6 +15,7 @@ import styles from "./login-screen.module.scss";
 
 type LoginScreenProps = Readonly<{
   status?: LoginStatus;
+  googleHref?: string;
 }>;
 
 const statusMessages: Readonly<Record<Exclude<LoginStatus, null>, string>> = {
@@ -31,7 +32,7 @@ const previewItems = [
   { icon: Newspaper, label: "AI-новости", value: "5 новых" }
 ] as const;
 
-export function LoginScreen({ status = null }: LoginScreenProps) {
+export function LoginScreen({ googleHref, status = null }: LoginScreenProps) {
   const message = status ? statusMessages[status] : null;
 
   return (
@@ -54,20 +55,32 @@ export function LoginScreen({ status = null }: LoginScreenProps) {
         ) : null}
 
         <div className={styles.actions}>
-          <button
-            aria-describedby="oauth-availability"
-            className={styles.googleButton}
-            disabled
-            type="button"
-          >
-            <span aria-hidden="true" className={styles.googleMark}>
-              G
-            </span>
-            <span>{status === "loading" ? "Переходим в Google…" : "Продолжить с Google"}</span>
-            <ArrowRight aria-hidden="true" />
-          </button>
+          {googleHref ? (
+            <a className={styles.googleButton} href={googleHref}>
+              <span aria-hidden="true" className={styles.googleMark}>
+                G
+              </span>
+              <span>{status === "loading" ? "Переходим в Google…" : "Продолжить с Google"}</span>
+              <ArrowRight aria-hidden="true" />
+            </a>
+          ) : (
+            <button
+              aria-describedby="oauth-availability"
+              className={styles.googleButton}
+              disabled
+              type="button"
+            >
+              <span aria-hidden="true" className={styles.googleMark}>
+                G
+              </span>
+              <span>{status === "loading" ? "Переходим в Google…" : "Продолжить с Google"}</span>
+              <ArrowRight aria-hidden="true" />
+            </button>
+          )}
           <p className={styles.availability} id="oauth-availability">
-            Вход станет доступен после подключения защищённого OAuth-потока.
+            {googleHref
+              ? "Откроется страница Google. Токены останутся на сервере."
+              : "Вход станет доступен после подключения защищённого OAuth-потока."}
           </p>
         </div>
 

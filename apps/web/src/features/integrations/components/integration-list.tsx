@@ -1,7 +1,19 @@
+"use client";
+
+import {
+  googleConnectResponseSchema,
+  integrationDeletionResponseSchema,
+  integrationListResponseSchema,
+  telegramLinkResponseSchema,
+  type IntegrationSummary
+} from "@dashboard/contracts";
 import { BellRing, CalendarDays, LockKeyhole, MapPin, Send } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
+import { useSession } from "@/features/session";
+import { browserApi } from "@/lib/api/browser-api-client";
 
 import styles from "./integration-list.module.scss";
 
@@ -13,7 +25,7 @@ type IntegrationCard = Readonly<{
   action: string;
   status: string;
   icon: LucideIcon;
-  tone: "neutral" | "warning";
+  tone: "neutral" | "warning" | "success";
 }>;
 
 const integrations: readonly IntegrationCard[] = [
@@ -60,6 +72,34 @@ const integrations: readonly IntegrationCard[] = [
 ];
 
 export function IntegrationList() {
+  const session = useSession();
+  const [remote, setRemote] = useState<readonly IntegrationSummary[]>([]);
+  const [message, setMessage] = useState("");
+  const [pending, setPending] = useState("");
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      const result = await browserApi({
+        path: "/api/v1/integrations",
+        schema: integrationListResponseSchema
+      });
+
+      if (!cancelled && result.ok) {
+        setRemote(result.data.data.integrations);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
   return (
     <div className={styles.wrapper}>
       <aside className={styles.privacyNote}>
@@ -74,9 +114,14 @@ export function IntegrationList() {
       </aside>
 
       <ul className={styles.grid} role="list">
-        {integrations.map(
-          ({ action, description, detail, icon: Icon, id, status, title, tone }) => (
-            <li className={styles.card} key={title}>
+        {integrations.map((card) => {
+          const Icon = card.icon;
+          const connected = isConnected(card.id, remote);
+          const status = session && connected ? "Подключено" : card.status;
+          const tone = session && connected ? "success" : card.tone;
+
+          return (
+            <li className={styles.card} key={card.title}>
               <div className={styles.cardHeader}>
                 <div aria-hidden="true" className={styles.icon}>
                   <Icon strokeWidth={1.8} />
@@ -85,22 +130,163 @@ export function IntegrationList() {
               </div>
 
               <div className={styles.cardCopy}>
-                <h2>{title}</h2>
-                <p>{description}</p>
+                <h2>{card.title}</h2>
+                <p>{card.description}</p>
               </div>
 
-              <p className={styles.detail}>{detail}</p>
+              <p className={styles.detail}>{card.detail}</p>
 
               <div className={styles.cardFooter}>
-                <button aria-describedby={`${id}-availability`} disabled type="button">
-                  {action}
+                <button
+                  aria-describedby={`${card.id}-availability`}
+                  disabled={!session || pending === card.id}
+                  onClick={() => {
+                    void runAction(card.id, connected, setMessage, setPending, setRemote);
+                  }}
+                  type="button"
+                >
+                  {session && connected ? disconnectLabel(card.id) : card.action}
                 </button>
-                <span id={`${id}-availability`}>Доступно после подключения API</span>
+                <span id={`${card.id}-availability`}>
+                  {session ? "Запрос уходит на сервер только после нажатия." : "Доступно после подключения API"}
+                </span>
               </div>
             </li>
-          )
-        )}
+          );
+        })}
       </ul>
+      {message ? <p role="status">{message}</p> : null}
     </div>
   );
+}
+
+function isConnected(id: string, remote: readonly IntegrationSummary[]): boolean {
+  const type = id === "google-calendar" ? "google_calendar" : id === "telegram" ? "telegram" : null;
+
+  if (!type) {
+    return false;
+  }
+
+  return remote.some((item) => item.type === type && item.status === "connected");
+}
+
+function disconnectLabel(id: string): string {
+  if (id === "google-calendar") {
+    return "Отключить календарь";
+  }
+
+  if (id === "telegram") {
+    return "Отключить Telegram";
+  }
+
+  return "Открыть настройки";
+}
+
+async function runAction(
+  id: string,
+  connected: boolean,
+  setMessage: (value: string) => void,
+  setPending: (value: string) => void,
+  setRemote: (value: readonly IntegrationSummary[]) => void
+): Promise<void> {
+  setPending(id);
+  setMessage("");
+
+  try {
+    if (id === "location") {
+      document.getElementById("weather-city")?.focus();
+      return;
+    }
+
+    if (id === "browser-notifications") {
+      document.getElementById("web-push-enable")?.focus();
+      return;
+    }
+
+    if (id === "google-calendar") {
+      await connectOrDisconnect(
+        connected,
+        "/api/v1/integrations/google/connect",
+        "/api/v1/integrations/google",
+        ["accounts.google.com"],
+        setMessage,
+        setRemote
+      );
+      return;
+    }
+
+    if (id === "telegram") {
+      await connectOrDisconnect(
+        connected,
+        "/api/v1/integrations/telegram/link",
+        "/api/v1/integrations/telegram",
+        ["t.me", "telegram.me"],
+        setMessage,
+        setRemote
+      );
+    }
+  } finally {
+    setPending("");
+  }
+}
+
+async function connectOrDisconnect(
+  connected: boolean,
+  connectPath: "/api/v1/integrations/google/connect" | "/api/v1/integrations/telegram/link",
+  deletePath: "/api/v1/integrations/google" | "/api/v1/integrations/telegram",
+  hosts: readonly string[],
+  setMessage: (value: string) => void,
+  setRemote: (value: readonly IntegrationSummary[]) => void
+): Promise<void> {
+  if (connected) {
+    const removed = await browserApi({
+      path: deletePath,
+      method: "DELETE",
+      schema: integrationDeletionResponseSchema
+    });
+    setMessage(removed.ok ? "Интеграция отключена." : removed.message);
+
+    if (removed.ok) {
+      const list = await browserApi({
+        path: "/api/v1/integrations",
+        schema: integrationListResponseSchema
+      });
+
+      if (list.ok) {
+        setRemote(list.data.data.integrations);
+      }
+    }
+
+    return;
+  }
+
+  const schema =
+    connectPath.endsWith("/link") ? telegramLinkResponseSchema : googleConnectResponseSchema;
+  const result = await browserApi({
+    path: connectPath,
+    method: "POST",
+    schema,
+    idempotencyKey: crypto.randomUUID()
+  });
+
+  if (!result.ok) {
+    setMessage(result.message);
+    return;
+  }
+
+  if (!isAllowedRedirect(result.data.data.url, hosts)) {
+    setMessage("Сервер вернул неожиданный адрес. Переход отменён.");
+    return;
+  }
+
+  window.location.assign(result.data.data.url);
+}
+
+function isAllowedRedirect(url: string, hosts: readonly string[]): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && hosts.includes(parsed.hostname);
+  } catch {
+    return false;
+  }
 }

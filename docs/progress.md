@@ -224,4 +224,14 @@
 - Изменены `apps/api/src/modules/notifications/webhook.service.ts`, `webhook.routes.ts`, `business-flows.integration.test.ts`, `webhook-authorization.unit.test.ts`, `infra/nginx/default.conf`, `infra/compose.dev.yml`, `.github/workflows/postgres.yml`, `package-lock.json`.
 - Проверки: `npm run lint` проходит. Новый набор на PostgreSQL 18.6: 7 тестов зелёные. Webhook и HTTP входа: 12 тестов зелёные. `npm run build` проходит для contracts, API и web. Playwright: 37 passed / 5 skipped. Порт 3000 был занят другим приложением, поэтому сценарии открывались на `localhost:3010`.
 
+## 2026-11-16 — Интерфейс подключён к API
+
+- Браузер вызывает `/api/v1` через rewrite Next.js на `INTERNAL_API_URL`. Серверный клиент пересылает cookie сессии. CSRF хранится только в памяти вкладки и добавляется к POST, PUT, PATCH и DELETE. Ответы проверяются схемами `@dashboard/contracts`.
+- При живой сессии дашборд, профиль, интеграции, рутины, таймер, место для погоды и Web Push читают и записывают API. Без cookie или если API недоступен, страницы остаются на локальных данных. Анонимный посетитель не перенаправляется на `/login`.
+- Ссылка «Продолжить с Google» ведёт на `/api/v1/auth/google` только когда `GET /health/live` отвечает. Адреса Google и Telegram открываются только по `https` и точному хосту. Несовпадение схемы ответа не показывает тело клиенту.
+- Защищённые маршруты помечены `dynamic = "force-dynamic"`. Без этого production-сборка отдавала одну страницу без сессии, хотя `cookies()` вызывался из соседнего модуля.
+- Новых переменных окружения нет. Используется уже описанный `INTERNAL_API_URL`.
+- Изменены `apps/web/next.config.ts`, `apps/web/src/lib/api`, `apps/web/src/lib/session`, `apps/web/src/lib/dashboard`, `apps/web/src/features/session` и страницы входа, дашборда, профиля, интеграций, рутин, таймера и уведомлений.
+- Проверки: `npm run lint` проходит. Vitest 263 passed / 27 skipped. Integration-тесты базы пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. Playwright 37 passed / 5 skipped. `npm run build` проходит; `/login`, `/dashboard` и страницы настроек динамические. В браузере без API на порту 4000 проверены вход, дашборд, профиль, интеграции и рутины на широкой и узкой ширине: мок-данные на месте, вход и подключение интеграций недоступны, предпочтения сохраняются в браузере, ошибок в консоли нет. Живой вход не проверялся.
+
 

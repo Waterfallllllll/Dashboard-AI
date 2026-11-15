@@ -18,6 +18,24 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
+function apiProxyOrigin(): string {
+  const value = process.env.INTERNAL_API_URL;
+
+  if (value) {
+    try {
+      const url = new URL(value);
+
+      if (url.protocol === "http:" || url.protocol === "https:") {
+        return url.origin;
+      }
+    } catch {
+      // A missing or malformed API origin falls back to the local backend.
+    }
+  }
+
+  return "http://localhost:4000";
+}
+
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
@@ -25,6 +43,16 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   agentRules: false,
+  async rewrites() {
+    const origin = apiProxyOrigin();
+
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${origin}/api/v1/:path*`
+      }
+    ];
+  },
   async headers() {
     return [
       {

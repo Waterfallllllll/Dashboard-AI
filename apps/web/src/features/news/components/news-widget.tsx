@@ -13,21 +13,34 @@ import {
   visibleNewsItems
 } from "../model/news-freshness";
 import { createMockNews } from "../model/mock-news";
+import type { NewsItem } from "../model/news-types";
 
 import styles from "./news-widget.module.scss";
 
 type NewsWidgetProps = Readonly<{
   itemLimit?: number;
+  items?: readonly NewsItem[];
   now?: number;
   sourceMode?: "all" | "official";
   timeZone: string;
 }>;
 
-export function NewsWidget({ itemLimit, now: nowProp, sourceMode, timeZone }: NewsWidgetProps) {
+export function NewsWidget({
+  itemLimit,
+  items: itemsProp,
+  now: nowProp,
+  sourceMode,
+  timeZone
+}: NewsWidgetProps) {
   const [capturedNow] = useState(() => nowProp ?? Date.now());
   const now = nowProp ?? capturedNow;
   const [hiddenIds, setHiddenIds] = useState<readonly string[]>([]);
-  const items = selectVisibleNews(visibleNewsItems(createMockNews(now), hiddenIds), {
+
+  if (itemsProp && itemsProp.length === 0) {
+    return <p className={styles.empty}>Свежих материалов пока нет.</p>;
+  }
+
+  const items = selectVisibleNews(visibleNewsItems(itemsProp ?? createMockNews(now), hiddenIds), {
     ...(itemLimit !== undefined ? { itemLimit } : {}),
     ...(sourceMode !== undefined ? { sourceMode } : {})
   });

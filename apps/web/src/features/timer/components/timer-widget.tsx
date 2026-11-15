@@ -50,6 +50,7 @@ type TimerWidgetProps = Readonly<{
   now?: number;
   initialSession?: TimerSession;
   configurable?: boolean;
+  onCommit?: (previous: TimerSession, next: TimerSession) => void;
 }>;
 
 const emptySubscribe = () => () => undefined;
@@ -58,6 +59,7 @@ export function TimerWidget({
   configurable = false,
   initialSession,
   now: nowProp,
+  onCommit,
   persist = false
 }: TimerWidgetProps) {
   const liveNow = useTickingNow(nowProp === undefined);
@@ -159,7 +161,9 @@ export function TimerWidget({
           aria-label={primaryLabel}
           className={styles.primary}
           onClick={() => {
-            commit(due.runStatus === "running" ? pauseTimer(due, now) : startTimer(due, now));
+            const next = due.runStatus === "running" ? pauseTimer(due, now) : startTimer(due, now);
+            onCommit?.(due, next);
+            commit(next);
           }}
           type="button"
         >
@@ -174,7 +178,9 @@ export function TimerWidget({
           aria-label="Пропустить интервал"
           className={styles.iconButton}
           onClick={() => {
-            commit(skipPhase(due, settings));
+            const next = skipPhase(due, settings);
+            onCommit?.(due, next);
+            commit(next);
           }}
           type="button"
         >
@@ -184,7 +190,9 @@ export function TimerWidget({
           aria-label="Сбросить таймер"
           className={styles.iconButton}
           onClick={() => {
-            commit(resetTimer());
+            const next = resetTimer();
+            onCommit?.(due, next);
+            commit(next);
           }}
           type="button"
         >

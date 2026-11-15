@@ -1,4 +1,5 @@
 export { DashboardBoard } from "./components/dashboard-board";
+export { WidgetPreferencesSync } from "./model/sync-widget-preferences";
 export { WidgetEditor } from "./components/widget-editor";
 export { WidgetCard } from "./components/widget-card";
 export { DEFAULT_WIDGET_LAYOUT, getVisibleWidgets } from "./model/widget-layout";

@@ -1,6 +1,10 @@
 "use client";
 
+import { pushSubscriptionResponseSchema } from "@dashboard/contracts";
 import { useEffect, useState } from "react";
+
+import { browserApi } from "@/lib/api/browser-api-client";
+import { getCsrfToken } from "@/lib/api/csrf-memory";
 
 import { requestBrowserNotifications } from "../model/notification-center";
 import { decodeVapidPublicKey, readWebPushPublicKey } from "../model/push-key";
@@ -86,10 +90,11 @@ export function WebPushControls({ publicKey }: WebPushControlsProps) {
     }
 
     try {
-      await registration.pushManager.subscribe({
+      const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: keyBytes
       });
+      await publishPushSubscription(subscription);
       setSubscribed(true);
       setMessage(
         "Браузер готов принимать Web Push. Сервер сохранит подписку, когда появится API. Ключ подписки не показывается и не пишется в localStorage."
@@ -134,6 +139,7 @@ export function WebPushControls({ publicKey }: WebPushControlsProps) {
       ) : (
         <button
           disabled={support !== "ready" || keyBytes === null}
+          id="web-push-enable"
           onClick={() => void enableDelivery()}
           type="button"
         >
@@ -147,6 +153,43 @@ export function WebPushControls({ publicKey }: WebPushControlsProps) {
       ) : null}
     </>
   );
+}
+
+async function publishPushSubscription(subscription: PushSubscription): Promise<void> {
+  if (!getCsrfToken() || typeof subscription.getKey !== "function") {
+    return;
+  }
+
+  const p256dh = subscription.getKey("p256dh");
+  const auth = subscription.getKey("auth");
+
+  if (!p256dh || !auth || !subscription.endpoint.startsWith("https://")) {
+    return;
+  }
+
+  await browserApi({
+    path: "/api/v1/push/subscriptions",
+    method: "POST",
+    schema: pushSubscriptionResponseSchema,
+    body: {
+      endpoint: subscription.endpoint,
+      keys: {
+        p256dh: encodePushKey(p256dh),
+        auth: encodePushKey(auth)
+      }
+    }
+  });
+}
+
+function encodePushKey(value: ArrayBuffer): string {
+  const bytes = new Uint8Array(value);
+  let binary = "";
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/u, "");
 }
 
 function detectPushSupport(): PushSupport {

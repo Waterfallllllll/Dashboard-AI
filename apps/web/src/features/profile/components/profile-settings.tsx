@@ -1,11 +1,19 @@
 "use client";
 
+import {
+  accountDeletionResponseSchema,
+  profileResponseSchema,
+  signOutResponseSchema
+} from "@dashboard/contracts";
 import { Clock3, Globe2, LogOut, ShieldAlert, UserRound } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ThemeControl } from "@/components/ui/theme-control";
+import { useSession } from "@/features/session";
+import { browserApi } from "@/lib/api/browser-api-client";
+import { getSystemTimeZone } from "@/lib/format/date-time";
 
 import {
   PROFILE_PREFERENCES_STORAGE_KEY,
@@ -16,8 +24,10 @@ import {
 import styles from "./profile-settings.module.scss";
 
 export function ProfileSettings() {
+  const session = useSession();
   const formRef = useRef<HTMLFormElement>(null);
   const [saveStatus, setSaveStatus] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     let rawValue: string | null;
@@ -28,7 +38,12 @@ export function ProfileSettings() {
       return;
     }
 
-    const preferences = parseStoredPreferences(rawValue);
+    const preferences = session
+      ? {
+          timezone: isTimezoneValue(session.user.timezone) ? session.user.timezone : "auto",
+          timeFormat: session.user.timeFormat
+        }
+      : parseStoredPreferences(rawValue);
 
     if (!preferences || !formRef.current) {
       return;
@@ -46,9 +61,9 @@ export function ProfileSettings() {
     if (timeFormatControl) {
       timeFormatControl.checked = true;
     }
-  }, []);
+  }, [session]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
@@ -65,10 +80,35 @@ export function ProfileSettings() {
         PROFILE_PREFERENCES_STORAGE_KEY,
         JSON.stringify({ timezone, timeFormat })
       );
-      setSaveStatus("Предпочтения сохранены в этом браузере.");
+      setSaveStatus(
+        session ? "Сохраняем предпочтения в аккаунте…" : "Предпочтения сохранены в этом браузере."
+      );
     } catch {
       setSaveStatus("Браузер запретил локальное сохранение настроек.");
+      return;
     }
+
+    if (!session) {
+      return;
+    }
+
+    const themeControl = event.currentTarget.querySelector("#theme-preference");
+    const theme =
+      themeControl instanceof HTMLSelectElement &&
+      (themeControl.value === "system" || themeControl.value === "light" || themeControl.value === "dark")
+        ? themeControl.value
+        : "system";
+    const result = await browserApi({
+      path: "/api/v1/profile",
+      method: "PATCH",
+      schema: profileResponseSchema,
+      body: {
+        timeFormat,
+        theme,
+        timezone: timezone === "auto" ? getSystemTimeZone() : timezone
+      }
+    });
+    setSaveStatus(result.ok ? "Предпочтения сохранены в аккаунте." : result.message);
   }
 
   return (
@@ -79,9 +119,15 @@ export function ProfileSettings() {
         </div>
         <div className={styles.accountCopy}>
           <h2 id="account-heading">Аккаунт Google</h2>
-          <p>Имя и аватар появятся после безопасного входа.</p>
+          <p>
+            {session
+              ? session.user.displayName
+              : "Имя и аватар появятся после безопасного входа."}
+          </p>
         </div>
-        <StatusBadge tone="warning">Не авторизован</StatusBadge>
+        <StatusBadge tone={session ? "success" : "warning"}>
+          {session ? "Авторизован" : "Не авторизован"}
+        </StatusBadge>
       </section>
 
       <form className={styles.form} onSubmit={handleSubmit} ref={formRef}>
@@ -147,10 +193,21 @@ export function ProfileSettings() {
           </div>
           <div>
             <h2 id="session-heading">Сессия</h2>
-            <p>Управление активным входом появится после подключения backend-сессий.</p>
+            <p>
+              {session
+                ? "Выход завершает только эту сессию."
+                : "Управление активным входом появится после подключения backend-сессий."}
+            </p>
           </div>
         </div>
-        <button className={styles.secondaryButton} disabled type="button">
+        <button
+          className={styles.secondaryButton}
+          disabled={!session}
+          onClick={() => {
+            void signOut();
+          }}
+          type="button"
+        >
           Выйти
         </button>
       </section>
@@ -165,10 +222,52 @@ export function ProfileSettings() {
             <p>Удаляет профиль, интеграции, историю и отложенные задачи без восстановления.</p>
           </div>
         </div>
-        <button className={styles.dangerButton} disabled type="button">
-          Удалить аккаунт
+        <button
+          className={styles.dangerButton}
+          disabled={!session}
+          onClick={() => {
+            if (!confirmDelete) {
+              setConfirmDelete(true);
+              return;
+            }
+
+            void deleteAccount();
+          }}
+          type="button"
+        >
+          {confirmDelete ? "Подтвердить удаление" : "Удалить аккаунт"}
         </button>
       </section>
     </div>
   );
+}
+
+async function signOut(): Promise<void> {
+  const result = await browserApi({
+    path: "/api/v1/auth/logout",
+    method: "POST",
+    schema: signOutResponseSchema
+  });
+
+  if (result.ok) {
+    leaveSession();
+  }
+}
+
+async function deleteAccount(): Promise<void> {
+  const result = await browserApi({
+    path: "/api/v1/account",
+    method: "DELETE",
+    schema: accountDeletionResponseSchema
+  });
+
+  if (result.ok) {
+    leaveSession();
+  }
+}
+
+function leaveSession(): void {
+  // Полная загрузка сбрасывает кэш RSC и CSRF в памяти после удаления cookie.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- сессия уже уничтожена
+  window.location.assign("/login");
 }

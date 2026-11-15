@@ -78,7 +78,9 @@
   padding-inline: var(--space-lg);
   background: var(--color-primary);
   color: var(--color-text-on-primary);
+  cursor: pointer;
   font: var(--text-label-lg);
+  text-decoration: none;
 
   &:disabled {
     opacity: 0.72;

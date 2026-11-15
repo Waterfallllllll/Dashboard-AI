@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  notificationPreferencesResponseSchema,
+  weatherLocationResponseSchema,
+  weatherPlacesResponseSchema
+} from "@dashboard/contracts";
 import { useState, useSyncExternalStore } from "react";
 
 import {
@@ -18,8 +23,11 @@ import {
   saveNotificationPreferences,
   subscribeNotifications,
   WebPushControls,
-  type BrowserPermission
+  type BrowserPermission,
+  type NotificationPreferences
 } from "@/features/notifications";
+import { browserApi } from "@/lib/api/browser-api-client";
+import { getCsrfToken } from "@/lib/api/csrf-memory";
 
 import styles from "./device-permissions.module.scss";
 
@@ -63,6 +71,13 @@ export function DevicePermissions() {
       setLocationMessage(
         "Сохранили координаты с точностью около километра. Прогноз останется демонстрационным, пока не подключён API погоды."
       );
+      if (next.kind === "coordinates") {
+        void syncCoordinates(
+          next.latitude,
+          next.longitude,
+          `${next.latitude.toFixed(2)}, ${next.longitude.toFixed(2)}`
+        );
+      }
     } catch (error) {
       const denied =
         typeof error === "object" && error !== null && "code" in error && error.code === 1;
@@ -92,6 +107,12 @@ export function DevicePermissions() {
     setLocationMessage(
       `Город «${nextCity}» сохранён. Прогноз погоды останется демонстрационным до API.`
     );
+    void syncCity(nextCity);
+  }
+
+  function updatePreferences(next: NotificationPreferences) {
+    saveNotificationPreferences(next);
+    void syncNotificationPreferences(next);
   }
 
   async function enableNotifications() {
@@ -124,6 +145,7 @@ export function DevicePermissions() {
               if (saveDeviceLocation(null)) {
                 setSaveError("");
                 setLocationMessage("Локация удалена. Виджет снова показывает Москву.");
+                void clearWeatherLocation();
               }
             }}
             type="button"
@@ -134,6 +156,7 @@ export function DevicePermissions() {
         <label>
           Город
           <input
+            id="weather-city"
             maxLength={80}
             onChange={(event) => {
               setCity(event.currentTarget.value);
@@ -163,28 +186,28 @@ export function DevicePermissions() {
             checked={preferences.workComplete}
             label="Завершение рабочего интервала"
             onChange={(workComplete) => {
-              saveNotificationPreferences({ ...preferences, workComplete });
+              updatePreferences({ ...preferences, workComplete });
             }}
           />
           <EventToggle
             checked={preferences.breakComplete}
             label="Завершение перерыва"
             onChange={(breakComplete) => {
-              saveNotificationPreferences({ ...preferences, breakComplete });
+              updatePreferences({ ...preferences, breakComplete });
             }}
           />
           <EventToggle
             checked={preferences.routineReminder}
             label="Напоминания о рутинах"
             onChange={(routineReminder) => {
-              saveNotificationPreferences({ ...preferences, routineReminder });
+              updatePreferences({ ...preferences, routineReminder });
             }}
           />
           <EventToggle
             checked={preferences.calendarReminder}
             label="Напоминание о ближайшем событии календаря"
             onChange={(calendarReminder) => {
-              saveNotificationPreferences({ ...preferences, calendarReminder });
+              updatePreferences({ ...preferences, calendarReminder });
             }}
           />
         </fieldset>
@@ -194,7 +217,7 @@ export function DevicePermissions() {
             Тихие часы с
             <input
               onChange={(event) => {
-                saveNotificationPreferences({
+                updatePreferences({
                   ...preferences,
                   quietStart: event.currentTarget.value || null
                 });
@@ -207,7 +230,7 @@ export function DevicePermissions() {
             до
             <input
               onChange={(event) => {
-                saveNotificationPreferences({
+                updatePreferences({
                   ...preferences,
                   quietEnd: event.currentTarget.value || null
                 });
@@ -257,6 +280,88 @@ function permissionMessage(permission: BrowserPermission): string {
     case "default":
       return "Системное разрешение ещё не запрашивалось.";
   }
+}
+
+async function syncCoordinates(latitude: number, longitude: number, label: string): Promise<void> {
+  if (!getCsrfToken()) {
+    return;
+  }
+
+  await browserApi({
+    path: "/api/v1/weather/location",
+    method: "PUT",
+    schema: weatherLocationResponseSchema,
+    body: { latitude, longitude, label }
+  });
+}
+
+async function syncCity(city: string): Promise<void> {
+  if (!getCsrfToken() || city.length < 2) {
+    return;
+  }
+
+  const places = await browserApi({
+    path: "/api/v1/weather/places",
+    schema: weatherPlacesResponseSchema,
+    query: { query: city }
+  });
+  const place = places.ok ? places.data.data.places[0] : undefined;
+
+  if (!place) {
+    return;
+  }
+
+  await browserApi({
+    path: "/api/v1/weather/location",
+    method: "PUT",
+    schema: weatherLocationResponseSchema,
+    body: place
+  });
+}
+
+async function clearWeatherLocation(): Promise<void> {
+  if (!getCsrfToken()) {
+    return;
+  }
+
+  await browserApi({
+    path: "/api/v1/weather/location",
+    method: "DELETE",
+    schema: weatherLocationResponseSchema
+  });
+}
+
+async function syncNotificationPreferences(preferences: NotificationPreferences): Promise<void> {
+  if (!getCsrfToken()) {
+    return;
+  }
+
+  const quietStart = clockTime(preferences.quietStart);
+  const quietEnd = clockTime(preferences.quietEnd);
+  const channel = (enabled: boolean) => ({ browser: enabled, telegram: enabled });
+
+  await browserApi({
+    path: "/api/v1/notifications/preferences",
+    method: "PATCH",
+    schema: notificationPreferencesResponseSchema,
+    body: {
+      work: channel(preferences.workComplete),
+      break: channel(preferences.breakComplete),
+      routine: channel(preferences.routineReminder),
+      calendar: channel(preferences.calendarReminder),
+      quietStart: quietStart && quietEnd ? quietStart : null,
+      quietEnd: quietStart && quietEnd ? quietEnd : null
+    }
+  });
+}
+
+function clockTime(value: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const match = /^([01]\d|2[0-3]):[0-5]\d/.exec(value);
+  return match?.[0] ?? null;
 }
 
 function requestPosition(): Promise<GeolocationPosition> {
