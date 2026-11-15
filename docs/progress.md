@@ -188,4 +188,13 @@
 - Изменены `apps/api/prisma`, `apps/api/src/infrastructure/db`, `.github/workflows/postgres.yml`, `.gitattributes`, `docs/architecture.md`.
 - Проверки: `npm run lint` проходит. Vitest 238 passed / 15 skipped. Пять новых integration-тестов миграции, прежние девять и `SELECT 1` пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
 
+## 2026-11-15 — Планы запросов, целостность и очистка аккаунта в PostgreSQL
+
+- `npm run db:check --workspace @dashboard/api` читает `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` для каждого unique-, query- и partial-индекса. На таблице меньше 1000 строк `Seq Scan` перепроверяется с `enable_seqscan = off`; сортировка поверх `Bitmap Index Scan` — с `enable_bitmapscan = off`. Для `routine_rules_user_status` в той же транзакции вставляется короткая выборка и выполняется `ANALYZE`. Транзакция всегда откатывается.
+- Проверка целостности ищет сирот, чужого владельца рутины или календаря, повтор типа или позиции виджета, сроки журналов и анонимный аудит, который не является `account_deleted`. Секретные колонки не читаются. Отчёт ограничен 50 нарушениями.
+- `purgeAccount` удаляет только мягко удалённого пользователя и только по UUID, в одной транзакции. Каскад стирает его строки. `news_items`, `one_time_tokens` и задачи без пользователя остаются. После удаления пишется `account_deleted` со сроком 90 дней. Живой маршрут `DELETE /api/v1/account` пока вызывает прежнюю очистку: репозитории переключатся в следующем пункте плана.
+- Сроки хранения заданы в коде: сессии и одноразовые токены по `expiresAt`, журнал доставки 30 дней, аудит 90 дней, завершённые задачи по `deleteAt`. Просроченные строки удалит worker. TTL-индексов нет. Новых переменных окружения нет.
+- Изменены `apps/api/src/infrastructure/db`, `apps/api/package.json`, `.github/workflows/postgres.yml`, `docs/architecture.md`.
+- Проверки: `npm run lint` проходит. Vitest 247 passed / 18 skipped. Три новых integration-теста проверки базы, прежние integration-тесты и `SELECT 1` пропущены: Docker не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. Планы на пустой базе сверены с PGlite 17.5; CI прогонит те же тесты на PostgreSQL 18. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
+
 

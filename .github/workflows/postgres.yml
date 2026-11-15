@@ -48,4 +48,4 @@ jobs:
         run: npm run db:migrate --workspace @dashboard/api
 
       - name: Check schema, indexes and constraints
-        run: npx vitest run apps/api/src/infrastructure/db/prisma-client.integration.test.ts apps/api/src/infrastructure/db/migration.integration.test.ts
+        run: npx vitest run apps/api/src/infrastructure/db/prisma-client.integration.test.ts apps/api/src/infrastructure/db/migration.integration.test.ts apps/api/src/infrastructure/db/database-check.integration.test.ts

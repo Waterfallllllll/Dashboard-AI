@@ -13,6 +13,7 @@
     "db:generate": "prisma generate",
     "db:migrate:dev": "prisma migrate dev",
     "db:migrate": "prisma migrate deploy",
+    "db:check": "tsx src/infrastructure/db/check-cli.ts",
     "db:mongo:ensure": "tsx src/infrastructure/mongodb/ensure-cli.ts",
     "db:mongo:migrate": "tsx src/infrastructure/mongodb/migrate-cli.ts",
     "db:mongo:check": "tsx src/infrastructure/mongodb/check-cli.ts",
