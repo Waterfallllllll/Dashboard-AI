@@ -14,6 +14,19 @@ services:
     volumes:
       # У PostgreSQL 18 каталог данных — /var/lib/postgresql, не /var/lib/postgresql/data.
       - postgres-data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+      - -c
+      - work_mem=8MB
+      - -c
+      - idle_in_transaction_session_timeout=30s
+      - -c
+      - statement_timeout=30s
+      - -c
+      - shared_preload_libraries=pg_stat_statements
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U dashboard -d dashboard"]
       interval: 5s

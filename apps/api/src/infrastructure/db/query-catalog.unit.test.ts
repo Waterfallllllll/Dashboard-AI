@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { PARTIAL_INDEXES, QUERY_INDEXES, UNIQUE_INDEXES } from "./migration-catalog.js";
+import {
+  ALL_PARTIAL_INDEXES,
+  FOREIGN_KEY_INDEXES,
+  QUERY_INDEXES,
+  UNIQUE_INDEXES
+} from "./migration-catalog.js";
 import {
   QUERY_TABLES,
   assertQueryCatalog,
@@ -17,7 +22,8 @@ describe("каталог запросов PostgreSQL", () => {
     const expected = [
       ...UNIQUE_INDEXES,
       ...QUERY_INDEXES,
-      ...PARTIAL_INDEXES.map((index) => index.name)
+      ...FOREIGN_KEY_INDEXES,
+      ...ALL_PARTIAL_INDEXES.map((index) => index.name)
     ].sort();
 
     expect(() => assertQueryCatalog(sample)).not.toThrow();

@@ -2,8 +2,13 @@ import { randomUUID } from "node:crypto";
 
 import { Prisma } from "../../generated/prisma/client.js";
 
-import { PARTIAL_INDEXES, QUERY_INDEXES, UNIQUE_INDEXES } from "./migration-catalog.js";
-import { prepareRoutineStatusSample } from "./routine-plan-sample.js";
+import {
+  ALL_PARTIAL_INDEXES,
+  FOREIGN_KEY_INDEXES,
+  QUERY_INDEXES,
+  UNIQUE_INDEXES
+} from "./migration-catalog.js";
+import { prepareRoutineReminderSample, prepareRoutineStatusSample } from "./routine-plan-sample.js";
 import { WORKER_DELETE_POLICIES, assertRetentionPolicy } from "./retention.js";
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -28,6 +33,7 @@ export const QUERY_TABLES = [
 
 const ORDER_BY = new Set([
   '"started_at" DESC',
+  '"reminder_local_time"',
   '"published_at" DESC',
   '"start_at"',
   '"created_at" DESC',
@@ -122,6 +128,10 @@ export function buildMainQueries(sample: QuerySample): readonly MainQuery[] {
       requiredSql: ['"expires_at" <='],
       statement: (value) => selectWhere("sessions", Prisma.sql`"expires_at" <= ${value.moment}`)
     }),
+    query("sessions-by-user", "sessions", "sessions_user_id", {
+      requiredSql: ['"user_id"'],
+      statement: (value) => selectWhere("sessions", Prisma.sql`"user_id" = ${value.userId}::uuid`)
+    }),
     query("oauth-state-by-hash", "one_time_tokens", "one_time_tokens_token_hash", {
       requiredSql: ['"token_hash"'],
       statement: (value) =>
@@ -172,6 +182,25 @@ export function buildMainQueries(sample: QuerySample): readonly MainQuery[] {
           "routine_rules",
           Prisma.sql`"user_id" = ${value.userId}::uuid AND "start_date" = ${value.localDate}::date AND "deleted_at" IS NULL`
         )
+    }),
+    query("routines-active-reminders", "routine_rules", "routine_rules_active_reminders", {
+      requiredSql: [
+        `"status" = 'active'`,
+        '"deleted_at" IS NULL',
+        '"reminder_local_time" IS NOT NULL',
+        'ORDER BY "reminder_local_time"'
+      ],
+      indexProvidesOrder: true,
+      prepare: (tx, value) => prepareRoutineReminderSample(tx, value.userId),
+      statement: (value) => {
+        void value.localDate;
+
+        return selectWhere(
+          "routine_rules",
+          Prisma.sql`"status" = 'active'::"routine_status" AND "deleted_at" IS NULL AND "reminder_local_time" IS NOT NULL`,
+          { orderBy: '"reminder_local_time"', limit: 20 }
+        );
+      }
     }),
     query("occurrence-by-rule-date", "routine_occurrences", "routine_occurrences_rule_date", {
       requiredSql: ['"routine_rule_id"', '"local_date"'],
@@ -408,7 +437,8 @@ export function assertQueryCatalog(sample: QuerySample = createQuerySample()): v
   const expectedIndexes = new Set<string>([
     ...UNIQUE_INDEXES,
     ...QUERY_INDEXES,
-    ...PARTIAL_INDEXES.map((index) => index.name)
+    ...FOREIGN_KEY_INDEXES,
+    ...ALL_PARTIAL_INDEXES.map((index) => index.name)
   ]);
 
   for (const item of queries) {
@@ -456,7 +486,7 @@ export function assertQueryCatalog(sample: QuerySample = createQuerySample()): v
     }
   }
 
-  for (const index of PARTIAL_INDEXES) {
+  for (const index of ALL_PARTIAL_INDEXES) {
     const item = queries.find((query) => query.indexName === index.name);
     const fragment = partialFragment(index.where);
 
@@ -477,6 +507,10 @@ export function assertQueryCatalog(sample: QuerySample = createQuerySample()): v
 }
 
 function partialFragment(where: string): string {
+  if (where.includes("reminder_local_time")) {
+    return '"reminder_local_time" IS NOT NULL';
+  }
+
   if (where.includes("deleted_at")) {
     return '"deleted_at" IS NULL';
   }

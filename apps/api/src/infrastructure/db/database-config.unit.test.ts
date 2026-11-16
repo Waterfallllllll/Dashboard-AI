@@ -47,6 +47,8 @@ describe("адрес PostgreSQL", () => {
     expect(config.connectionString).toContain("postgres://");
     expect(config.poolMax).toBe(10);
     expect(config.statementTimeoutMs).toBe(10_000);
+    expect(config.idleInTransactionTimeoutMs).toBe(30_000);
+    expect(config.workMem).toBe("8MB");
     expect(JSON.stringify({ poolMax: config.poolMax })).not.toContain("local-only");
   });
 

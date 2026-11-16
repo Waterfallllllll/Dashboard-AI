@@ -7,9 +7,10 @@ import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
+  ALL_PARTIAL_INDEXES,
   CIPHERTEXT_CHECKS,
+  FOREIGN_KEY_INDEXES,
   FOREIGN_KEYS,
-  PARTIAL_INDEXES,
   QUERY_INDEXES,
   SOFT_DELETE_TABLES,
   UNIQUE_INDEXES,
@@ -72,7 +73,7 @@ describe.skipIf(!hasPostgres)("применённая миграция PostgreSQ
     `;
     const byName = new Map(indexes.map((row) => [row.index_name, row]));
 
-    for (const index of PARTIAL_INDEXES) {
+    for (const index of ALL_PARTIAL_INDEXES) {
       const row = byName.get(index.name);
       expect(row?.is_unique).toBe(index.unique);
       expect(row?.predicate ?? "").toContain(predicateFragment(index.where));
@@ -83,9 +84,16 @@ describe.skipIf(!hasPostgres)("применённая миграция PostgreSQ
       expect(byName.get(name)?.predicate ?? null).toBeNull();
     }
 
-    for (const name of QUERY_INDEXES) {
+    for (const name of [...QUERY_INDEXES, ...FOREIGN_KEY_INDEXES]) {
       expect(byName.has(name)).toBe(true);
     }
+
+    const defaults = await prisma.$queryRaw<Array<{ column_default: string | null }>>`
+      SELECT column_default
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'users' AND column_name = 'id'
+    `;
+    expect(defaults[0]?.column_default ?? "").toContain("uuidv7()");
 
     const foreignKeys = await prisma.$queryRaw<ConstraintRow[]>`
       SELECT con.conname AS name, pg_get_constraintdef(con.oid) AS definition

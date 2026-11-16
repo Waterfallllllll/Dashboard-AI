@@ -59,6 +59,23 @@ export const PARTIAL_INDEXES: readonly PartialIndexDefinition[] = [
   }
 ];
 
+export const LATER_PARTIAL_INDEXES: readonly PartialIndexDefinition[] = [
+  {
+    name: "routine_rules_active_reminders",
+    table: "routine_rules",
+    columns: ["reminder_local_time"],
+    where: `"deleted_at" IS NULL AND "status" = 'active'::"routine_status" AND "reminder_local_time" IS NOT NULL`,
+    unique: false
+  }
+];
+
+export const ALL_PARTIAL_INDEXES: readonly PartialIndexDefinition[] = [
+  ...PARTIAL_INDEXES,
+  ...LATER_PARTIAL_INDEXES
+];
+
+export const FOREIGN_KEY_INDEXES = ["sessions_user_id"] as const;
+
 export const CIPHERTEXT_CHECKS: readonly CiphertextCheck[] = [
   {
     name: "auth_accounts_access_token_ciphertext",
@@ -175,7 +192,7 @@ export function renderMigrationExtras(): string {
 
 export function unexpectedMigrationDrift(script: string): readonly string[] {
   const allowed = new Set<string>([
-    ...PARTIAL_INDEXES.flatMap((index) => [
+    ...ALL_PARTIAL_INDEXES.flatMap((index) => [
       `DROP INDEX "${index.name}"`,
       `DROP INDEX "public"."${index.name}"`
     ]),

@@ -1,6 +1,6 @@
 import { Prisma, type PrismaClient } from "../../generated/prisma/client.js";
 
-import { CIPHERTEXT_CHECKS, FOREIGN_KEYS, PARTIAL_INDEXES } from "./migration-catalog.js";
+import { ALL_PARTIAL_INDEXES, CIPHERTEXT_CHECKS, FOREIGN_KEYS } from "./migration-catalog.js";
 import {
   auditRetentionViolation,
   deliveryRetentionViolation,
@@ -39,7 +39,8 @@ export type IntegrityCode =
   | "AUDIT_ANONYMOUS_ACTION"
   | "PARTIAL_INDEX_MISSING"
   | "CIPHERTEXT_CHECK_MISSING"
-  | "FOREIGN_KEY_MISSING";
+  | "FOREIGN_KEY_MISSING"
+  | "UNINDEXED_FOREIGN_KEY";
 
 export type IntegrityViolation = {
   readonly code: IntegrityCode;
@@ -64,6 +65,23 @@ type WidgetRow = {
 type DatedRow = { id: string | null; created_at: unknown; delete_at: unknown };
 type AuditRow = DatedRow & { user_id: string | null; action: string | null };
 type ConstraintRow = { name: string; definition: string | null };
+type ForeignKeyColumnRow = { table_name: string | null; column_name: string | null };
+
+const UNINDEXED_FOREIGN_KEY_SQL = `
+SELECT rel.relname AS table_name, a.attname AS column_name
+FROM pg_constraint c
+JOIN pg_class rel ON rel.oid = c.conrelid
+JOIN pg_namespace n ON n.oid = c.connamespace
+JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+WHERE c.contype = 'f'
+  AND n.nspname = 'public'
+  AND NOT EXISTS (
+    SELECT 1
+    FROM pg_index i
+    WHERE i.indrelid = c.conrelid
+      AND a.attnum = ANY (i.indkey)
+  )
+`.trim();
 
 export async function checkDataIntegrity(prisma: PrismaClient): Promise<IntegrityReport> {
   const violations: IntegrityViolation[] = [];
@@ -158,7 +176,7 @@ export async function checkDataIntegrity(prisma: PrismaClient): Promise<Integrit
     ).map((row) => row.index_name)
   );
 
-  for (const index of PARTIAL_INDEXES) {
+  for (const index of ALL_PARTIAL_INDEXES) {
     if (!indexes.has(index.name)) {
       push(violations, "PARTIAL_INDEX_MISSING", index.table, index.name, stop);
     }
@@ -184,6 +202,18 @@ export async function checkDataIntegrity(prisma: PrismaClient): Promise<Integrit
     }
   }
 
+  for (const row of await prisma.$queryRaw<ForeignKeyColumnRow[]>(
+    Prisma.raw(UNINDEXED_FOREIGN_KEY_SQL)
+  )) {
+    push(
+      violations,
+      "UNINDEXED_FOREIGN_KEY",
+      row.table_name ?? "pg_constraint",
+      row.column_name,
+      stop
+    );
+  }
+
   return {
     ok: violations.length === 0,
     violations,
@@ -196,7 +226,8 @@ export function integrityStatementText(): readonly string[] {
     ...USER_TABLES.map((table) => orphanSql(table).text),
     `SELECT "id"::text AS id, "user_id"::text AS user_id, "widget_type"::text AS widget_type, "position" FROM "widget_preferences"`,
     `SELECT "id"::text AS id, "created_at", "delete_at" FROM "notification_deliveries"`,
-    `SELECT "id"::text AS id, "user_id"::text AS user_id, "action"::text AS action, "created_at", "delete_at" FROM "audit_events"`
+    `SELECT "id"::text AS id, "user_id"::text AS user_id, "action"::text AS action, "created_at", "delete_at" FROM "audit_events"`,
+    UNINDEXED_FOREIGN_KEY_SQL
   ];
 }
 

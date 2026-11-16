@@ -3,14 +3,17 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  ALL_PARTIAL_INDEXES,
   CIPHERTEXT_CHECKS,
   FOREIGN_KEYS,
   INITIAL_MIGRATION,
+  LATER_PARTIAL_INDEXES,
   PARTIAL_INDEXES,
   QUERY_INDEXES,
   SOFT_DELETE_TABLES,
   UNIQUE_INDEXES,
   renderMigrationExtras,
+  renderPartialIndex,
   unexpectedMigrationDrift
 } from "./migration-catalog.js";
 
@@ -86,5 +89,36 @@ describe("первая миграция Prisma", () => {
     expect(unexpectedMigrationDrift(expected)).toEqual([]);
     expect(unexpectedMigrationDrift('DROP TABLE "users"')).toEqual(['DROP TABLE "users"']);
     expect(unexpectedMigrationDrift("")).toEqual([]);
+    expect(
+      unexpectedMigrationDrift(
+        LATER_PARTIAL_INDEXES.map((index) => `DROP INDEX "${index.name}"`).join(";\n")
+      )
+    ).toEqual([]);
+  });
+
+  it("миграция postgres-patterns задаёт uuidv7, индекс внешнего ключа и отзыв схемы public", () => {
+    const sql = readFileSync(
+      new URL(
+        "../../../prisma/migrations/20261116161000_postgres_patterns/migration.sql",
+        import.meta.url
+      ),
+      "utf8"
+    );
+
+    const reminder = LATER_PARTIAL_INDEXES[0];
+
+    if (!reminder) {
+      throw new Error("Нет индекса напоминаний");
+    }
+
+    expect(sql.includes("\r")).toBe(false);
+    expect(sql).toContain('CREATE INDEX "sessions_user_id" ON "sessions"("user_id")');
+    expect(sql).toContain(renderPartialIndex(reminder));
+    expect(sql.match(/SET DEFAULT uuidv7\(\)/g)).toHaveLength(16);
+    expect(sql).toContain("REVOKE ALL ON SCHEMA public FROM PUBLIC");
+    expect(sql).not.toContain("DROP ");
+    expect(ALL_PARTIAL_INDEXES.map((index) => index.name)).toContain(
+      "routine_rules_active_reminders"
+    );
   });
 });

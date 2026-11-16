@@ -224,4 +224,14 @@
 - Изменены `apps/api/src/modules/notifications/webhook.service.ts`, `webhook.routes.ts`, `business-flows.integration.test.ts`, `webhook-authorization.unit.test.ts`, `infra/nginx/default.conf`, `infra/compose.dev.yml`, `.github/workflows/postgres.yml`, `package-lock.json`.
 - Проверки: `npm run lint` проходит. Новый набор на PostgreSQL 18.6: 7 тестов зелёные. Webhook и HTTP входа: 12 тестов зелёные. `npm run build` проходит для contracts, API и web. Playwright: 37 passed / 5 skipped. Порт 3000 был занят другим приложением, поэтому сценарии открывались на `localhost:3010`.
 
+## 2026-11-16 — PostgreSQL по паттернам индексов, UUID v7 и таймаутов
+
+- Миграция `20261116161000_postgres_patterns` индексирует внешний ключ `sessions.user_id`, добавляет частичный индекс живых напоминаний `routine_rules_active_reminders` и меняет значение по умолчанию первичного ключа на `uuidv7()`. Старые UUID версии 4 не переписываются. Новые идентификаторы в приложении тоже версии 7.
+- Пул приложения держит `statement_timeout` 10 секунд, `idle_in_transaction_session_timeout` 30 секунд и `work_mem` 8MB. Локальный PostgreSQL ограничивает соединения 100, простой транзакции 30 секундами и запрос вне пула 30 секундами, подгружает `pg_stat_statements`. Расширение создаётся при первой инициализации тома.
+- У роли `PUBLIC` отобраны права на схему `public`. Политики RLS с `auth.uid()` не включены: к базе подключается роль приложения, worker читает строки всех пользователей. Проверка целостности сообщает о внешнем ключе без индекса. Секреты этот запрос не читает.
+- Новых переменных окружения нет.
+- Изменены `apps/api/prisma`, `apps/api/src/infrastructure/db`, `apps/api/src/shared/public-id.ts`, `infra/compose.dev.yml`, `infra/postgres/init/01-stat-statements.sql`, `docs/architecture.md`.
+- Проверки: `npm run lint` проходит. Vitest 260 passed / 27 skipped. Integration-тесты базы пропущены: `DATABASE_URL` в этом запуске не задан. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.
+
+
 

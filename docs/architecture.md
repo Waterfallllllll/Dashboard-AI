@@ -542,9 +542,11 @@ modules/routines/
 ### 8.1. Подключение
 
 - Схема живёт в `apps/api/prisma/schema.prisma`. Модели называются в PascalCase, поля — в camelCase. Таблицы и колонки в PostgreSQL — в snake_case через `@@map` и `@map`.
-- Первичный ключ — UUID (`gen_random_uuid()`). Моменты времени — `timestamptz`. Локальная дата рутины — `date`.
+- Первичный ключ — UUID версии 7 (`uuidv7()`). Новые значения упорядочены по времени, публичный идентификатор остаётся UUID. Уже записанные UUID версии 4 сохраняются. Моменты времени — `timestamptz`. Локальная дата рутины — `date`. Флаги — `boolean`. Строка с настоящим пределом длины остаётся `varchar(n)`; секрет и длинный текст — `text`. `varchar(255)` в схеме нет.
 - Каждый процесс создаёт один `PrismaClient` поверх `@prisma/adapter-pg` в `apps/api/src/infrastructure/db/prisma-client.ts`. В watch mode клиент переиспользуется внутри процесса, чтобы пул не размножался.
-- Пул адаптера ограничен десятью соединениями на процесс. Сумма соединений API, worker и миграции остаётся ниже `max_connections` сервера. Время выполнения запроса ограничено 10 секундами.
+- Пул адаптера ограничен десятью соединениями на процесс. Сумма соединений API, worker и миграции остаётся ниже `max_connections` = 100. На соединении приложения `statement_timeout` — 10 секунд, `idle_in_transaction_session_timeout` — 30 секунд, `work_mem` — 8MB.
+- Локальный PostgreSQL в `infra/compose.dev.yml` ставит те же потолки на сервере: запрос вне пула приложения обрывается через 30 секунд. `pg_stat_statements` подгружается при старте и создаётся при первой инициализации тома.
+- Миграция отзывает у роли `PUBLIC` все права на схему `public`. Владелец базы сохраняет доступ. Политики RLS с `auth.uid()` не включаются: к базе подключается роль приложения, а worker читает строки всех пользователей. Чужие строки отсекает сервис.
 - Клиент открывается при старте и закрывается через `$disconnect` при `SIGTERM`/`SIGINT`.
 - API становится ready только после успешного `SELECT 1`.
 - На transient errors применяются ограниченные retries с exponential backoff.
@@ -572,6 +574,7 @@ modules/routines/
 - hash session token, `userId`, `expiresAt`;
 - внешний ключ на `users` с `ON DELETE CASCADE`;
 - unique по hash;
+- индекс по `userId` для внешнего ключа и выборки сессий пользователя;
 - индекс по `expiresAt` для очистки просроченных сессий.
 
 `one_time_tokens`:
@@ -596,7 +599,8 @@ modules/routines/
 - внешний ключ на `users` с `ON DELETE CASCADE`;
 - unique `(id, userId)` для составной ссылки из экземпляров;
 - индекс `routine_rules_user_status` по `(userId, status)` для живых строк (`deletedAt IS NULL`);
-- индекс `routine_rules_user_start_date` по `(userId, startDate)` для живых строк (`deletedAt IS NULL`).
+- индекс `routine_rules_user_start_date` по `(userId, startDate)` для живых строк (`deletedAt IS NULL`);
+- частичный индекс `routine_rules_active_reminders` по `reminderLocalTime` для живых активных правил, у которых задано напоминание.
 
 `routine_occurrences`:
 
@@ -722,7 +726,7 @@ Access token, refresh token, credentials интеграций и ключи Web 
 
 Выборки живых строк фильтруют `deletedAt: null`. Физическая очистка аккаунта описана в разделе 8.9.
 
-Уникальность живых строк задаёт partial unique index в SQL миграции: `WHERE deleted_at IS NULL`. Декларативный `@@unique` Prisma ORM 7 такое условие не выражает, а уникальный индекс PostgreSQL считает разные `NULL` различными, поэтому пара `(userId, type, deletedAt)` две живые строки не запрещает. Имена индексов перечислены в разделе 8.2: `routine_rules_user_status`, `routine_rules_user_start_date`, `timer_sessions_one_active_user`, `integrations_user_type`, `scheduled_jobs_pending_run_at`.
+Уникальность живых строк задаёт partial unique index в SQL миграции: `WHERE deleted_at IS NULL`. Декларативный `@@unique` Prisma ORM 7 такое условие не выражает, а уникальный индекс PostgreSQL считает разные `NULL` различными, поэтому пара `(userId, type, deletedAt)` две живые строки не запрещает. Имена индексов перечислены в разделе 8.2: `routine_rules_user_status`, `routine_rules_user_start_date`, `routine_rules_active_reminders`, `timer_sessions_one_active_user`, `integrations_user_type`, `scheduled_jobs_pending_run_at`.
 
 Следующая миграция, которую предлагает `prisma migrate dev`, проверяется до коммита. Если Prisma генерирует `DROP INDEX` для partial index или `DROP CONSTRAINT` для проверки ciphertext, эта команда из SQL удаляется. Integration-тест читает `pg_indexes` и `pg_constraint` и подтверждает, что частичные индексы и проверки на месте.
 
@@ -736,13 +740,13 @@ Access token, refresh token, credentials интеграций и ключи Web 
 - `db:migrate:dev` — `prisma migrate dev`, только локальная разработка;
 - `db:migrate` — `prisma migrate deploy`, CI и production.
 
-Первая миграция — `apps/api/prisma/migrations/20261114202100_initial`. Она создаёт таблицы, внешние ключи с `ON DELETE CASCADE`, unique, query-индексы, partial indexes, поля ciphertext и колонки `deleted_at`. Первичный ключ получает `DEFAULT gen_random_uuid()`. Новая миграция не удаляет колонку в том же выпуске, где код перестаёт её читать. Сгенерированный клиент импортируется только внутри `apps/api`.
+Первая миграция — `apps/api/prisma/migrations/20261114202100_initial`. Она создаёт таблицы, внешние ключи с `ON DELETE CASCADE`, unique, query-индексы, partial indexes, поля ciphertext и колонки `deleted_at`. Первичный ключ получает `DEFAULT gen_random_uuid()`. Миграция `20261116161000_postgres_patterns` меняет это значение по умолчанию на `uuidv7()`, индексирует `sessions.user_id`, добавляет частичный индекс напоминаний и отзывает права `PUBLIC` на схему `public`. Старые UUID версии 4 остаются. Новая миграция не удаляет колонку в том же выпуске, где код перестаёт её читать. Сгенерированный клиент импортируется только внутри `apps/api`.
 
 ### 8.8. Проверка запросов
 
 Основные чтения сессии, дашборда, рутин, таймера, новостей, интеграций и уведомлений собраны в каталоге запросов. У каждого unique- и query-индекса есть один запрос. Команда `npm run db:check --workspace @dashboard/api` выполняет `EXPLAIN (ANALYZE, BUFFERS)`.
 
-План принимается, если он читает ожидаемый индекс (`Index Scan`, `Index Only Scan` или `Bitmap Index Scan`) и не делает отдельную сортировку там, где порядок уже задан индексом. Запросы к частичным индексам включают их фильтр: `deletedAt IS NULL` или `completedAt IS NULL`.
+План принимается, если он читает ожидаемый индекс (`Index Scan`, `Index Only Scan` или `Bitmap Index Scan`) и не делает отдельную сортировку там, где порядок уже задан индексом. Запросы к частичным индексам включают их фильтр: `deletedAt IS NULL`, `completedAt IS NULL` или активное напоминание.
 
 На малой таблице — меньше 1000 строк — планировщик может выбрать `Seq Scan`. Тогда проверка подтверждает, что индекс есть в `pg_indexes`, и повторяет план с `enable_seqscan = off`. Если порядок уже задан индексом, а план всё же сортирует поверх `Bitmap Index Scan`, проверка повторяет запрос с `enable_bitmapscan = off`. Два частичных индекса рутин делят ведущий столбец `user_id`, и на пустой таблице их стоимость совпадает. Если для `routine_rules_user_status` выбран соседний индекс, проверка в той же транзакции вставляет короткую выборку живых правил, выполняет `ANALYZE` и читает план снова. Транзакция откатывается: строки и статистика не сохраняются. В принятом плане должен читаться заданный индекс.
 
@@ -756,6 +760,7 @@ Access token, refresh token, credentials интеграций и ключи Web 
 - у записи `notification_deliveries` нет `deleteAt` либо срок не равен 30 дням от `createdAt`;
 - у записи `audit_events` нет `deleteAt` либо срок не равен 90 дням от `createdAt`;
 - обязательный partial unique index отсутствует;
+- внешний ключ не входит ни в один индекс;
 - обязательная проверка формата ciphertext отсутствует.
 
 Сроки:

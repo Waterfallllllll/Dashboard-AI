@@ -34,6 +34,8 @@ export function getPrismaClient(env: NodeJS.ProcessEnv = process.env): PrismaCli
     connectionTimeoutMillis: config.connectTimeoutMs,
     statement_timeout: config.statementTimeoutMs,
     query_timeout: config.statementTimeoutMs,
+    idle_in_transaction_session_timeout: config.idleInTransactionTimeoutMs,
+    options: `-c work_mem=${config.workMem}`,
     application_name: "evergreen-dashboard"
   });
   const client = new PrismaClient({
