@@ -158,18 +158,14 @@ dashboard/
 │  │  │  │  ├─ notifications/
 │  │  │  │  ├─ routines/
 │  │  │  │  ├─ timer/
-│  │  │  │  ├─ weather/
-│  │  │  │  └─ widget-settings/
+│  │  │  │  └─ weather/
 │  │  │  ├─ components/
 │  │  │  │  ├─ ui/
-│  │  │  │  ├─ layout/
-│  │  │  │  └─ feedback/
+│  │  │  │  └─ layout/
 │  │  │  ├─ lib/
 │  │  │  │  ├─ api/
-│  │  │  │  ├─ auth/
 │  │  │  │  ├─ browser/
 │  │  │  │  └─ format/
-│  │  │  ├─ providers/
 │  │  │  └─ styles/
 │  │  │     ├─ _breakpoints.scss
 │  │  │     ├─ _mixins.scss
@@ -202,23 +198,18 @@ dashboard/
 │     │  │  ├─ news/
 │     │  │  ├─ notifications/
 │     │  │  ├─ routines/
-│     │  │  ├─ timer/
+│     │  │  ├─ timers/
 │     │  │  ├─ users/
 │     │  │  ├─ weather/
 │     │  │  └─ widgets/
 │     │  ├─ infrastructure/
 │     │  │  ├─ crypto/
 │     │  │  ├─ db/
-│     │  │  ├─ http-clients/
 │     │  │  ├─ jobs/
-│     │  │  ├─ logging/
-│     │  │  └─ push/
+│     │  │  └─ logging/
 │     │  ├─ middleware/
-│     │  ├─ shared/
-│     │  │  ├─ errors/
-│     │  │  ├─ types/
-│     │  │  └─ utils/
-│     │  └─ tests/
+│     │  └─ shared/
+│     │     └─ errors/
 │     ├─ package.json
 │     └─ tsconfig.json
 │
@@ -228,7 +219,7 @@ dashboard/
 │  │  │  ├─ auth/
 │  │  │  ├─ common/
 │  │  │  ├─ routines/
-│  │  │  ├─ timer/
+│  │  │  ├─ timers/
 │  │  │  └─ widgets/
 │  │  └─ package.json
 │  └─ config/

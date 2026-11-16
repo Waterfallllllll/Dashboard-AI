@@ -51,16 +51,29 @@ function isJsonParseError(error: unknown): boolean {
   return error instanceof SyntaxError && hasNumberField(error, "status", 400);
 }
 
-function isDatabaseUnavailable(error: unknown): boolean {
-  if (!(error instanceof Error)) {
+function isDatabaseUnavailable(error: unknown, seen = new Set<unknown>()): boolean {
+  if (typeof error !== "object" || error === null || seen.has(error)) {
     return false;
   }
 
-  return (
-    error.name === "MongoServerSelectionError" ||
-    error.name === "MongoNetworkError" ||
-    error.name === "MongoNotConnectedError"
-  );
+  seen.add(error);
+  const record = error as { name?: unknown; code?: unknown; cause?: unknown };
+  const code = record.code;
+  const name = record.name;
+
+  if (
+    name === "PrismaClientInitializationError" ||
+    code === "P1001" ||
+    code === "P1002" ||
+    code === "P1017" ||
+    code === "ECONNREFUSED" ||
+    code === "ENOTFOUND" ||
+    code === "ECONNRESET"
+  ) {
+    return true;
+  }
+
+  return isDatabaseUnavailable(record.cause, seen);
 }
 
 function hasStringField(error: unknown, field: string, expected: string): boolean {

@@ -1,15 +1,13 @@
 const sourceFiles = ["**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}"];
 const webFiles = ["apps/web/**/*.{js,mjs,jsx,ts,tsx}"];
-const apiFiles = [
-  "apps/api/**/*.{js,mjs,cjs,ts,mts,cts}",
-  "scripts/**/*.{js,mjs,cjs,ts,mts,cts}"
-];
+const apiFiles = ["apps/api/**/*.{js,mjs,cjs,ts,mts,cts}"];
 const contractFiles = ["packages/contracts/**/*.{js,mjs,cjs,ts,mts,cts}"];
 
 const forbiddenStackMessage = {
   tailwind: "Tailwind CSS не входит в стек. Стили — SCSS Modules и CSS custom properties.",
   cssInJs: "runtime CSS-in-JS не используется. Стили — SCSS Modules.",
   drizzle: "Drizzle не входит в стек. Хранилище — Prisma ORM и PostgreSQL.",
+  mongodb: "MongoDB не входит в стек. Хранилище — Prisma ORM и PostgreSQL.",
   graphql: "GraphQL не входит в стек. API — REST /api/v1."
 };
 
@@ -21,6 +19,9 @@ const forbiddenStackPaths = [
   { name: "@emotion/styled", message: forbiddenStackMessage.cssInJs },
   { name: "@emotion/css", message: forbiddenStackMessage.cssInJs },
   { name: "drizzle-orm", message: forbiddenStackMessage.drizzle },
+  { name: "mongodb", message: forbiddenStackMessage.mongodb },
+  { name: "mongoose", message: forbiddenStackMessage.mongodb },
+  { name: "bson", message: forbiddenStackMessage.mongodb },
   { name: "graphql", message: forbiddenStackMessage.graphql },
   { name: "graphql-tag", message: forbiddenStackMessage.graphql },
   { name: "@apollo/client", message: forbiddenStackMessage.graphql }
@@ -36,14 +37,11 @@ const forbiddenStackPatterns = [
 
 const backendOnlyMessage =
   "Frontend не импортирует backend-пакеты и не подключается к PostgreSQL. Данные — через /api/v1.";
-const frontendOnlyMessage =
-  "apps/api не импортирует frontend-код. UI живёт в apps/web.";
+const frontendOnlyMessage = "apps/api не импортирует frontend-код. UI живёт в apps/web.";
 const contractsMessage =
   "packages/contracts содержит только сериализуемые DTO и Zod-схемы: без UI, Express и Prisma.";
 
 const backendOnlyPaths = [
-  { name: "mongodb", message: backendOnlyMessage },
-  { name: "bson", message: backendOnlyMessage },
   { name: "pg", message: backendOnlyMessage },
   { name: "postgres", message: backendOnlyMessage },
   { name: "prisma", message: backendOnlyMessage },
@@ -81,9 +79,7 @@ const frontendOnlyPatterns = [
   { group: ["@dnd-kit/*"], message: frontendOnlyMessage }
 ];
 
-const backendOnlyPatterns = [
-  { group: ["@prisma/*", "prisma/*"], message: backendOnlyMessage }
-];
+const backendOnlyPatterns = [{ group: ["@prisma/*", "prisma/*"], message: backendOnlyMessage }];
 
 const webToApiPatterns = [
   {
@@ -163,7 +159,11 @@ export default [
   },
   {
     name: "dashboard/boundaries/no-route-handlers",
-    files: ["apps/web/src/app/**/route.ts", "apps/web/src/app/**/route.js", "apps/web/src/app/**/route.tsx"],
+    files: [
+      "apps/web/src/app/**/route.ts",
+      "apps/web/src/app/**/route.js",
+      "apps/web/src/app/**/route.tsx"
+    ],
     rules: {
       "no-restricted-syntax": [
         "error",
@@ -215,11 +215,7 @@ export default [
           ...frontendOnlyPatterns,
           ...apiToWebPatterns,
           {
-            group: [
-              ...layerFile("service"),
-              ...layerFile("controller"),
-              ...layerFile("routes")
-            ],
+            group: [...layerFile("service"), ...layerFile("controller"), ...layerFile("routes")],
             message:
               "Обратные импорты запрещены: repository не импортирует service, controller или routes."
           }
@@ -241,7 +237,12 @@ export default [
             message: "Обратные импорты запрещены: service не импортирует controller или routes."
           },
           {
-            group: ["../*/*.repository", "../*/*.repository.*", "**/modules/*/*.repository", "**/modules/*/*.repository.*"],
+            group: [
+              "../*/*.repository",
+              "../*/*.repository.*",
+              "**/modules/*/*.repository",
+              "**/modules/*/*.repository.*"
+            ],
             message:
               "Модуль не обращается к repository другого модуля — только через публичный service."
           }

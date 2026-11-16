@@ -174,7 +174,7 @@
 - Подключён Prisma ORM 7.10.1: `apps/api/prisma/schema.prisma`, `prisma.config.ts`, клиент `@prisma/adapter-pg` и `pg` 8.23.1. На процесс один `PrismaClient` и пул до 10 соединений. Runtime читает `DATABASE_URL`, миграции — `DIRECT_DATABASE_URL`.
 - В схеме описаны пользователи, сессии, одноразовые токены, виджеты, рутины, таймеры, интеграции, календарь, новости, очередь, push, журнал доставки и аудит. Частичные unique-индексы и SQL-миграция ещё не применяются: это следующий пункт плана.
 - API и worker при старте выполняют `SELECT 1` и закрывают клиент при остановке. Репозитории по-прежнему пишут через прежний драйвер.
-- Команды: `db:generate`, `db:migrate:dev`, `db:migrate` (`prisma migrate deploy`). Прежние команды каталога переименованы в `db:mongo:ensure`, `db:mongo:migrate`, `db:mongo:check`.
+- Команды: `db:generate`, `db:migrate:dev`, `db:migrate` (`prisma migrate deploy`).
 - Новые переменные: `DATABASE_URL`, `DIRECT_DATABASE_URL`.
 - Изменены `apps/api`, `infra/compose.dev.yml`, `.env.example`, `.github/workflows/postgres.yml`, правила ESLint и `.cursor/rules`, `docs/architecture.md`.
 - Проверки: `npm run lint` проходит. Vitest 235 passed / 10 skipped. Девять прежних integration-тестов и новый `SELECT 1` пропущены: Docker на этой машине не установлен, PostgreSQL не запущен и `DATABASE_URL` не задан. `npm run build` проходит для contracts, API и web. E2E не запускался: интерфейс не менялся.

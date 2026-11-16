@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { auditDeleteAt } from "../../infrastructure/mongodb/retention.js";
+import { auditDeleteAt } from "../../infrastructure/db/retention.js";
 import { MemoryAuditRepository } from "./audit.repository.js";
 import { AuditService } from "./audit.service.js";
 

@@ -1,7 +1,4 @@
-import { createHash } from "node:crypto";
-
-import { ObjectId } from "mongodb";
-
+import { deterministicEntityId } from "../shared/public-id.js";
 import type { RuleChanges } from "./routines/routine-edit.js";
 import { fromStoredRecurrence, toStoredRecurrence } from "./routines/routine-schedule.js";
 import type {
@@ -449,6 +446,5 @@ function byStart(left: RoutineRuleRecord, right: RoutineRuleRecord): number {
 }
 
 function occurrenceId(ruleId: string, localDate: string): string {
-  const digest = createHash("sha256").update(`${ruleId}:${localDate}`).digest();
-  return new ObjectId(digest.subarray(0, 12)).toHexString();
+  return deterministicEntityId(`${ruleId}:${localDate}`);
 }

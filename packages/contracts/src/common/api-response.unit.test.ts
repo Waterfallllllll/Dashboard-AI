@@ -54,7 +54,7 @@ describe("конверт ответа API", () => {
   });
 
   it("не переносит секрет из сообщения и полей в тело ошибки", () => {
-    const secret = "mongodb://user:pass@localhost/dashboard";
+    const secret = "postgresql://user:db-password@localhost/dashboard";
     const response = createErrorResponse({
       code: "ROUTINE_NOT_FOUND",
       message: secret,

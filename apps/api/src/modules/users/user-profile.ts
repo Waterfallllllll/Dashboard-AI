@@ -1,6 +1,5 @@
 import type { Profile, ThemePreference, TimeFormat } from "@dashboard/contracts";
 
-import type { UserDocument } from "../../infrastructure/mongodb/collection-catalog.js";
 import {
   DEFAULT_DISPLAY_NAME,
   DEFAULT_LOCALE,
@@ -36,20 +35,6 @@ export const NEW_USER_DEFAULTS = {
   timeFormat: DEFAULT_TIME_FORMAT,
   theme: DEFAULT_THEME
 } as const;
-
-export function toUserProfile(document: UserDocument): UserProfile {
-  return {
-    id: document._id.toHexString(),
-    displayName: document.displayName,
-    avatarUrl: document.avatarUrl,
-    locale: document.locale,
-    timezone: document.timezone,
-    timeFormat: document.timeFormat,
-    theme: document.theme,
-    createdAt: document.createdAt,
-    updatedAt: document.updatedAt
-  };
-}
 
 export function profileDto(user: UserProfile): Profile {
   return {

@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { ApiError, parseRequest, toPublicErrorResponse } from "./api-error.js";
 
 const requestId = "req_12345678";
-const secret = "mongodb://user:pass@localhost/dashboard";
+const secret = "postgresql://user:db-password@localhost/dashboard";
 
 describe("публичная ошибка API", () => {
   it("прячет неизвестное исключение и неверный идентификатор запроса", () => {
@@ -32,7 +32,7 @@ describe("публичная ошибка API", () => {
 
     expect(error.status).toBe(500);
     expect(response.status).toBe(500);
-    expect(response.body.error.message).not.toContain("mongodb");
+    expect(response.body.error.message).not.toContain("db-password");
     expect(response.body.meta.requestId).toBe(requestId);
   });
 
