@@ -17,6 +17,7 @@ import {
   unexpectedMigrationDrift
 } from "./migration-catalog.js";
 import { connectDatabase, disconnectPrisma, getPrismaClient } from "./prisma-client.js";
+import { ensureShadowDatabase } from "./shadow-database.js";
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -219,6 +220,8 @@ describe.skipIf(!hasPostgres)("применённая миграция PostgreSQ
   });
 
   it("отличается от схемы Prisma только частичными индексами и проверками ciphertext", async () => {
+    const directUrl = process.env.DIRECT_DATABASE_URL?.trim() || databaseUrl;
+    await ensureShadowDatabase(directUrl);
     const { stdout } = await runPrisma([
       "migrate",
       "diff",
@@ -234,7 +237,7 @@ describe.skipIf(!hasPostgres)("применённая миграция PostgreSQ
     expect(script).toContain("DROP INDEX");
     expect(script).toContain("DROP CONSTRAINT");
     expect(unexpectedMigrationDrift(script)).toEqual([]);
-  });
+  }, 120_000);
 });
 
 function runPrisma(args: readonly string[]): Promise<{ stdout: string }> {
