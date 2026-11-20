@@ -129,6 +129,7 @@ describe.skipIf(!hasPostgres)("планы запросов, целостност
     const tokenId = randomUUID();
     const systemJobId = randomUUID();
     const startedAt = new Date();
+    let tombstoneId: string | undefined;
 
     try {
       await prisma.user.create({
@@ -164,7 +165,7 @@ describe.skipIf(!hasPostgres)("планы запросов, целостност
       expect(await prisma.oneTimeToken.count({ where: { id: tokenId } })).toBe(1);
       expect(await prisma.scheduledJob.count({ where: { id: systemJobId } })).toBe(1);
 
-      const tombstone = await prisma.auditEvent.findFirst({
+      const tombstones = await prisma.auditEvent.findMany({
         where: {
           action: "account_deleted",
           userId: null,
@@ -172,11 +173,15 @@ describe.skipIf(!hasPostgres)("планы запросов, целостност
         },
         select: { id: true, createdAt: true, deleteAt: true }
       });
+      const tombstone = tombstones.find(
+        (event) => event.deleteAt.getTime() === auditDeleteAt(event.createdAt).getTime()
+      );
 
       if (!tombstone) {
         throw new Error("Нет записи account_deleted");
       }
 
+      tombstoneId = tombstone.id;
       expect(tombstone.deleteAt.toISOString()).toBe(
         auditDeleteAt(tombstone.createdAt).toISOString()
       );
@@ -192,9 +197,9 @@ describe.skipIf(!hasPostgres)("планы запросов, целостност
       await prisma.newsItem.deleteMany({ where: { id: newsId } });
       await prisma.oneTimeToken.deleteMany({ where: { id: tokenId } });
       await prisma.scheduledJob.deleteMany({ where: { id: systemJobId } });
-      await prisma.auditEvent.deleteMany({
-        where: { action: "account_deleted", userId: null, createdAt: { gte: startedAt } }
-      });
+      if (tombstoneId) {
+        await prisma.auditEvent.deleteMany({ where: { id: tombstoneId } });
+      }
     }
   });
 });

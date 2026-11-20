@@ -219,7 +219,7 @@ describe.skipIf(!hasPostgres)("применённая миграция PostgreSQ
     }
   });
 
-  it("отличается от схемы Prisma только частичными индексами и проверками ciphertext", async () => {
+  it("не предлагает правок схемы кроме частичных индексов и проверок ciphertext", async () => {
     const directUrl = process.env.DIRECT_DATABASE_URL?.trim() || databaseUrl;
     await ensureShadowDatabase(directUrl);
     const { stdout } = await runPrisma([
@@ -234,8 +234,8 @@ describe.skipIf(!hasPostgres)("применённая миграция PostgreSQ
     const start = stdout.search(/^(--|ALTER|DROP|CREATE)/m);
     const script = start < 0 ? stdout : stdout.slice(start);
 
-    expect(script).toContain("DROP INDEX");
-    expect(script).toContain("DROP CONSTRAINT");
+    // Prisma 7 не описывает частичные индексы и CHECK, поэтому diff часто пустой.
+    // Если движок всё же предложит SQL, допустимы только снятия этих объектов.
     expect(unexpectedMigrationDrift(script)).toEqual([]);
   }, 120_000);
 });

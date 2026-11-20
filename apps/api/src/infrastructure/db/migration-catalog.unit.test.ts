@@ -89,6 +89,7 @@ describe("первая миграция Prisma", () => {
     expect(unexpectedMigrationDrift(expected)).toEqual([]);
     expect(unexpectedMigrationDrift('DROP TABLE "users"')).toEqual(['DROP TABLE "users"']);
     expect(unexpectedMigrationDrift("")).toEqual([]);
+    expect(unexpectedMigrationDrift("-- This is an empty migration.\n")).toEqual([]);
     expect(
       unexpectedMigrationDrift(
         LATER_PARTIAL_INDEXES.map((index) => `DROP INDEX "${index.name}"`).join(";\n")
