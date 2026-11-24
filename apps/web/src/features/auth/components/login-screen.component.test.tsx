@@ -4,16 +4,17 @@ import { describe, expect, it } from "vitest";
 import { LoginScreen } from "./login-screen";
 
 describe("LoginScreen", () => {
-  it("не включает Google OAuth до появления backend-потока", () => {
+  it("ведёт на вход через Google", () => {
     render(<LoginScreen />);
 
-    expect(screen.getByRole("button", { name: /Продолжить с Google/ })).toBeDisabled();
+    expect(screen.getByRole("link", { name: /Продолжить с Google/ })).toHaveAttribute(
+      "href",
+      "/api/v1/auth/google"
+    );
     expect(
-      screen.getByText("Вход станет доступен после подключения защищённого OAuth-потока.")
+      screen.getByText("Google запросит только имя, адрес почты и профиль.")
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/Мы не храним OAuth-токены в браузере/)
-    ).toBeInTheDocument();
+    expect(screen.getByText(/Мы не храним OAuth-токены в браузере/)).toBeInTheDocument();
   });
 
   it("сообщает об ошибке входа", () => {

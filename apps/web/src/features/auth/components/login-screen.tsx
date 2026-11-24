@@ -54,20 +54,15 @@ export function LoginScreen({ status = null }: LoginScreenProps) {
         ) : null}
 
         <div className={styles.actions}>
-          <button
-            aria-describedby="oauth-availability"
-            className={styles.googleButton}
-            disabled
-            type="button"
-          >
+          <a className={styles.googleButton} href="/api/v1/auth/google">
             <span aria-hidden="true" className={styles.googleMark}>
               G
             </span>
             <span>{status === "loading" ? "Переходим в Google…" : "Продолжить с Google"}</span>
             <ArrowRight aria-hidden="true" />
-          </button>
+          </a>
           <p className={styles.availability} id="oauth-availability">
-            Вход станет доступен после подключения защищённого OAuth-потока.
+            Google запросит только имя, адрес почты и профиль.
           </p>
         </div>
 

@@ -24,7 +24,12 @@ describe("PublicShell", () => {
     );
     expect(screen.getByRole("link", { name: "Условия" })).toHaveAttribute("href", "/terms");
     expect(screen.getByRole("heading", { name: /Важное — перед глазами/ })).toBeInTheDocument();
-    expect(screen.getByText("Вход отменён. Можно попробовать ещё раз, когда будете готовы.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Продолжить с Google/ })).toBeDisabled();
+    expect(
+      screen.getByText("Вход отменён. Можно попробовать ещё раз, когда будете готовы.")
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Продолжить с Google/ })).toHaveAttribute(
+      "href",
+      "/api/v1/auth/google"
+    );
   });
 });

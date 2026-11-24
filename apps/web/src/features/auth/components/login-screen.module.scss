@@ -79,6 +79,7 @@
   background: var(--color-primary);
   color: var(--color-text-on-primary);
   font: var(--text-label-lg);
+  text-decoration: none;
 
   &:disabled {
     opacity: 0.72;

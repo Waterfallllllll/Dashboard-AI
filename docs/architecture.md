@@ -972,7 +972,7 @@ OAuth state входа, state календаря и одноразовая сс�
 - worker с watch mode;
 - локальный PostgreSQL 18 через `compose.dev.yml`.
 
-Reverse proxy в локальной разработке необязателен. Frontend dev server может проксировать `/api/v1` в backend, чтобы browser продолжал работать с same-origin URL.
+Reverse proxy в локальной разработке необязателен. Dev-сервер Next.js проксирует `/api/v1/*` на `INTERNAL_API_URL`, чтобы браузер работал с единым origin.
 
 Корневые команды разработки, сборки и тестирования определены в package manifest; выбранный package manager указан в [TECHNOLOGIES.md](./TECHNOLOGIES.md).
 

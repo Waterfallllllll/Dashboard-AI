@@ -15,7 +15,7 @@ test.describe("рутины и интеграции", () => {
     await expect(page.getByRole("heading", { name: "Ничего не найдено" })).toBeVisible();
   });
 
-  test("показывает интеграции MVP и блокирует подключение до API", async ({ page }) => {
+  test("показывает интеграции MVP и включает подключение календаря", async ({ page }) => {
     await page.goto("/settings/integrations");
 
     await expect(page.getByRole("heading", { name: "Google Calendar" })).toBeVisible();
@@ -23,7 +23,7 @@ test.describe("рутины и интеграции", () => {
     await expect(page.getByRole("heading", { name: "Местоположение" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Уведомления браузера" })).toBeVisible();
 
-    await expect(page.getByRole("button", { name: "Подключить календарь" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Подключить календарь" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Подключить Telegram" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Настроить локацию" })).toBeDisabled();
     await expect(page.getByRole("button", { name: "Включить уведомления" })).toBeDisabled();

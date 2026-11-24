@@ -1,5 +1,9 @@
-import path from "node:path";
+import { readFileSync } from "node:fs";
+import path, { resolve } from "node:path";
+
 import type { NextConfig } from "next";
+
+import { internalApiOrigin } from "./src/lib/api/internal-api-origin";
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -20,6 +24,16 @@ if (process.env.NODE_ENV === "production") {
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  async rewrites() {
+    const origin = internalApiOrigin(readInternalApiUrl());
+
+    return [
+      {
+        source: "/api/v1/:path*",
+        destination: `${origin}/api/v1/:path*`
+      }
+    ];
+  },
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
   transpilePackages: ["@dashboard/contracts"],
   reactStrictMode: true,
@@ -50,3 +64,18 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+
+function readInternalApiUrl(): string | undefined {
+  const configured = process.env.INTERNAL_API_URL?.trim();
+
+  if (configured) {
+    return configured;
+  }
+
+  try {
+    const source = readFileSync(resolve(import.meta.dirname, "../../.env"), "utf8");
+    return source.match(/^INTERNAL_API_URL=(.*)$/m)?.[1];
+  } catch {
+    return undefined;
+  }
+}

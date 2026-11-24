@@ -3,6 +3,8 @@ import type { LucideIcon } from "lucide-react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 
+import { GoogleCalendarConnect, type CalendarConnectionStatus } from "./google-calendar-connect";
+
 import styles from "./integration-list.module.scss";
 
 type IntegrationCard = Readonly<{
@@ -59,7 +61,11 @@ const integrations: readonly IntegrationCard[] = [
   }
 ];
 
-export function IntegrationList() {
+type IntegrationListProps = Readonly<{
+  calendarStatus?: CalendarConnectionStatus | null;
+}>;
+
+export function IntegrationList({ calendarStatus = null }: IntegrationListProps) {
   return (
     <div className={styles.wrapper}>
       <aside className={styles.privacyNote}>
@@ -81,7 +87,15 @@ export function IntegrationList() {
                 <div aria-hidden="true" className={styles.icon}>
                   <Icon strokeWidth={1.8} />
                 </div>
-                <StatusBadge tone={tone}>{status}</StatusBadge>
+                <StatusBadge
+                  tone={
+                    id === "google-calendar" && calendarStatus === "connected" ? "neutral" : tone
+                  }
+                >
+                  {id === "google-calendar" && calendarStatus === "connected"
+                    ? "Подключено"
+                    : status}
+                </StatusBadge>
               </div>
 
               <div className={styles.cardCopy}>
@@ -92,10 +106,16 @@ export function IntegrationList() {
               <p className={styles.detail}>{detail}</p>
 
               <div className={styles.cardFooter}>
-                <button aria-describedby={`${id}-availability`} disabled type="button">
-                  {action}
-                </button>
-                <span id={`${id}-availability`}>Доступно после подключения API</span>
+                {id === "google-calendar" ? (
+                  <GoogleCalendarConnect status={calendarStatus} />
+                ) : (
+                  <>
+                    <button aria-describedby={`${id}-availability`} disabled type="button">
+                      {action}
+                    </button>
+                    <span id={`${id}-availability`}>Доступно после подключения API</span>
+                  </>
+                )}
               </div>
             </li>
           )
