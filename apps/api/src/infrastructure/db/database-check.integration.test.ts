@@ -20,6 +20,8 @@ const databaseUrl = process.env.DATABASE_URL ?? "";
 const hasPostgres =
   databaseUrl.startsWith("postgresql://") || databaseUrl.startsWith("postgres://");
 const ciphertext = "enc:v1:AAAAAAAAAAAAAAAA.BBBBBBBBBBBBBBBBBBBBBB.QQqq";
+// Дальше горизонта очистки просроченных строк: соседний тест не должен забирать эти фикстуры.
+const keptUntil = new Date("2099-01-01T00:00:00.000Z");
 
 describe.skipIf(!hasPostgres)("планы запросов, целостность и очистка аккаунта", () => {
   beforeAll(async () => {
@@ -83,7 +85,7 @@ describe.skipIf(!hasPostgres)("планы запросов, целостност
           idempotencyKey: `bad-${badDeliveryId}`,
           status: "sent",
           createdAt,
-          deleteAt: createdAt
+          deleteAt: keptUntil
         }
       });
       await prisma.notificationDelivery.create({
@@ -353,7 +355,7 @@ async function insertOwnedGraph(
       tokenHash: `${tokenId.replaceAll("-", "")}${tokenId.replaceAll("-", "")}`,
       purpose: "oauth_state",
       payload: ciphertext,
-      expiresAt: new Date("2026-11-01T00:10:00.000Z")
+      expiresAt: keptUntil
     }
   });
   await insertJob(systemJobId, `lock-${systemJobId}`, null);
