@@ -17,7 +17,6 @@ test-results/
 # Environment and secrets
 .env
 .env.*
-!.env.example
 *.pem
 
 # Logs

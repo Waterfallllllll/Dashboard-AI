@@ -36,6 +36,7 @@
     "test:e2e:install": "playwright install chromium",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "env:secrets": "node scripts/ensure-local-secrets.mjs",
     "clean": "rimraf apps/*/.next apps/*/dist packages/*/dist coverage playwright-report test-results",
     "infra:up": "docker compose -f infra/compose.dev.yml up -d",
     "infra:down": "docker compose -f infra/compose.dev.yml down",

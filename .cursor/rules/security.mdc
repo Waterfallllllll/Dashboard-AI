@@ -1,7 +1,7 @@
 ---
 description: Секреты, сессии, OAuth, пользовательский ввод и чувствительные данные. Импортируй при авторизации, cookie, webhook, шифровании, env, Geolocation, Notifications или любом пользовательском вводе.
 alwaysApply: false
-globs: "**/.env.example,**/apps/api/src/modules/auth/**,**/apps/web/src/features/auth/**,**/apps/api/src/modules/integrations/**"
+globs: "**/.env,**/apps/api/src/modules/auth/**,**/apps/web/src/features/auth/**,**/apps/api/src/modules/integrations/**"
 ---
 
 # Безопасность
@@ -14,4 +14,4 @@ globs: "**/.env.example,**/apps/api/src/modules/auth/**,**/apps/web/src/features
 - RSS/HTML сторонних источников не вставляется в DOM.
 - Не храни секреты в коде, клиентском бандле или `localStorage`.
 
-Имена переменных — в `@.env.example`. Не коммить `.env`.
+Имена переменных — в `@docs/architecture.md` § 13. Не выводить и не коммить `.env`.

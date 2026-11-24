@@ -45,6 +45,7 @@ describe("адрес PostgreSQL", () => {
 
     expect(config.connectionString).toContain("postgres://");
     expect(config.poolMax).toBe(10);
+    expect(config.usesTransactionPooler).toBe(false);
     expect(config.statementTimeoutMs).toBe(10_000);
     expect(config.idleInTransactionTimeoutMs).toBe(30_000);
     expect(config.workMem).toBe("8MB");
@@ -68,6 +69,19 @@ describe("адрес PostgreSQL", () => {
     expect(() =>
       readDatabaseConfig({ DATABASE_URL: `postgresql://user:${secret}@localhost` })
     ).not.toThrow(new RegExp(secret));
+  });
+
+  it("распознаёт transaction-mode пулер Neon и явный параметр PgBouncer", () => {
+    const neon = readDatabaseConfig({
+      DATABASE_URL:
+        "postgresql://user:secret@ep-example-pooler.eu-central-1.aws.neon.tech/dashboard"
+    });
+    const explicit = readDatabaseConfig({
+      DATABASE_URL: "postgresql://user:secret@localhost/dashboard?pgbouncer=true"
+    });
+
+    expect(neon.usesTransactionPooler).toBe(true);
+    expect(explicit.usesTransactionPooler).toBe(true);
   });
 });
 

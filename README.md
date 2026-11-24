@@ -47,8 +47,8 @@ npm run dev:web
 Поднимает PostgreSQL, накатывает схему и запускает web, API и worker.
 
 1. Установить зависимости: `npm ci`.
-2. Создать файл окружения из примера и заполнить секреты (см. ниже).
-3. Запустить базу: `npm run infra:up`. PostgreSQL слушает `127.0.0.1:5432`, логин и пароль совпадают с `DATABASE_URL` в `.env.example`.
+2. Заполнить корневой `.env` (см. ниже).
+3. Для локального PostgreSQL запустить `npm run infra:up`. При использовании Neon этот шаг пропустить.
 4. Применить миграции: `npm run db:migrate --workspace @dashboard/api`.
 5. Запустить процессы: `npm run dev`.
 
@@ -60,35 +60,22 @@ npm run dev:web
 
 ### Файл окружения
 
-`.env` не коммитится. Скопируйте пример в два места: Prisma читает корневой файл, а процессы API и worker — файл в каталоге своего workspace.
+`.env` не коммитится. Prisma, API и worker читают единый корневой файл. Значения,
+переданные хостингом через переменные окружения, имеют приоритет.
 
-PowerShell:
-
-```powershell
-Copy-Item .env.example .env
-Copy-Item .env apps\api\.env
-```
-
-bash:
-
-```bash
-cp .env.example .env
-cp .env apps/api/.env
-```
-
-В скопированном файле уже заданы адреса приложения и локальный `DATABASE_URL`. Без четырёх значений API не стартует:
+Без четырёх значений API не стартует:
 
 - `SESSION_SECRET` — не короче 32 символов, без пробелов;
 - `DATA_ENCRYPTION_KEY` — 32 байта в hex (64 символа) или base64;
-- `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` — клиент OAuth из Google Cloud. В консоли Google укажите redirect URI из `.env.example`.
+- `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` — клиент OAuth из Google Cloud. В консоли Google укажите значение `GOOGLE_REDIRECT_URI` из `.env`.
 
 Сгенерировать локальные секреты:
 
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+npm run env:secrets
 ```
 
-Первая строка подходит для `SESSION_SECRET`, вторая — для `DATA_ENCRYPTION_KEY`. Это разные значения.
+Команда заполняет только отсутствующие или некорректные значения и не выводит сами секреты.
 
 Telegram, Web Push и ключ новостей можно оставить пустыми: без них соответствующие уведомления просто не отправляются. Погода ходит в Open-Meteo, отдельный ключ не нужен.
 

@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-environment.js";
 
 import { ApiError } from "./shared/errors/api-error.js";
 import { createBackend } from "./app/create-backend.js";

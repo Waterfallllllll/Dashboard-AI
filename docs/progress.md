@@ -248,4 +248,13 @@
 - Ссылка на дизайн-систему ведёт в `docs/Design.md`.
 - Изменён `README.md`. Новые переменные окружения не добавлялись. Сборка и тесты не запускались: исходный код не менялся.
 
+## 2026-11-24 — Neon PostgreSQL и единый `.env`
+
+- Neon PostgreSQL 18.7 подключён через pooled runtime URL и прямой URL для Prisma. Все три production-миграции применены, проверка 40 запросов и целостности прошла без нарушений.
+- Prisma принимает `DATABASE_URL_UNPOOLED` от Vercel/Neon как fallback для миграций. Runtime не отправляет несовместимые session startup-параметры в transaction-mode PgBouncer.
+- API, worker и Prisma читают единый корневой `.env`. Шаблон `.env.example` удалён, активная документация и правила обновлены. `npm run env:secrets` безопасно создаёт отсутствующие локальные `SESSION_SECRET` и `DATA_ENCRYPTION_KEY`.
+- Новых обязательных переменных нет. Поддержано провайдерское имя `DATABASE_URL_UNPOOLED`; реальные `GOOGLE_CLIENT_ID` и `GOOGLE_CLIENT_SECRET` по-прежнему выдаёт Google Cloud.
+- Изменены конфигурация Prisma и PostgreSQL, загрузка окружения API/worker, корневые scripts, README, архитектура, правила Cursor и документация прогресса.
+- Проверки: `npm run lint`, `npm run typecheck`, целевые Vitest-тесты и `npm run build` проходят. API smoke-тест вернул `ready`; `db:check` сообщил 0 запросов без нужного индекса и 0 нарушений целостности. Общий `format:check` сохраняет прежний долг форматирования в несвязанных файлах.
+
 

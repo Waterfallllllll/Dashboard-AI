@@ -8,6 +8,7 @@ const WORK_MEM_PATTERN = /^\d+(?:kB|MB|GB)$/;
 export type DatabaseConfig = {
   readonly connectionString: string;
   readonly poolMax: number;
+  readonly usesTransactionPooler: boolean;
   readonly statementTimeoutMs: number;
   readonly idleInTransactionTimeoutMs: number;
   readonly connectTimeoutMs: number;
@@ -15,9 +16,12 @@ export type DatabaseConfig = {
 };
 
 export function readDatabaseConfig(env: NodeJS.ProcessEnv = process.env): DatabaseConfig {
+  const connectionString = readConnectionString(env.DATABASE_URL);
+
   return {
-    connectionString: readConnectionString(env.DATABASE_URL),
+    connectionString,
     poolMax: POOL_MAX,
+    usesTransactionPooler: isTransactionPooler(connectionString),
     statementTimeoutMs: STATEMENT_TIMEOUT_MS,
     idleInTransactionTimeoutMs: IDLE_IN_TRANSACTION_TIMEOUT_MS,
     connectTimeoutMs: CONNECT_TIMEOUT_MS,
@@ -56,4 +60,13 @@ function readConnectionString(value: string | undefined): string {
   }
 
   return raw;
+}
+
+function isTransactionPooler(connectionString: string): boolean {
+  const url = new URL(connectionString);
+
+  return (
+    url.hostname.toLowerCase().includes("-pooler.") ||
+    url.searchParams.get("pgbouncer")?.toLowerCase() === "true"
+  );
 }

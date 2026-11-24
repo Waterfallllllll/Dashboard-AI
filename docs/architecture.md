@@ -245,7 +245,7 @@ dashboard/
 │  ├─ compose.dev.yml
 │  └─ compose.prod.yml
 │
-├─ .env.example
+├─ .env                 # локальный файл, не попадает в Git
 ├─ package.json
 ├─ package-lock.json
 ├─ TECHNICAL_SPECIFICATION.md
@@ -544,14 +544,14 @@ modules/routines/
 - Схема живёт в `apps/api/prisma/schema.prisma`. Модели называются в PascalCase, поля — в camelCase. Таблицы и колонки в PostgreSQL — в snake_case через `@@map` и `@map`.
 - Первичный ключ — UUID версии 7 (`uuidv7()`). Новые значения упорядочены по времени, публичный идентификатор остаётся UUID. Уже записанные UUID версии 4 сохраняются. Моменты времени — `timestamptz`. Локальная дата рутины — `date`. Флаги — `boolean`. Строка с настоящим пределом длины остаётся `varchar(n)`; секрет и длинный текст — `text`. `varchar(255)` в схеме нет.
 - Каждый процесс создаёт один `PrismaClient` поверх `@prisma/adapter-pg` в `apps/api/src/infrastructure/db/prisma-client.ts`. В watch mode клиент переиспользуется внутри процесса, чтобы пул не размножался.
-- Пул адаптера ограничен десятью соединениями на процесс. Сумма соединений API, worker и миграции остаётся ниже `max_connections` = 100. На соединении приложения `statement_timeout` — 10 секунд, `idle_in_transaction_session_timeout` — 30 секунд, `work_mem` — 8MB.
+- Пул адаптера ограничен десятью соединениями на процесс. Сумма соединений API, worker и миграции остаётся ниже `max_connections` = 100. Прямое соединение задаёт `statement_timeout` 10 секунд, `idle_in_transaction_session_timeout` 30 секунд и `work_mem` 8MB. Для transaction-mode PgBouncer эти startup-параметры не отправляются; ограничение запроса на стороне клиента остаётся равным 10 секундам.
 - Локальный PostgreSQL в `infra/compose.dev.yml` ставит те же потолки на сервере: запрос вне пула приложения обрывается через 30 секунд. `pg_stat_statements` подгружается при старте и создаётся при первой инициализации тома.
 - Миграция отзывает у роли `PUBLIC` все права на схему `public`. Владелец базы сохраняет доступ. Политики RLS с `auth.uid()` не включаются: к базе подключается роль приложения, а worker читает строки всех пользователей. Чужие строки отсекает сервис.
 - Клиент открывается при старте и закрывается через `$disconnect` при `SIGTERM`/`SIGINT`.
 - API становится ready только после успешного `SELECT 1`.
 - На transient errors применяются ограниченные retries с exponential backoff.
 - Запросы имеют ограничение максимального времени выполнения.
-- Runtime читает `DATABASE_URL`. `prisma migrate` использует прямое соединение: на MVP это тот же адрес, а при появлении transaction-mode пулера — отдельный `DIRECT_DATABASE_URL`.
+- Runtime читает `DATABASE_URL`. `prisma migrate` использует прямое соединение: на MVP это тот же адрес, а при появлении transaction-mode пулера — `DIRECT_DATABASE_URL` или предоставленный Neon/Vercel `DATABASE_URL_UNPOOLED`.
 
 ### 8.2. Таблицы
 
@@ -1076,7 +1076,8 @@ Worker:
 
 ## 13. Переменные окружения
 
-Корневой `.env.example` содержит только имена и безопасные примеры.
+Локальная разработка читает единый корневой `.env`. Файл содержит секреты и не
+попадает в Git. На хостинге те же значения передаются через переменные окружения.
 
 `web`:
 
@@ -1093,6 +1094,7 @@ Worker:
 - `APP_ORIGIN`;
 - `DATABASE_URL`;
 - `DIRECT_DATABASE_URL` — прямое соединение для `prisma migrate`, если runtime-адрес ведёт в transaction-mode пулер; на MVP может совпадать с `DATABASE_URL`;
+- `DATABASE_URL_UNPOOLED` — имя прямого соединения в Neon/Vercel; используется как fallback, если `DIRECT_DATABASE_URL` не задан;
 - `SESSION_SECRET`;
 - `DATA_ENCRYPTION_KEY`;
 - `GOOGLE_CLIENT_ID`;

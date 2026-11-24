@@ -32,11 +32,15 @@ export function getPrismaClient(env: NodeJS.ProcessEnv = process.env): PrismaCli
     connectionString: config.connectionString,
     max: config.poolMax,
     connectionTimeoutMillis: config.connectTimeoutMs,
-    statement_timeout: config.statementTimeoutMs,
     query_timeout: config.statementTimeoutMs,
-    idle_in_transaction_session_timeout: config.idleInTransactionTimeoutMs,
-    options: `-c work_mem=${config.workMem}`,
-    application_name: "evergreen-dashboard"
+    application_name: "evergreen-dashboard",
+    ...(config.usesTransactionPooler
+      ? {}
+      : {
+          statement_timeout: config.statementTimeoutMs,
+          idle_in_transaction_session_timeout: config.idleInTransactionTimeoutMs,
+          options: `-c work_mem=${config.workMem}`
+        })
   });
   const client = new PrismaClient({
     adapter: new PrismaPg(pool, {

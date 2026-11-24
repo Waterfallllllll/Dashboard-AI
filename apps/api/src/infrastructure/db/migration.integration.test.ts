@@ -220,7 +220,10 @@ describe.skipIf(!hasPostgres)("применённая миграция PostgreSQ
   });
 
   it("не предлагает правок схемы кроме частичных индексов и проверок ciphertext", async () => {
-    const directUrl = process.env.DIRECT_DATABASE_URL?.trim() || databaseUrl;
+    const directUrl =
+      process.env.DIRECT_DATABASE_URL?.trim() ||
+      process.env.DATABASE_URL_UNPOOLED?.trim() ||
+      databaseUrl;
     await ensureShadowDatabase(directUrl);
     const { stdout } = await runPrisma([
       "migrate",

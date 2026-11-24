@@ -18,6 +18,6 @@ npm run test:e2e
 npm run build
 ```
 
-Локальный `.env` создаётся из `@.env.example`. Секреты в `.env` не коммить.
+Все локальные процессы читают корневой `.env`. Секреты из него не выводить и не коммитить.
 
 Integration-тесты нового хранилища — только против реального PostgreSQL 18. Prisma Client в них не подменяется моком. Клиент собирается командой `npm run db:generate --workspace @dashboard/api`.
