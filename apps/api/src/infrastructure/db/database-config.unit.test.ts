@@ -33,7 +33,6 @@ describe("схема Prisma", () => {
 
     expect(models).toEqual([...MODEL_NAMES]);
     expect(schema).not.toContain("DATABASE_URL");
-    expect(schema).not.toContain("mongodb");
     expect(schema).toContain('provider = "postgresql"');
   });
 });
@@ -58,10 +57,10 @@ describe("адрес PostgreSQL", () => {
     expect(() => readDatabaseConfig({})).toThrow(/DATABASE_URL/);
     expect(() => readDatabaseConfig({})).not.toThrow(new RegExp(secret));
     expect(() =>
-      readDatabaseConfig({ DATABASE_URL: `mongodb://user:${secret}@localhost/dashboard` })
+      readDatabaseConfig({ DATABASE_URL: `mysql://user:${secret}@localhost/dashboard` })
     ).toThrow(/PostgreSQL/);
     expect(() =>
-      readDatabaseConfig({ DATABASE_URL: `mongodb://user:${secret}@localhost/dashboard` })
+      readDatabaseConfig({ DATABASE_URL: `mysql://user:${secret}@localhost/dashboard` })
     ).not.toThrow(new RegExp(secret));
     expect(() =>
       readDatabaseConfig({ DATABASE_URL: `postgresql://user:${secret}@localhost` })

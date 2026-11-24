@@ -1,4 +1,4 @@
-import { ObjectId } from "mongodb";
+import { newEntityId } from "../../shared/public-id.js";
 
 import {
   WORK_JOB_TYPES,
@@ -63,7 +63,7 @@ export class MemoryJobQueue implements JobQueue {
     const existing = this.jobs.find((item) => item.idempotencyKey === job.idempotencyKey);
 
     if (!existing) {
-      this.jobs.push(storedFrom(job, new ObjectId().toHexString()));
+      this.jobs.push(storedFrom(job, newEntityId()));
       return "created";
     }
 
@@ -205,7 +205,7 @@ export class MemoryJobQueue implements JobQueue {
 
     if (!existing) {
       this.jobs.push({
-        id: new ObjectId().toHexString(),
+        id: newEntityId(),
         type: "scheduler-lock",
         payload: {},
         runAt: now,
@@ -254,7 +254,7 @@ export class MemoryJobQueue implements JobQueue {
     }
 
     this.jobs.push({
-      id: new ObjectId().toHexString(),
+      id: newEntityId(),
       type: "worker-heartbeat",
       payload: {},
       runAt: now,

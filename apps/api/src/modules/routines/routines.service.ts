@@ -9,7 +9,7 @@ import type {
   RoutineRulePatch
 } from "@dashboard/contracts";
 import { ApiError } from "../../shared/errors/api-error.js";
-import { idempotencyObjectId } from "../../shared/idempotency-id.js";
+import { idempotencyEntityId } from "../../shared/idempotency-id.js";
 import { newEntityId } from "../../shared/public-id.js";
 import type { Actor } from "../auth/auth.types.js";
 import { isEditProblem, planRuleEdit, type RuleDraft } from "./routine-edit.js";
@@ -142,7 +142,7 @@ export class RoutinesService {
   ): Promise<{ rule: RoutineRule; replayed: boolean }> {
     const now = this.now();
     const id = idempotencyKey
-      ? idempotencyObjectId(actor.userId, "routine-rule", idempotencyKey)
+      ? idempotencyEntityId(actor.userId, "routine-rule", idempotencyKey)
       : newEntityId();
     const record = ruleRecord(id, actor.userId, draftFromCreate(input, timezone), now);
     const inserted = await this.routines.insertRule(record);

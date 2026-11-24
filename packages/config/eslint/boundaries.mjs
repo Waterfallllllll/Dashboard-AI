@@ -42,8 +42,6 @@ const contractsMessage =
   "packages/contracts содержит только сериализуемые DTO и Zod-схемы: без UI, Express и Prisma.";
 
 const backendOnlyPaths = [
-  { name: "mongodb", message: backendOnlyMessage },
-  { name: "bson", message: backendOnlyMessage },
   { name: "pg", message: backendOnlyMessage },
   { name: "postgres", message: backendOnlyMessage },
   { name: "prisma", message: backendOnlyMessage },

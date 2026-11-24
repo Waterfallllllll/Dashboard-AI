@@ -262,8 +262,6 @@ OAuth-токены, refresh tokens и server session не хранятся в `l
 Не входят в целевой стек:
 
 - Tailwind CSS;
-- MongoDB и MongoDB Node.js Driver;
-- Mongoose;
 - Prisma ORM 8 до стабильного релиза;
 - Drizzle;
 - GraphQL;

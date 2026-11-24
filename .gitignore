@@ -38,7 +38,6 @@ Thumbs.db
 # Hosting and local infrastructure
 .vercel/
 .docker/
-mongodb-data/
 postgres-data/
 
 # Generated Prisma Client

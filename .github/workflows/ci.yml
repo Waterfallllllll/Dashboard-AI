@@ -97,8 +97,6 @@ jobs:
     env:
       DATABASE_URL: postgresql://dashboard:dashboard@localhost:5432/dashboard
       DIRECT_DATABASE_URL: postgresql://dashboard:dashboard@localhost:5432/dashboard
-      MONGODB_URI: mongodb://localhost:27017/dashboard?replicaSet=rs0
-      MONGODB_DB_NAME: dashboard
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -118,20 +116,11 @@ jobs:
       - name: Generate Prisma Client
         run: npm run db:generate --workspace @dashboard/api
 
-      - name: Start PostgreSQL and MongoDB
+      - name: Start PostgreSQL
         shell: bash
         run: |
           set -euo pipefail
-          docker compose -f infra/compose.dev.yml up -d --wait postgres mongodb
-          docker compose -f infra/compose.dev.yml run --rm --no-deps mongodb-init
-          for _ in $(seq 1 30); do
-            if docker compose -f infra/compose.dev.yml exec -T mongodb mongosh --quiet --eval 'quit(rs.status().myState === 1 ? 0 : 1)'; then
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "MongoDB replica set did not elect a primary" >&2
-          exit 1
+          docker compose -f infra/compose.dev.yml up -d --wait postgres
 
       - name: Apply Prisma migrations
         run: npm run db:migrate --workspace @dashboard/api

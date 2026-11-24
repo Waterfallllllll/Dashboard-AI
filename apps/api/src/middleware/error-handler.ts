@@ -51,16 +51,22 @@ function isJsonParseError(error: unknown): boolean {
   return error instanceof SyntaxError && hasNumberField(error, "status", 400);
 }
 
+const DATABASE_UNAVAILABLE_CODES = new Set(["P1001", "P1002", "P1008", "P1017"]);
+
 function isDatabaseUnavailable(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false;
   }
 
-  return (
-    error.name === "MongoServerSelectionError" ||
-    error.name === "MongoNetworkError" ||
-    error.name === "MongoNotConnectedError"
-  );
+  if (error.name === "PrismaClientInitializationError") {
+    return true;
+  }
+
+  if (error.name !== "PrismaClientKnownRequestError" || !("code" in error)) {
+    return false;
+  }
+
+  return typeof error.code === "string" && DATABASE_UNAVAILABLE_CODES.has(error.code);
 }
 
 function hasStringField(error: unknown, field: string, expected: string): boolean {

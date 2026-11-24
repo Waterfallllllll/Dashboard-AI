@@ -8,8 +8,8 @@ globs: "**/packages/contracts/**/*.ts"
 
 `packages/contracts` — единственный общий контракт frontend и backend. Только сериализуемые DTO и Zod-схемы.
 
-Пакет не зависит от React, Express, MongoDB и не экспортирует модели БД.
+Пакет не зависит от React, Express и Prisma и не экспортирует модели БД.
 
 Новый эндпоинт: сначала схема в contracts, затем backend и frontend.
 
-JSON-поля API — `camelCase`. В контракт не попадают `ObjectId`, внутренние документы хранилища и секретные поля интеграций.
+JSON-поля API — `camelCase`. В контракт не попадают внутренние ключи хранилища и секретные поля интеграций.

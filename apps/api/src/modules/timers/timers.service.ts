@@ -7,7 +7,7 @@ import type {
 } from "@dashboard/contracts";
 import { ApiError } from "../../shared/errors/api-error.js";
 import type { JobSignal } from "../../infrastructure/jobs/job-types.js";
-import { idempotencyObjectId } from "../../shared/idempotency-id.js";
+import { idempotencyEntityId } from "../../shared/idempotency-id.js";
 import { newEntityId } from "../../shared/public-id.js";
 import { zonedDayBounds } from "../../shared/local-date.js";
 import type { Actor } from "../auth/auth.types.js";
@@ -79,7 +79,7 @@ export class TimersService {
     await this.settleOpen(actor);
     const now = this.now();
     const id = idempotencyKey
-      ? idempotencyObjectId(actor.userId, "timer-session", idempotencyKey)
+      ? idempotencyEntityId(actor.userId, "timer-session", idempotencyKey)
       : newEntityId();
     const session = createRunningSession({
       id,
