@@ -27,6 +27,7 @@ export type PurgeDeletedCounts = Record<PurgeTable | "users", number>;
 export type PurgeResult = {
   readonly user: "purged" | "missing";
   readonly deleted: PurgeDeletedCounts;
+  readonly auditEventId: string | null;
 };
 
 export class AccountStillActiveError extends Error {
@@ -69,7 +70,7 @@ export async function purgeAccount(prisma: PrismaClient, userId: string): Promis
     const state = assertAccountPurgeAllowed(user);
 
     if (state === "missing") {
-      return { user: "missing", deleted: emptyDeleted() };
+      return { user: "missing", deleted: emptyDeleted(), auditEventId: null };
     }
 
     const deleted = await countOwned(tx, userId);
@@ -82,17 +83,20 @@ export async function purgeAccount(prisma: PrismaClient, userId: string): Promis
     }
 
     const createdAt = new Date();
-    await tx.auditEvent.create({
+    const tombstone = await tx.auditEvent.create({
       data: {
         action: "account_deleted",
+        userId: null,
         createdAt,
         deleteAt: auditDeleteAt(createdAt)
-      }
+      },
+      select: { id: true }
     });
 
     return {
       user: "purged",
-      deleted: { ...deleted, users: 1 }
+      deleted: { ...deleted, users: 1 },
+      auditEventId: tombstone.id
     };
   });
 }

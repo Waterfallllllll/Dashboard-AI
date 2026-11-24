@@ -129,8 +129,8 @@ describe.skipIf(!hasPostgres)("удаление просроченных стр�
     });
     await prisma.auditEvent.createMany({
       data: [
-        { id: expiredAuditId, userId, action: "logout", deleteAt: past },
-        { id: liveAuditId, action: "account_deleted", deleteAt: future }
+        { id: expiredAuditId, userId, action: "logout", createdAt: past, deleteAt: past },
+        { id: liveAuditId, action: "account_deleted", createdAt: past, deleteAt: future }
       ]
     });
     await prisma.timerSession.create({

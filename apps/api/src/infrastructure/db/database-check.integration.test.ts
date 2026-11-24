@@ -128,7 +128,6 @@ describe.skipIf(!hasPostgres)("планы запросов, целостност
     const newsId = randomUUID();
     const tokenId = randomUUID();
     const systemJobId = randomUUID();
-    const startedAt = new Date();
     let tombstoneId: string | undefined;
 
     try {
@@ -150,6 +149,7 @@ describe.skipIf(!hasPostgres)("планы запросов, целостност
       expect(await prisma.user.count({ where: { id: liveId } })).toBe(1);
 
       const purged = await purgeAccount(prisma, userId);
+      tombstoneId = purged.auditEventId ?? undefined;
 
       expect(purged.user).toBe("purged");
       expect(purged.deleted.users).toBe(1);
@@ -165,23 +165,17 @@ describe.skipIf(!hasPostgres)("планы запросов, целостност
       expect(await prisma.oneTimeToken.count({ where: { id: tokenId } })).toBe(1);
       expect(await prisma.scheduledJob.count({ where: { id: systemJobId } })).toBe(1);
 
-      const tombstones = await prisma.auditEvent.findMany({
-        where: {
-          action: "account_deleted",
-          userId: null,
-          createdAt: { gte: startedAt }
-        },
-        select: { id: true, createdAt: true, deleteAt: true }
-      });
-      const tombstone = tombstones.find(
-        (event) => event.deleteAt.getTime() === auditDeleteAt(event.createdAt).getTime()
-      );
-
-      if (!tombstone) {
+      if (!purged.auditEventId) {
         throw new Error("Нет записи account_deleted");
       }
 
-      tombstoneId = tombstone.id;
+      const tombstone = await prisma.auditEvent.findUniqueOrThrow({
+        where: { id: purged.auditEventId },
+        select: { id: true, userId: true, action: true, createdAt: true, deleteAt: true }
+      });
+
+      expect(tombstone.userId).toBeNull();
+      expect(tombstone.action).toBe("account_deleted");
       expect(tombstone.deleteAt.toISOString()).toBe(
         auditDeleteAt(tombstone.createdAt).toISOString()
       );
@@ -189,6 +183,7 @@ describe.skipIf(!hasPostgres)("планы запросов, целостност
       const repeated = await purgeAccount(prisma, userId);
 
       expect(repeated.user).toBe("missing");
+      expect(repeated.auditEventId).toBeNull();
       expect(repeated.deleted.users).toBe(0);
       expect(await prisma.newsItem.count({ where: { id: newsId } })).toBe(1);
       expect(await prisma.auditEvent.count({ where: { id: tombstone.id } })).toBe(1);
