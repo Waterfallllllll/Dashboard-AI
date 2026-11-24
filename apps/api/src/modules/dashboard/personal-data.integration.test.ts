@@ -74,7 +74,7 @@ describe.skipIf(mongoUri === "")("личные данные в MongoDB", () => {
     expect(rule?.title).toBe("Зарядка");
     expect(rule?.userId.toHexString()).toBe(actor.userId);
     expect(savedOccurrence?.status).toBe("done");
-    expect(savedOccurrence?.routineRuleId.toHexString()).toBe(created.rule.id);
+    expect(savedOccurrence?.routineRuleId).toBe(created.rule.id);
 
     const started = await personal.timers.start(
       actor,

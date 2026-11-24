@@ -2,7 +2,7 @@ import type { Db, Filter, MatchKeysAndValues } from "mongodb";
 
 import type { TimerSessionDocument } from "../../infrastructure/mongodb/collection-catalog.js";
 import { duplicateKeyFields, isDuplicateKey } from "../../shared/mongo-error.js";
-import { parseObjectId } from "../../shared/object-id.js";
+import { parseObjectId, parseStoredEntityId, storedEntityIdText } from "../../shared/object-id.js";
 import type { TimerCursor, TimerRecord } from "./timers.types.js";
 
 export type TimerInsertResult = "inserted" | "duplicate" | "active-exists";
@@ -116,7 +116,7 @@ export class MongoTimersRepository implements TimersRepository {
     before: TimerCursor | null
   ): Promise<TimerRecord[]> {
     const id = parseObjectId(userId);
-    const beforeId = before ? parseObjectId(before.id) : null;
+    const beforeId = before ? parseStoredEntityId(before.id) : null;
 
     if (!id || (before && !beforeId)) {
       return [];
@@ -166,7 +166,7 @@ export class MongoTimersRepository implements TimersRepository {
 
 function ownedFilter(userId: string, id: string) {
   const user = parseObjectId(userId);
-  const sessionId = parseObjectId(id);
+  const sessionId = parseStoredEntityId(id);
 
   if (!user || !sessionId) {
     return null;
@@ -176,7 +176,7 @@ function ownedFilter(userId: string, id: string) {
 }
 
 function sessionDocument(session: TimerRecord): TimerSessionDocument | null {
-  const id = parseObjectId(session.id);
+  const id = parseStoredEntityId(session.id);
   const userId = parseObjectId(session.userId);
 
   if (!id || !userId) {
@@ -215,7 +215,7 @@ function sessionFields(session: TimerRecord): MatchKeysAndValues<TimerSessionDoc
 
 function toSession(document: TimerSessionDocument): TimerRecord {
   return {
-    id: document._id.toHexString(),
+    id: storedEntityIdText(document._id),
     userId: document.userId.toHexString(),
     preset: { ...document.preset },
     runStatus: document.runStatus,

@@ -1,5 +1,6 @@
 import { ObjectId, type Db, type Document } from "mongodb";
 
+import { parseUuid } from "../../shared/public-id.js";
 import type { CollectionName } from "./collection-catalog.js";
 import { auditRetentionViolation, deliveryRetentionViolation } from "./retention.js";
 import {
@@ -153,8 +154,10 @@ function collectViolations(
     pushViolation(violations, "ORPHAN_USER", name, documentId, onTruncate);
   }
 
-  if (name === "routine_rules" && documentId instanceof ObjectId && userId instanceof ObjectId) {
-    ruleOwners.set(documentId.toHexString(), userId.toHexString());
+  const ruleKey = entityKey(documentId);
+
+  if (name === "routine_rules" && ruleKey && userId instanceof ObjectId) {
+    ruleOwners.set(ruleKey, userId.toHexString());
   }
 
   if (name === "integrations" && documentId instanceof ObjectId && userId instanceof ObjectId) {
@@ -176,8 +179,8 @@ function collectViolations(
   }
 
   if (name === "routine_occurrences") {
-    const ruleId = doc["routineRuleId"];
-    const owner = ruleId instanceof ObjectId ? ruleOwners.get(ruleId.toHexString()) : undefined;
+    const ruleId = entityKey(doc["routineRuleId"]);
+    const owner = ruleId ? ruleOwners.get(ruleId) : undefined;
 
     if (owner === undefined) {
       pushViolation(violations, "ROUTINE_RULE_MISSING", name, documentId, onTruncate);
@@ -263,8 +266,16 @@ function pushViolation(
   violations.push({
     code,
     collection,
-    documentId: documentId instanceof ObjectId ? documentId.toHexString() : "unknown"
+    documentId: entityKey(documentId) ?? "unknown"
   });
+}
+
+function entityKey(value: unknown): string | null {
+  if (value instanceof ObjectId) {
+    return value.toHexString();
+  }
+
+  return typeof value === "string" && parseUuid(value) ? value : null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -5,7 +5,7 @@ import type {
   RoutineRuleDocument
 } from "../../infrastructure/mongodb/collection-catalog.js";
 import { isDuplicateKey } from "../../shared/mongo-error.js";
-import { parseObjectId } from "../../shared/object-id.js";
+import { parseObjectId, parseStoredEntityId, storedEntityIdText } from "../../shared/object-id.js";
 import type { RuleChanges } from "./routine-edit.js";
 import { fromStoredRecurrence, toStoredRecurrence } from "./routine-schedule.js";
 import type {
@@ -112,7 +112,7 @@ export class MongoRoutinesRepository implements RoutinesRepository {
   async findRulesByIds(userId: string, ids: readonly string[]): Promise<RoutineRuleRecord[]> {
     const user = parseObjectId(userId);
     const ruleIds = ids.flatMap((id) => {
-      const parsed = parseObjectId(id);
+      const parsed = parseStoredEntityId(id);
       return parsed ? [parsed] : [];
     });
 
@@ -261,7 +261,7 @@ export class MongoRoutinesRepository implements RoutinesRepository {
     localDate: string;
   }): Promise<RoutineOccurrenceRecord | null> {
     const userId = parseObjectId(input.userId);
-    const ruleId = parseObjectId(input.ruleId);
+    const ruleId = parseStoredEntityId(input.ruleId);
 
     if (!userId || !ruleId) {
       return null;
@@ -440,7 +440,7 @@ class MissingDocumentError extends Error {
 
 function ruleFilter(userId: string, id: string, includeDeleted: boolean) {
   const user = parseObjectId(userId);
-  const ruleId = parseObjectId(id);
+  const ruleId = parseStoredEntityId(id);
 
   if (!user || !ruleId) {
     return null;
@@ -453,7 +453,7 @@ function ruleFilter(userId: string, id: string, includeDeleted: boolean) {
 
 function occurrenceFilter(userId: string, id: string) {
   const user = parseObjectId(userId);
-  const occurrenceId = parseObjectId(id);
+  const occurrenceId = parseStoredEntityId(id);
 
   if (!user || !occurrenceId) {
     return null;
@@ -463,7 +463,7 @@ function occurrenceFilter(userId: string, id: string) {
 }
 
 function ruleDocument(rule: RoutineRuleRecord): RoutineRuleDocument | null {
-  const id = parseObjectId(rule.id);
+  const id = parseStoredEntityId(rule.id);
   const userId = parseObjectId(rule.userId);
 
   if (!id || !userId) {
@@ -507,7 +507,7 @@ function ruleChanges(changes: RuleChanges, now: Date): MatchKeysAndValues<Routin
 
 function toRule(document: RoutineRuleDocument): RoutineRuleRecord {
   return {
-    id: document._id.toHexString(),
+    id: storedEntityIdText(document._id),
     userId: document.userId.toHexString(),
     title: document.title,
     description: document.description,
@@ -525,9 +525,9 @@ function toRule(document: RoutineRuleDocument): RoutineRuleRecord {
 
 function toOccurrence(document: RoutineOccurrenceDocument): RoutineOccurrenceRecord {
   return {
-    id: document._id.toHexString(),
+    id: storedEntityIdText(document._id),
     userId: document.userId.toHexString(),
-    ruleId: document.routineRuleId.toHexString(),
+    ruleId: storedEntityIdText(document.routineRuleId),
     localDate: document.localDate,
     titleOverride: document.titleOverride,
     status: document.status,

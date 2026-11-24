@@ -1,6 +1,17 @@
 import type { ObjectId } from "mongodb";
 
 const objectId = { bsonType: "objectId" } as const;
+const entityId = {
+  anyOf: [
+    objectId,
+    {
+      bsonType: "string",
+      minLength: 36,
+      maxLength: 36,
+      pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    }
+  ]
+} as const;
 const date = { bsonType: "date" } as const;
 const dateOrNull = { bsonType: ["date", "null"] } as const;
 const schemaVersion = { bsonType: "number", enum: [1] } as const;
@@ -141,7 +152,7 @@ export type DashboardConfigDocument = {
 };
 
 export type RoutineRuleDocument = {
-  _id: ObjectId;
+  _id: ObjectId | string;
   schemaVersion: 1;
   userId: ObjectId;
   title: string;
@@ -161,10 +172,10 @@ export type RoutineRuleDocument = {
 };
 
 export type RoutineOccurrenceDocument = {
-  _id: ObjectId;
+  _id: ObjectId | string;
   schemaVersion: 1;
   userId: ObjectId;
-  routineRuleId: ObjectId;
+  routineRuleId: ObjectId | string;
   localDate: string;
   titleOverride: string | null;
   status: "pending" | "done" | "hidden";
@@ -173,7 +184,7 @@ export type RoutineOccurrenceDocument = {
 };
 
 export type TimerSessionDocument = {
-  _id: ObjectId;
+  _id: ObjectId | string;
   schemaVersion: 1;
   userId: ObjectId;
   preset: {
@@ -344,14 +355,15 @@ const textOrNull = (maxLength: number): JsonSchema => nullableString(maxLength);
 
 function documentSchema(
   required: readonly string[],
-  properties: Readonly<Record<string, JsonSchema>>
+  properties: Readonly<Record<string, JsonSchema>>,
+  idSchema: JsonSchema = objectId
 ): JsonSchema {
   return {
     bsonType: "object",
     additionalProperties: false,
     required: ["schemaVersion", ...required],
     properties: {
-      _id: objectId,
+      _id: idSchema,
       schemaVersion,
       ...properties
     }
@@ -556,7 +568,8 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
         createdAt: date,
         updatedAt: date,
         deletedAt: dateOrNull
-      }
+      },
+      entityId
     )
   },
   {
@@ -573,13 +586,14 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
       ],
       {
         userId: objectId,
-        routineRuleId: objectId,
+        routineRuleId: entityId,
         localDate,
         titleOverride: textOrNull(120),
         status: { bsonType: "string", enum: ["pending", "done", "hidden"] },
         completedAt: dateOrNull,
         excludedAt: dateOrNull
-      }
+      },
+      entityId
     )
   },
   {
@@ -618,7 +632,8 @@ export const COLLECTION_DEFINITIONS: readonly CollectionDefinition[] = [
         completedAt: dateOrNull,
         cycleNumber: { bsonType: "number", minimum: 0, maximum: 10_000 },
         version: { bsonType: "number", minimum: 1, maximum: 1_000_000 }
-      }
+      },
+      entityId
     )
   },
   {
