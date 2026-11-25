@@ -7,7 +7,7 @@ export {
   subscribeRoutineLibrary,
   updateRoutineLibrary
 } from "./model/routine-library-store";
-export type { RoutineDayOffset } from "./model/routine-day";
+export type { RoutineDayOffset, RoutineOccurrence } from "./model/routine-day";
 export {
   addDays,
   addOneOff,

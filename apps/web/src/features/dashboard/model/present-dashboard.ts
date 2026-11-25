@@ -1,0 +1,269 @@
+import type { Dashboard, NewsTopic, TimerSnapshot } from "@dashboard/contracts";
+import type { CalendarEvent } from "@/features/calendar";
+import type { NewsItem } from "@/features/news";
+import type { RoutineOccurrence } from "@/features/routines";
+import type { TimerSession } from "@/features/timer";
+import type { WeatherSnapshot } from "@/features/weather";
+
+import { formatInZone } from "@/lib/format/date-time";
+
+import type { WidgetStatus } from "./widget-status";
+
+const NEWS_TOPIC_LABELS = {
+  llm: "LLM",
+  agents: "Агенты",
+  research: "Исследования",
+  devtools: "Инструменты",
+  vision: "Зрение",
+  robotics: "Робототехника",
+  business: "Бизнес"
+} as const satisfies Record<NewsTopic, NewsItem["topic"]>;
+
+const CALENDAR_COLORS = ["#1f6feb", "#8a5a00", "#1a7f37", "#8250df"] as const;
+const WORK_DURATION_MS = 25 * 60 * 1000;
+const SHORT_BREAK_MS = 5 * 60 * 1000;
+const LONG_BREAK_MS = 15 * 60 * 1000;
+
+export type PresentedSection<T> = Readonly<{
+  status: WidgetStatus;
+  data: T;
+  updatedAt: number | null;
+}>;
+
+export type PresentedDashboard = Readonly<{
+  generatedAt: string;
+  timeZone: string;
+  timeFormat: "12" | "24";
+  datetime: PresentedSection<null>;
+  weather: PresentedSection<WeatherSnapshot | null>;
+  calendar: PresentedSection<readonly CalendarEvent[]>;
+  routines: PresentedSection<readonly RoutineOccurrence[]>;
+  timer: PresentedSection<TimerSession | null>;
+  news: PresentedSection<readonly NewsItem[]>;
+}>;
+
+export function presentDashboard(dashboard: Dashboard, timeZone: string): PresentedDashboard {
+  const accountZone =
+    dashboard.datetime.status === "ready" ? dashboard.datetime.timezone : timeZone;
+  const accountFormat =
+    dashboard.datetime.status === "ready" ? dashboard.datetime.timeFormat : "24";
+
+  return {
+    generatedAt: dashboard.generatedAt,
+    timeZone: accountZone,
+    timeFormat: accountFormat,
+    datetime: {
+      status: dashboard.datetime.status === "ready" ? "success" : "error",
+      data: null,
+      updatedAt: null
+    },
+    weather: presentWeather(dashboard.weather, accountZone),
+    calendar: presentCalendar(dashboard.calendar),
+    routines: presentRoutines(dashboard.routines),
+    timer: presentTimer(dashboard.timer),
+    news: presentNews(dashboard.news)
+  };
+}
+
+function presentWeather(
+  section: Dashboard["weather"],
+  timeZone: string
+): PresentedSection<WeatherSnapshot | null> {
+  if (section.status !== "ready" && section.status !== "stale") {
+    return { status: toWidgetStatus(section.status), data: null, updatedAt: null };
+  }
+
+  return {
+    status: toWidgetStatus(section.status),
+    updatedAt: timestamp(section.updatedAt),
+    data: {
+      locationLabel: section.weather.locationLabel,
+      temperatureC: section.weather.temperature,
+      apparentTemperatureC: section.weather.apparentTemperature,
+      description: section.weather.description,
+      precipitationProbability: section.weather.precipitationProbability,
+      windSpeedKmh: section.weather.windSpeedKmh,
+      minC: section.weather.min,
+      maxC: section.weather.max,
+      weatherCode: section.weather.weatherCode,
+      isDay: section.weather.isDay,
+      scene: section.weather.scene,
+      updatedAt: timestamp(section.updatedAt) ?? Date.parse(section.updatedAt),
+      hourly: section.weather.hourly.map((hour) => ({
+        hourLabel: formatInZone(Date.parse(hour.at), timeZone, "HH:mm"),
+        temperatureC: hour.temperature,
+        precipitationProbability: hour.precipitationProbability,
+        weatherCode: hour.weatherCode
+      }))
+    }
+  };
+}
+
+function presentCalendar(
+  section: Dashboard["calendar"]
+): PresentedSection<readonly CalendarEvent[]> {
+  if (section.status !== "ready" && section.status !== "stale") {
+    return { status: toWidgetStatus(section.status), data: [], updatedAt: null };
+  }
+
+  return {
+    status: toWidgetStatus(section.status),
+    updatedAt: timestamp(section.updatedAt),
+    data: section.events.map((event) => ({
+      id: event.id,
+      title: event.title,
+      startAt: Date.parse(event.startAt),
+      endAt: Date.parse(event.endAt),
+      allDay: event.allDay,
+      location: event.location,
+      meetingUrl: event.meetingUrl,
+      htmlLink: event.htmlLink,
+      status: event.status,
+      calendar: {
+        name: event.calendarName,
+        color: calendarColor(event.calendarName)
+      }
+    }))
+  };
+}
+
+function presentNews(section: Dashboard["news"]): PresentedSection<readonly NewsItem[]> {
+  if (section.status === "pending") {
+    return { status: "loading", data: [], updatedAt: null };
+  }
+
+  if (section.status !== "ready" && section.status !== "stale") {
+    return {
+      status: toWidgetStatus(section.status),
+      data: [],
+      updatedAt: section.status === "empty" ? timestamp(section.updatedAt) : null
+    };
+  }
+
+  return {
+    status: toWidgetStatus(section.status),
+    updatedAt: timestamp(section.updatedAt),
+    data: section.items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      excerpt: item.excerpt,
+      source: item.source,
+      official: item.official,
+      topic: NEWS_TOPIC_LABELS[item.topic],
+      publishedAt: Date.parse(item.publishedAt),
+      url: item.url
+    }))
+  };
+}
+
+function presentRoutines(
+  section: Dashboard["routines"]
+): PresentedSection<readonly RoutineOccurrence[]> {
+  if (section.status !== "ready") {
+    return { status: "error", data: [], updatedAt: null };
+  }
+
+  const source = readRoutineItems(section.day);
+
+  if (source === null) {
+    return { status: "error", data: [], updatedAt: null };
+  }
+
+  const items = source
+    .filter((item) => item.status !== "hidden")
+    .map((item) => ({
+      id: item.id,
+      title: item.title,
+      dayOffset: 0 as const,
+      done: item.status === "done"
+    }));
+
+  return {
+    status: items.length === 0 ? "empty" : "success",
+    data: items,
+    updatedAt: null
+  };
+}
+
+function presentTimer(section: Dashboard["timer"]): PresentedSection<TimerSession | null> {
+  if (section.status !== "ready") {
+    return { status: "error", data: null, updatedAt: null };
+  }
+
+  return { status: "success", data: toTimerSession(section.timer), updatedAt: null };
+}
+
+function toTimerSession(snapshot: TimerSnapshot): TimerSession {
+  const active = snapshot.session;
+  const phase = active?.phase ?? snapshot.next.phase;
+  const durationMs = active?.durationMs ?? phaseDuration(phase);
+
+  return {
+    mode: "pomodoro",
+    phase,
+    runStatus: active?.runStatus ?? "idle",
+    durationMs,
+    remainingMs: active?.remainingMs ?? durationMs,
+    endsAt: active?.endsAt ? Date.parse(active.endsAt) : null,
+    completedWorkInCycle: active?.cycleNumber ?? snapshot.next.cycleNumber,
+    completedWorkToday: snapshot.completedToday,
+    dailyGoal: snapshot.dailyGoal
+  };
+}
+
+function phaseDuration(phase: TimerSession["phase"]): number {
+  switch (phase) {
+    case "work":
+      return WORK_DURATION_MS;
+    case "short-break":
+      return SHORT_BREAK_MS;
+    case "long-break":
+      return LONG_BREAK_MS;
+  }
+}
+
+function toWidgetStatus(
+  status: "ready" | "stale" | "empty" | "unavailable" | "error"
+): WidgetStatus {
+  switch (status) {
+    case "ready":
+      return "success";
+    case "stale":
+      return "stale";
+    case "empty":
+      return "empty";
+    case "unavailable":
+      return "disconnected";
+    case "error":
+      return "error";
+  }
+}
+
+type RoutineDayItem = Extract<Dashboard["routines"], { status: "ready" }>["day"]["items"][number];
+
+function readRoutineItems(day: unknown): readonly RoutineDayItem[] | null {
+  if (typeof day !== "object" || day === null || !("items" in day) || !Array.isArray(day.items)) {
+    return null;
+  }
+
+  return day.items as readonly RoutineDayItem[];
+}
+
+function timestamp(value: string | null): number | null {
+  if (value === null) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
+function calendarColor(name: string): string {
+  let hash = 0;
+
+  for (const char of name) {
+    hash = (hash + char.charCodeAt(0)) % CALENDAR_COLORS.length;
+  }
+
+  return CALENDAR_COLORS[hash] ?? CALENDAR_COLORS[0];
+}

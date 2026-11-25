@@ -70,12 +70,23 @@ export function getWidgetStatusLabel(status: WidgetStatus): string {
   }
 }
 
+const GENERIC_EMPTY_COPY: WidgetStatusCopy = {
+  title: "Пока нет данных",
+  description: "В этой карточке появится содержимое, когда источник начнёт отдавать записи.",
+  action: { label: "Настроить виджеты", kind: "link", href: "/settings/widgets" }
+};
+
 export function getWidgetStatusCopy(
   type: WidgetType,
-  status: WidgetStatus
+  status: WidgetStatus,
+  emptyMode: "section" | "placeholder" = "section"
 ): WidgetStatusCopy | null {
   if (status === "loading" || showsWidgetContent(status)) {
     return null;
+  }
+
+  if (status === "empty" && emptyMode === "placeholder" && (type === "calendar" || type === "news")) {
+    return GENERIC_EMPTY_COPY;
   }
 
   if (status === "empty") {
@@ -87,11 +98,22 @@ export function getWidgetStatusCopy(
       };
     }
 
-    return {
-      title: "Пока нет данных",
-      description: "В этой карточке появится содержимое, когда источник начнёт отдавать записи.",
-      action: { label: "Настроить виджеты", kind: "link", href: "/settings/widgets" }
-    };
+    if (type === "calendar") {
+      return {
+        title: "На сегодня событий нет",
+        description:
+          "Завершившиеся события скрыты. Обновление запросит список у Google Calendar."
+      };
+    }
+
+    if (type === "news") {
+      return {
+        title: "За последние сутки новостей нет",
+        description: "В ленте нет материалов за сегодня и последние 24 часа."
+      };
+    }
+
+    return GENERIC_EMPTY_COPY;
   }
 
   if (status === "permission-required") {

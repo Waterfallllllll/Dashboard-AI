@@ -28,6 +28,7 @@ import {
 
 const OPEN_METEO_HOST = "api.open-meteo.com";
 const OPEN_METEO_GEO_HOST = "geocoding-api.open-meteo.com";
+const DASHBOARD_BUDGET_MS = 400;
 
 export type WeatherLocationPort = {
   read(actor: Actor): Promise<WeatherPlace | null>;
@@ -40,6 +41,7 @@ export type TemperaturePort = {
 
 export class WeatherService {
   private readonly cache = new WeatherCache(() => this.now().getTime());
+  private readonly inflight = new Map<string, Promise<WeatherSection>>();
 
   constructor(
     private readonly locations: WeatherLocationPort,
@@ -52,7 +54,11 @@ export class WeatherService {
   ) {}
 
   async load(viewer: Viewer): Promise<WeatherSection> {
-    return this.section(viewer, await this.locations.read(viewer));
+    return this.section(viewer, await this.locations.read(viewer), "wait");
+  }
+
+  async loadForDashboard(viewer: Viewer): Promise<WeatherSection> {
+    return this.section(viewer, await this.locations.read(viewer), "budget");
   }
 
   async forCoordinates(viewer: Viewer, query: WeatherQuery): Promise<WeatherSection> {
@@ -62,7 +68,8 @@ export class WeatherService {
 
     return this.section(
       viewer,
-      roundPlace(Number(query.latitude), Number(query.longitude), "Выбранная точка")
+      roundPlace(Number(query.latitude), Number(query.longitude), "Выбранная точка"),
+      "wait"
     );
   }
 
@@ -109,7 +116,11 @@ export class WeatherService {
     return this.locations.read(actor);
   }
 
-  private async section(viewer: Viewer, place: WeatherPlace | null): Promise<WeatherSection> {
+  private async section(
+    viewer: Viewer,
+    place: WeatherPlace | null,
+    mode: "wait" | "budget"
+  ): Promise<WeatherSection> {
     try {
       if (!place) {
         return { status: "unavailable" };
@@ -123,23 +134,63 @@ export class WeatherService {
         return { status: "ready", updatedAt: fresh.updatedAt, weather: fresh.weather };
       }
 
-      try {
-        const weather = await this.fetchForecast(place, unit, viewer.timezone);
-        const updatedAt = this.now().toISOString();
-        this.cache.put(key, weather, updatedAt);
-        return { status: "ready", updatedAt, weather };
-      } catch (error) {
-        if (!(error instanceof ProviderUnavailableError)) {
-          throw error;
-        }
+      const pending = this.enqueue(viewer, place, unit, key);
 
-        const stale = this.cache.stale(key);
-        return stale
-          ? { status: "stale", updatedAt: stale.updatedAt, weather: stale.weather }
-          : { status: "error", message: SECTION_ERROR_MESSAGE };
+      if (mode === "wait") {
+        return pending;
       }
+
+      const stale = this.cache.stale(key);
+
+      if (stale) {
+        return { status: "stale", updatedAt: stale.updatedAt, weather: stale.weather };
+      }
+
+      return budget(pending, { status: "unavailable" }, DASHBOARD_BUDGET_MS);
     } catch {
       return { status: "error", message: SECTION_ERROR_MESSAGE };
+    }
+  }
+
+  private enqueue(
+    viewer: Viewer,
+    place: WeatherPlace,
+    unit: WeatherSnapshot["unit"],
+    key: string
+  ): Promise<WeatherSection> {
+    const existing = this.inflight.get(key);
+
+    if (existing) {
+      return existing;
+    }
+
+    const pending = this.fetchSection(viewer, place, unit, key).finally(() => {
+      this.inflight.delete(key);
+    });
+    this.inflight.set(key, pending);
+    return pending;
+  }
+
+  private async fetchSection(
+    viewer: Viewer,
+    place: WeatherPlace,
+    unit: WeatherSnapshot["unit"],
+    key: string
+  ): Promise<WeatherSection> {
+    try {
+      const weather = await this.fetchForecast(place, unit, viewer.timezone);
+      const updatedAt = this.now().toISOString();
+      this.cache.put(key, weather, updatedAt);
+      return { status: "ready", updatedAt, weather };
+    } catch (error) {
+      if (!(error instanceof ProviderUnavailableError)) {
+        return { status: "error", message: SECTION_ERROR_MESSAGE };
+      }
+
+      const stale = this.cache.stale(key);
+      return stale
+        ? { status: "stale", updatedAt: stale.updatedAt, weather: stale.weather }
+        : { status: "error", message: SECTION_ERROR_MESSAGE };
     }
   }
 
@@ -153,7 +204,8 @@ export class WeatherService {
       allowHosts: [OPEN_METEO_HOST],
       provider: "weather",
       fetchImpl: this.fetchImpl,
-      breaker: this.forecastBreaker
+      breaker: this.forecastBreaker,
+      maxAttempts: 1
     });
     const weather = parseForecast(parseJson(body), place, unit, this.now());
 
@@ -171,4 +223,17 @@ function providerTimeZone(value: string): string {
 
 function parseJson(body: string): unknown {
   return JSON.parse(body) as unknown;
+}
+
+function budget<T>(pending: Promise<T>, fallback: T, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      resolve(fallback);
+    }, ms);
+  });
+
+  return Promise.race([pending, deadline]).finally(() => {
+    clearTimeout(timer);
+  });
 }

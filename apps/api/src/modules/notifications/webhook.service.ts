@@ -5,7 +5,13 @@ import { API_ERROR_CODES } from "@dashboard/contracts";
 import type { JobQueue } from "../../infrastructure/jobs/memory-job-queue.js";
 import { ApiError } from "../../shared/errors/api-error.js";
 
-const START_COMMAND = /^\/start(?:@[A-Za-z0-9_]{5,32})?\s+([A-Za-z0-9_-]{20,128})$/;
+const START_COMMAND = /^\/start(?:@[A-Za-z0-9_]{5,32})?(?:\s+([A-Za-z0-9_-]{20,128}))?$/;
+const LINKED_TEXT =
+  "Telegram подключён к Evergreen. Уведомления таймера будут приходить в этот чат.";
+const EXPIRED_TEXT =
+  "Ссылка устарела или уже использована. Запросите новую в настройках интеграций.";
+const MISSING_TEXT =
+  "Эта команда без кода привязку не завершает. Нажмите «Подключить Telegram» в настройках и откройте новую ссылку.";
 
 export type TelegramUpdate = {
   readonly secret: string | undefined;
@@ -19,6 +25,8 @@ export type GoogleCalendarNotice = {
   readonly resourceState: string | undefined;
 };
 
+export type TelegramStartResult = "linked" | "invalid" | "ignored";
+
 export class WebhookService {
   constructor(
     private readonly telegramSecret: string | null,
@@ -29,7 +37,8 @@ export class WebhookService {
       telegramUserId: string
     ) => Promise<"linked" | "invalid">,
     private readonly maxAttempts: number,
-    private readonly now: () => Date = () => new Date()
+    private readonly now: () => Date = () => new Date(),
+    private readonly reply: ((chatId: string, text: string) => Promise<void>) | null = null
   ) {}
 
   authorizeTelegram(secret: string | undefined): void {
@@ -40,16 +49,25 @@ export class WebhookService {
     requireConfiguredSecret(this.googleToken, token);
   }
 
-  async acceptTelegram(update: TelegramUpdate): Promise<void> {
+  async acceptTelegram(update: TelegramUpdate): Promise<TelegramStartResult> {
     this.authorizeTelegram(update.secret);
 
-    const token = update.text ? START_COMMAND.exec(update.text.trim())?.[1] : undefined;
+    const match = update.text ? START_COMMAND.exec(update.text.trim()) : null;
+    const token = match?.[1];
+    const chatId = update.telegramUserId;
 
-    if (!token || !update.telegramUserId || !/^\d{1,20}$/.test(update.telegramUserId)) {
-      return;
+    if (!chatId || !/^\d{1,20}$/.test(chatId) || !match) {
+      return "ignored";
     }
 
-    await this.linkTelegram(token, update.telegramUserId);
+    if (!token) {
+      await this.safeReply(chatId, MISSING_TEXT);
+      return "ignored";
+    }
+
+    const result = await this.linkTelegram(token, chatId);
+    await this.safeReply(chatId, result === "linked" ? LINKED_TEXT : EXPIRED_TEXT);
+    return result;
   }
 
   async acceptGoogleCalendar(notice: GoogleCalendarNotice): Promise<void> {
@@ -69,6 +87,18 @@ export class WebhookService {
       userId: null,
       maxAttempts: this.maxAttempts
     });
+  }
+
+  private async safeReply(chatId: string, text: string): Promise<void> {
+    if (!this.reply) {
+      return;
+    }
+
+    try {
+      await this.reply(chatId, text);
+    } catch {
+      return;
+    }
   }
 }
 

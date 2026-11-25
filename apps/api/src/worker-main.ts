@@ -2,6 +2,7 @@ import "./load-environment.js";
 
 import { ApiError } from "./shared/errors/api-error.js";
 import { createBackend } from "./app/create-backend.js";
+import { workerJobLogLevel } from "./infrastructure/jobs/worker-log-level.js";
 import { runWorkerCycle } from "./infrastructure/jobs/worker-cycle.js";
 import { ProviderUnavailableError } from "./infrastructure/http/provider-guard.js";
 import { localDateInTimeZone } from "./shared/local-date.js";
@@ -34,18 +35,28 @@ try {
         ).getTime(),
         maxAttempts: backend.runtime.worker.maxAttempts,
         onJob: (event) => {
-          backend.logger.info(
-            {
-              workerId,
-              jobId: event.id,
-              jobType: event.type,
-              attempt: event.attempt,
-              outcome: event.outcome,
-              durationMs: event.durationMs,
-              ...(event.userId ? { userId: event.userId } : {})
-            },
-            "Задача worker"
-          );
+          const fields = {
+            workerId,
+            jobId: event.id,
+            jobType: event.type,
+            attempt: event.attempt,
+            outcome: event.outcome,
+            durationMs: event.durationMs,
+            ...(event.userId ? { userId: event.userId } : {})
+          };
+          const level = workerJobLogLevel(event);
+
+          if (level === "debug") {
+            backend.logger.debug(fields, "Задача worker");
+            return;
+          }
+
+          if (level === "warn") {
+            backend.logger.warn(fields, "Задача worker");
+            return;
+          }
+
+          backend.logger.info(fields, "Задача worker");
         },
         handlers: {
           timerDue: (userId, sessionId) => backend.personal.timers.handleDue(userId, sessionId),
@@ -113,7 +124,10 @@ try {
           }
         }
       });
-      backend.logger.info({ workerId, result, durationMs: Date.now() - started }, "Цикл worker");
+      backend.logger.debug(
+        { workerId, result, durationMs: Date.now() - started },
+        "Цикл worker"
+      );
     } catch (error) {
       const code = error instanceof ProviderUnavailableError ? error.provider : "unexpected";
       backend.logger.error(

@@ -22,8 +22,17 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
+const webPushEnv = webPushPublicEnv();
+
 const nextConfig: NextConfig = {
   output: "standalone",
+  ...(webPushEnv ? { env: webPushEnv } : {}),
+  experimental: {
+    // Turbopack 16.4 восстанавливает версию HMR из файлового кэша .next/dev.
+    // Первая подписка тогда отвечает restart, сервер шлёт «HMR hash mismatch»,
+    // и открытая вкладка перезагружает документ без остановки.
+    turbopackFileSystemCacheForDev: false
+  },
   async rewrites() {
     const origin = internalApiOrigin(readInternalApiUrl());
 
@@ -72,9 +81,25 @@ function readInternalApiUrl(): string | undefined {
     return configured;
   }
 
+  return readRootEnv("INTERNAL_API_URL");
+}
+
+function webPushPublicEnv(): { NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY: string } | undefined {
+  const configured =
+    process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY?.trim() ||
+    readRootEnv("NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY");
+
+  if (!configured) {
+    return undefined;
+  }
+
+  return { NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY: configured };
+}
+
+function readRootEnv(name: string): string | undefined {
   try {
     const source = readFileSync(resolve(import.meta.dirname, "../../.env"), "utf8");
-    return source.match(/^INTERNAL_API_URL=(.*)$/m)?.[1];
+    return source.match(new RegExp(`^${name}=(.*)$`, "m"))?.[1]?.trim() || undefined;
   } catch {
     return undefined;
   }

@@ -8,33 +8,25 @@ export class PrismaNewsRepository implements NewsRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
   async upsertMany(items: readonly NewsDraft[], now: Date): Promise<void> {
-    for (const item of items) {
-      await this.prisma.newsItem.upsert({
-        where: { contentHash: item.contentHash },
-        create: {
-          source: item.source,
-          title: item.title,
-          excerpt: item.excerpt,
-          canonicalUrl: item.canonicalUrl,
-          contentHash: item.contentHash,
-          publishedAt: item.publishedAt,
-          language: item.language,
-          topics: [...item.topics],
-          imageUrl: item.imageUrl,
-          createdAt: now
-        },
-        update: {
-          source: item.source,
-          title: item.title,
-          excerpt: item.excerpt,
-          canonicalUrl: item.canonicalUrl,
-          publishedAt: item.publishedAt,
-          language: item.language,
-          topics: [...item.topics],
-          imageUrl: item.imageUrl
-        }
-      });
+    if (items.length === 0) {
+      return;
     }
+
+    await this.prisma.newsItem.createMany({
+      data: items.map((item) => ({
+        source: item.source,
+        title: item.title,
+        excerpt: item.excerpt,
+        canonicalUrl: item.canonicalUrl,
+        contentHash: item.contentHash,
+        publishedAt: item.publishedAt,
+        language: item.language,
+        topics: [...item.topics],
+        imageUrl: item.imageUrl,
+        createdAt: now
+      })),
+      skipDuplicates: true
+    });
   }
 
   async recent(now: Date, limit: number): Promise<readonly StoredNewsItem[]> {

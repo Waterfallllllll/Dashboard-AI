@@ -46,6 +46,57 @@ export class TelegramClient {
     this.checkedAt = this.now();
   }
 
+  async setWebhook(webhookUrl: string, secret: string): Promise<void> {
+    const target = webhookTarget(webhookUrl);
+
+    if (!/^[A-Za-z0-9_-]{16,128}$/.test(secret)) {
+      throw new ProviderUnavailableError("telegram", true);
+    }
+
+    const url = new URL(`https://api.telegram.org/bot${this.token}/setWebhook`);
+    assertAllowedUrl(url, ["api.telegram.org"], "telegram");
+    this.breaker.assertClosed("telegram");
+    let response: Response;
+
+    try {
+      response = await this.fetchImpl(url.toString(), {
+        method: "POST",
+        redirect: "manual",
+        signal: AbortSignal.timeout(5000),
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "user-agent": "EvergreenDashboard/0.1"
+        },
+        body: JSON.stringify({
+          url: target,
+          secret_token: secret,
+          allowed_updates: ["message"],
+          drop_pending_updates: false
+        })
+      });
+    } catch {
+      this.breaker.fail();
+      throw new ProviderUnavailableError("telegram");
+    }
+
+    if (!response.ok) {
+      await response.body?.cancel();
+      this.breaker.fail();
+      throw new ProviderUnavailableError(
+        "telegram",
+        response.status < 500 && response.status !== 429
+      );
+    }
+
+    const accepted = webhookAccepted(await response.text());
+    this.breaker.succeed();
+
+    if (!accepted) {
+      throw new ProviderUnavailableError("telegram", true);
+    }
+  }
+
   async sendMessage(chatId: string, text: string): Promise<{ messageId: string | null }> {
     if (!/^\d{1,20}$/.test(chatId) || text.length === 0 || text.length > 240) {
       throw new ProviderUnavailableError("telegram", true);
@@ -116,6 +167,36 @@ function parseJson(body: string): unknown {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const WEBHOOK_PATH = "/api/v1/webhooks/telegram";
+
+function webhookTarget(value: string): string {
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    throw new ProviderUnavailableError("telegram", true);
+  }
+
+  if (
+    url.protocol !== "https:" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.hash !== "" ||
+    url.search !== "" ||
+    url.pathname !== WEBHOOK_PATH
+  ) {
+    throw new ProviderUnavailableError("telegram", true);
+  }
+
+  return url.href;
+}
+
+function webhookAccepted(body: string): boolean {
+  const parsed = parseJson(body);
+  return isRecord(parsed) && parsed.ok === true && parsed.result === true;
 }
 
 function messageIdOf(body: string): string | null {

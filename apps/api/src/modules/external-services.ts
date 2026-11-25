@@ -100,7 +100,7 @@ export function createExternalServices(input: {
       input.widgets,
       input.routines,
       input.timers,
-      weather,
+      { load: (viewer) => weather.loadForDashboard(viewer) },
       calendar,
       news,
       clock

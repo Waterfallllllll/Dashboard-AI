@@ -1102,6 +1102,7 @@ Worker:
 - `GOOGLE_REDIRECT_URI`;
 - `TELEGRAM_BOT_TOKEN`;
 - `TELEGRAM_WEBHOOK_SECRET`;
+- `TELEGRAM_WEBHOOK_URL` — публичный `https://<хост>/api/v1/webhooks/telegram`; без него API не регистрирует webhook;
 - `WEB_PUSH_PUBLIC_KEY`;
 - `WEB_PUSH_PRIVATE_KEY`;
 - provider keys для погоды/новостей;

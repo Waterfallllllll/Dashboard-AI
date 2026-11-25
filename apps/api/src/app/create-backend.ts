@@ -53,6 +53,7 @@ export type Backend = {
   readonly jobs: JobQueue;
   readonly metrics: MetricsSource;
   readonly renewWatches: () => Promise<void>;
+  readonly registerTelegramWebhook: () => Promise<void>;
   readonly close: () => Promise<void>;
 };
 
@@ -116,7 +117,13 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
     runtime.googleCalendarWebhookToken,
     jobs,
     (token, telegramUserId) => external.integrations.completeTelegramLink(token, telegramUserId),
-    runtime.worker.maxAttempts
+    runtime.worker.maxAttempts,
+    () => new Date(),
+    telegram
+      ? async (chatId, text) => {
+          await telegram.sendMessage(chatId, text);
+        }
+      : null
   );
   const authService = new AuthService(
     new PrismaAuthRepository(prisma),
@@ -153,8 +160,29 @@ export async function createBackend(env: NodeJS.ProcessEnv = process.env): Promi
     jobs,
     metrics: createMetrics(jobs, () => notificationRepository.countDeliveries()),
     renewWatches: () => renewDueWatches(integrationsRepository, gateway, runtime, external),
+    registerTelegramWebhook: () =>
+      registerTelegramWebhook(
+        telegram,
+        runtime.telegramWebhookUrl,
+        runtime.telegramWebhookSecret,
+        logger
+      ),
     close: () => disconnectPrisma()
   };
+}
+
+async function registerTelegramWebhook(
+  telegram: TelegramClient | null,
+  webhookUrl: string | null,
+  secret: string | null,
+  logger: Logger
+): Promise<void> {
+  if (!telegram || !webhookUrl || !secret) {
+    return;
+  }
+
+  await telegram.setWebhook(webhookUrl, secret);
+  logger.info({ host: new URL(webhookUrl).host }, "Webhook Telegram зарегистрирован");
 }
 
 async function renewDueWatches(

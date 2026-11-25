@@ -22,6 +22,8 @@ export class UnavailableSectionSource
   }
 }
 
+const SECTION_DEADLINE_MS = 10_000;
+
 type SectionError = { readonly status: "error"; readonly message: string };
 type ReadyDatetime = {
   readonly status: "ready";
@@ -46,12 +48,12 @@ export class DashboardService {
     const today = localDateInTimeZone(now, viewer.timezone);
     const [datetime, widgets, routines, timer, weather, calendar, news] = await Promise.allSettled([
       Promise.resolve(datetimeSection(viewer, now)),
-      this.widgets.get(viewer),
-      this.routines.listDay(viewer, date, today),
-      this.timers.current(viewer, date, viewer.timezone),
-      this.weather.load(viewer, date),
-      this.calendar.load(viewer, date),
-      this.news.load(viewer, date)
+      withDeadline(this.widgets.get(viewer)),
+      withDeadline(this.routines.listDay(viewer, date, today)),
+      withDeadline(this.timers.current(viewer, date, viewer.timezone)),
+      withDeadline(this.weather.load(viewer, date)),
+      withDeadline(this.calendar.load(viewer, date)),
+      withDeadline(this.news.load(viewer, date))
     ]);
 
     return {
@@ -95,4 +97,29 @@ function externalSection<T>(result: PromiseSettledResult<T>): T | SectionError {
 
 function sectionError(): SectionError {
   return { status: "error", message: SECTION_ERROR_MESSAGE };
+}
+
+function withDeadline<T>(work: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let settled = false;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      if (!settled) {
+        reject(new Error("section deadline"));
+      }
+    }, SECTION_DEADLINE_MS);
+  });
+
+  deadline.catch(() => undefined);
+  work.catch(() => undefined);
+
+  return Promise.race([
+    work.finally(() => {
+      settled = true;
+    }),
+    deadline
+  ]).finally(() => {
+    settled = true;
+    clearTimeout(timer);
+  });
 }

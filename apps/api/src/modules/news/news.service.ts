@@ -26,6 +26,7 @@ import {
 } from "./news-model.js";
 
 const FRESH_MS = 15 * 60 * 1000;
+const REFRESH_BUDGET_MS = 400;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const parser = new Parser();
 const officialSources = new Set(
@@ -38,6 +39,7 @@ export type NewsPreferencePort = {
 
 export class NewsService {
   private refreshedAt: number | null = null;
+  private refreshTask: Promise<void> | null = null;
   private readonly breakers = new Map<string, CircuitBreaker>();
 
   constructor(
@@ -53,50 +55,126 @@ export class NewsService {
       limit: 5,
       sourceMode: "all" as const
     }));
-    const fresh = this.refreshedAt !== null && this.now().getTime() - this.refreshedAt < FRESH_MS;
-    let failed = false;
-
-    if (!fresh) {
-      try {
-        await this.refresh();
-        this.refreshedAt = this.now().getTime();
-      } catch {
-        failed = true;
-      }
-    }
-
     const stored = await this.news.recent(this.now(), 50);
     const items = visibleItems(stored, viewer, preference, query, this.now());
-    const updatedAt =
-      this.refreshedAt === null
-        ? (items[0]?.publishedAt ?? null)
-        : new Date(this.refreshedAt).toISOString();
+    const fresh = this.refreshedAt !== null && this.now().getTime() - this.refreshedAt < FRESH_MS;
 
-    if (items.length === 0) {
-      if (failed || this.refreshedAt === null) {
-        return { status: "error", message: SECTION_ERROR_MESSAGE };
+    const latest = items[0];
+
+    if (latest) {
+      if (!fresh) {
+        void this.refreshShared().then(
+          () => {
+            this.refreshedAt = this.now().getTime();
+          },
+          () => undefined
+        );
       }
 
+      return {
+        status: "ready",
+        updatedAt:
+          this.refreshedAt === null ? latest.publishedAt : new Date(this.refreshedAt).toISOString(),
+        items
+      };
+    }
+
+    if (fresh && this.refreshedAt !== null) {
       return { status: "empty", updatedAt: new Date(this.refreshedAt).toISOString() };
     }
 
-    if (failed) {
-      return updatedAt
-        ? { status: "stale", updatedAt, items }
-        : { status: "error", message: SECTION_ERROR_MESSAGE };
+    const outcome = await budget(
+      this.refreshShared().then(
+        () => "ok" as const,
+        () => "fail" as const
+      ),
+      "timeout" as const,
+      REFRESH_BUDGET_MS
+    );
+
+    if (outcome === "timeout") {
+      void this.refreshShared().then(
+        () => {
+          this.refreshedAt = this.now().getTime();
+        },
+        () => undefined
+      );
+      return { status: "pending" };
+    }
+
+    if (outcome === "fail") {
+      return { status: "error", message: SECTION_ERROR_MESSAGE };
+    }
+
+    this.refreshedAt = this.now().getTime();
+    const refreshed = visibleItems(
+      await this.news.recent(this.now(), 50),
+      viewer,
+      preference,
+      query,
+      this.now()
+    );
+
+    if (refreshed.length === 0 || this.refreshedAt === null) {
+      return {
+        status: "empty",
+        updatedAt: this.refreshedAt === null ? null : new Date(this.refreshedAt).toISOString()
+      };
     }
 
     return {
       status: "ready",
-      updatedAt:
-        this.refreshedAt === null
-          ? this.now().toISOString()
-          : new Date(this.refreshedAt).toISOString(),
-      items
+      updatedAt: new Date(this.refreshedAt).toISOString(),
+      items: refreshed
     };
   }
 
   async refresh(): Promise<void> {
+    return this.refreshShared();
+  }
+
+  async loadSettled(viewer: Viewer, query?: NewsQuery): Promise<NewsSection> {
+    if (this.refreshTask) {
+      return this.afterRefresh(viewer, query);
+    }
+
+    const current = await this.load(viewer, undefined, query);
+    return current.status === "pending" ? this.afterRefresh(viewer, query) : current;
+  }
+
+  async refreshSection(viewer: Viewer, query?: NewsQuery): Promise<NewsSection> {
+    return this.afterRefresh(viewer, query);
+  }
+
+  private async afterRefresh(viewer: Viewer, query?: NewsQuery): Promise<NewsSection> {
+    try {
+      await this.refreshShared();
+      this.refreshedAt = this.now().getTime();
+    } catch {
+      return { status: "error", message: SECTION_ERROR_MESSAGE };
+    }
+
+    const section = await this.load(viewer, undefined, query);
+    const refreshedAt = this.refreshedAt;
+
+    if (section.status === "pending" || refreshedAt === null) {
+      return {
+        status: "empty",
+        updatedAt: refreshedAt === null ? null : new Date(refreshedAt).toISOString()
+      };
+    }
+
+    return section;
+  }
+
+  private refreshShared(): Promise<void> {
+    this.refreshTask ??= this.refreshFeeds().finally(() => {
+      this.refreshTask = null;
+    });
+    return this.refreshTask;
+  }
+
+  private async refreshFeeds(): Promise<void> {
     const results = await Promise.allSettled(this.feeds.map((feed) => this.readFeed(feed)));
     const drafts = dedupeNews(
       results.flatMap((result) => (result.status === "fulfilled" ? result.value : []))
@@ -211,4 +289,17 @@ function visibleItems(
   const currentItems = mapped.filter((entry) => entry.current).map((entry) => entry.item);
   const recentItems = mapped.filter((entry) => !entry.current).map((entry) => entry.item);
   return [...currentItems, ...recentItems].slice(0, preference.limit);
+}
+
+function budget<T>(pending: Promise<T>, fallback: T, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      resolve(fallback);
+    }, ms);
+  });
+
+  return Promise.race([pending, deadline]).finally(() => {
+    clearTimeout(timer);
+  });
 }

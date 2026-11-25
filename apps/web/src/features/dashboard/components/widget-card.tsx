@@ -61,11 +61,13 @@ type WidgetCardProps = Readonly<{
   updatedAtLabel?: string;
   onRetry?: () => void;
   onRefresh?: () => void;
+  emptyMode?: "section" | "placeholder";
 }>;
 
 export function WidgetCard({
   background,
   children,
+  emptyMode = "section",
   onRefresh,
   onRetry,
   status,
@@ -80,7 +82,7 @@ export function WidgetCard({
   const menuId = useId();
   const menuRef = useRef<HTMLDivElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const statusCopy = getWidgetStatusCopy(widget.type, status);
+  const statusCopy = getWidgetStatusCopy(widget.type, status, emptyMode);
   const showRefresh = canRefreshWidget(status, widget.hasExternalSource);
   const busy = status === "loading";
 

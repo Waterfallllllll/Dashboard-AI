@@ -46,3 +46,17 @@ export function subscribeClockPreferences(onStoreChange: () => void): () => void
 export function resolveTimeZone(timezone: StoredPreferences["timezone"]): string {
   return timezone === "auto" ? getSystemTimeZone() : timezone;
 }
+
+export function hasStoredClockPreferences(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return (
+      parseStoredPreferences(window.localStorage.getItem(PROFILE_PREFERENCES_STORAGE_KEY)) !== null
+    );
+  } catch {
+    return false;
+  }
+}

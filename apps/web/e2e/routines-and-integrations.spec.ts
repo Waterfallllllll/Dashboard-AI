@@ -24,9 +24,9 @@ test.describe("рутины и интеграции", () => {
     await expect(page.getByRole("heading", { name: "Уведомления браузера" })).toBeVisible();
 
     await expect(page.getByRole("button", { name: "Подключить календарь" })).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Подключить Telegram" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Подключить Telegram" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Определить место" })).toBeEnabled();
     await expect(page.getByRole("button", { name: "Сохранить город" })).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Включить уведомления" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Включить уведомления" })).toBeVisible();
   });
 });

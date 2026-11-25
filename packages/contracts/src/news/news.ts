@@ -38,7 +38,8 @@ export const newsFeedSchema = z.strictObject({
 
 export const newsQuerySchema = z.strictObject({
   language: newsLanguageSchema.optional(),
-  sourceMode: newsSourceModeSchema.optional()
+  sourceMode: newsSourceModeSchema.optional(),
+  refresh: z.literal("1").optional()
 });
 
 export const newsResponseSchema = apiSuccessSchema(newsFeedSchema);

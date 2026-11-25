@@ -11,7 +11,7 @@
   gap: var(--space-md);
 }
 
-.previewNotice {
+.notice {
   flex: 1 1 18rem;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -36,6 +36,10 @@
     margin-block-start: var(--space-xs);
     color: var(--color-info);
     font: var(--text-body-sm);
+  }
+
+  .settingsLink {
+    margin-block-start: var(--space-sm);
   }
 }
 

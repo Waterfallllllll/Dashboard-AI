@@ -7,7 +7,7 @@ import { CalendarConnectError, connectGoogleCalendar } from "../api/connect-goog
 export type CalendarConnectionStatus = "connected" | "cancelled" | "error";
 
 const statusMessages: Readonly<Record<CalendarConnectionStatus, string>> = {
-  connected: "Календарь подключён. События появятся после синхронизации.",
+  connected: "Календарь подключён. Доступ только на чтение.",
   cancelled: "Подключение календаря отменено.",
   error: "Не удалось подключить календарь. Повторите попытку."
 };
@@ -28,6 +28,10 @@ export function GoogleCalendarConnect({
   const [pending, setPending] = useState(false);
   const [notice, setNotice] = useState(status ? statusMessages[status] : "");
   const [needsLogin, setNeedsLogin] = useState(false);
+
+  if (status === "connected") {
+    return <span id="google-calendar-availability">{statusMessages.connected}</span>;
+  }
 
   async function startConnection(): Promise<void> {
     setPending(true);

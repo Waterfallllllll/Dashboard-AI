@@ -1,12 +1,14 @@
 "use client";
 
 import { Clock3, Globe2, LogOut, ShieldAlert, UserRound } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ThemeControl } from "@/components/ui/theme-control";
 
+import { loadAccountSession, signOutAccount, type AccountView } from "../api/account-session";
 import {
   PROFILE_PREFERENCES_STORAGE_KEY,
   isTimezoneValue,
@@ -15,9 +17,55 @@ import {
 
 import styles from "./profile-settings.module.scss";
 
-export function ProfileSettings() {
+type AccountState = AccountView | { readonly status: "loading" } | { readonly status: "error" };
+
+type ProfileSettingsProps = Readonly<{
+  loadSession?: typeof loadAccountSession;
+  signOut?: typeof signOutAccount;
+  onSignedOut?: () => void;
+}>;
+
+const accountCopy: Readonly<Record<AccountState["status"], string>> = {
+  loading: "Проверяем текущий вход.",
+  anonymous: "Имя и аватар появятся после входа через Google.",
+  authenticated: "Вход через Google выполнен.",
+  error: "Не удалось проверить сессию."
+};
+
+export function ProfileSettings({
+  loadSession = loadAccountSession,
+  signOut = signOutAccount,
+  onSignedOut
+}: ProfileSettingsProps) {
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [saveStatus, setSaveStatus] = useState("");
+  const [account, setAccount] = useState<AccountState>({ status: "loading" });
+  const [signingOut, setSigningOut] = useState(false);
+  const [sessionNotice, setSessionNotice] = useState("");
+
+  useEffect(() => {
+    let ignore = false;
+    const controller = new AbortController();
+
+    loadSession(fetch, controller.signal).then(
+      (nextAccount) => {
+        if (!ignore) {
+          setAccount(nextAccount);
+        }
+      },
+      (error: unknown) => {
+        if (!ignore && !(error instanceof Error && error.name === "AbortError")) {
+          setAccount({ status: "error" });
+        }
+      }
+    );
+
+    return () => {
+      ignore = true;
+      controller.abort();
+    };
+  }, [loadSession]);
 
   useEffect(() => {
     let rawValue: string | null;
@@ -71,17 +119,52 @@ export function ProfileSettings() {
     }
   }
 
+  async function handleSignOut(): Promise<void> {
+    if (account.status !== "authenticated") {
+      return;
+    }
+
+    setSigningOut(true);
+    setSessionNotice("");
+
+    try {
+      await signOut(account.csrfToken);
+      setAccount({ status: "anonymous" });
+
+      if (onSignedOut) {
+        onSignedOut();
+      } else {
+        router.push("/login");
+        router.refresh();
+      }
+    } catch {
+      setSessionNotice("Не удалось выйти. Повторите попытку.");
+    } finally {
+      setSigningOut(false);
+    }
+  }
+
+  const signedIn = account.status === "authenticated";
+  const heading = signedIn ? account.displayName : "Аккаунт Google";
+
   return (
     <div className={styles.settings}>
-      <section aria-labelledby="account-heading" className={styles.accountCard}>
+      <section
+        aria-busy={account.status === "loading"}
+        aria-labelledby="account-heading"
+        className={styles.accountCard}
+      >
         <div aria-hidden="true" className={styles.avatar}>
-          <UserRound />
+          <AccountAvatar
+            key={signedIn ? (account.avatarUrl ?? "none") : "guest"}
+            url={signedIn ? account.avatarUrl : null}
+          />
         </div>
         <div className={styles.accountCopy}>
-          <h2 id="account-heading">Аккаунт Google</h2>
-          <p>Имя и аватар появятся после безопасного входа.</p>
+          <h2 id="account-heading">{heading}</h2>
+          <p>{accountCopy[account.status]}</p>
         </div>
-        <StatusBadge tone="warning">Не авторизован</StatusBadge>
+        <AccountStatus account={account} />
       </section>
 
       <form className={styles.form} onSubmit={handleSubmit} ref={formRef}>
@@ -147,12 +230,35 @@ export function ProfileSettings() {
           </div>
           <div>
             <h2 id="session-heading">Сессия</h2>
-            <p>Управление активным входом появится после подключения backend-сессий.</p>
+            <p>
+              {signedIn
+                ? "Можно завершить вход на этом устройстве."
+                : "Войдите через Google, чтобы управлять входом."}
+            </p>
+            {sessionNotice ? (
+              <p aria-live="polite" className={styles.saveStatus}>
+                {sessionNotice}
+              </p>
+            ) : null}
           </div>
         </div>
-        <button className={styles.secondaryButton} disabled type="button">
-          Выйти
-        </button>
+        <div className={styles.sessionActions}>
+          {account.status === "anonymous" ? (
+            <a className={styles.secondaryButton} href="/api/v1/auth/google">
+              Войти через Google
+            </a>
+          ) : null}
+          <button
+            className={styles.secondaryButton}
+            disabled={!signedIn || signingOut}
+            onClick={() => {
+              void handleSignOut();
+            }}
+            type="button"
+          >
+            {signingOut ? "Выходим…" : "Выйти"}
+          </button>
+        </div>
       </section>
 
       <section aria-labelledby="danger-heading" className={styles.dangerSection}>
@@ -170,5 +276,43 @@ export function ProfileSettings() {
         </button>
       </section>
     </div>
+  );
+}
+
+function AccountStatus({ account }: Readonly<{ account: AccountState }>) {
+  if (account.status === "authenticated") {
+    return <StatusBadge tone="success">Авторизован</StatusBadge>;
+  }
+
+  if (account.status === "loading") {
+    return <StatusBadge tone="info">Проверяем</StatusBadge>;
+  }
+
+  if (account.status === "error") {
+    return <StatusBadge tone="error">Нет связи</StatusBadge>;
+  }
+
+  return <StatusBadge tone="warning">Не авторизован</StatusBadge>;
+}
+
+function AccountAvatar({ url }: Readonly<{ url: string | null }>) {
+  const [failed, setFailed] = useState(false);
+
+  if (!url || failed) {
+    return <UserRound />;
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element -- адрес аватара задаёт Google и может быть любым https-хостом
+    <img
+      alt=""
+      height={48}
+      onError={() => {
+        setFailed(true);
+      }}
+      referrerPolicy="no-referrer"
+      src={url}
+      width={48}
+    />
   );
 }

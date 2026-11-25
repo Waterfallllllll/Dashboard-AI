@@ -29,6 +29,9 @@ try {
   const server = createServer(app);
   server.listen(backend.runtime.config.port, () => {
     backend.logger.info({ port: backend.runtime.config.port }, "API слушает порт");
+    void backend.registerTelegramWebhook().catch(() => {
+      backend.logger.warn({}, "Webhook Telegram не зарегистрирован");
+    });
   });
   installShutdown({
     server,

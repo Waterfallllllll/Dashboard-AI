@@ -1,6 +1,8 @@
 export { NotificationHost } from "./components/notification-host";
 export { ServiceWorkerRegistrar } from "./components/service-worker-registrar";
 export { WebPushControls } from "./components/web-push-controls";
+export { decodeVapidPublicKey, readWebPushPublicKey } from "./model/push-key";
+export { registerAppServiceWorker } from "./model/register-service-worker";
 export {
   publishProductNotice,
   readBrowserPermission,

@@ -17,11 +17,12 @@ describe("страница профиля", () => {
         eyebrow="Настройки"
         title="Профиль"
       >
-        <ProfileSettings />
+        <ProfileSettings loadSession={async () => ({ status: "anonymous" })} />
       </PageScaffold>
     );
 
     expect(screen.getByRole("heading", { level: 1, name: "Профиль" })).toBeInTheDocument();
+    expect(await screen.findByText("Не авторизован")).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText("Часовой пояс"), "Asia/Vladivostok");
     await user.selectOptions(screen.getByLabelText("Тема интерфейса"), "dark");

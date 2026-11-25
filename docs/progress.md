@@ -1,3 +1,53 @@
+## 2026-11-25 — Новости не притворяются пустыми, пока ленты ещё читаются
+
+- Если RSS не успевает за 400 мс, дашборд отвечает `pending`, карточка остаётся в загрузке и дочитывает `GET /api/v1/news`. Пустой день после завершённого чтения пишет «За последние сутки новостей нет» и больше не ведёт в настройки виджетов. Кнопка обновления вызывает `GET /api/v1/news?refresh=1` и дожидается фидов.
+- Изменены `packages/contracts/src/dashboard/dashboard.ts`, `packages/contracts/src/news/news.ts`, `apps/api/src/modules/news/news.service.ts`, `apps/api/src/modules/news/news.controller.ts`, `apps/web/src/features/news/api/load-news-section.ts`, `apps/web/src/features/dashboard/components/dashboard-board.tsx`, `apps/web/src/features/dashboard/model/widget-status.ts`, `apps/web/src/features/dashboard/model/present-dashboard.ts`.
+- Проверки: unit-тесты ожидания и пустой ленты, запрос `refresh=1`, интеграционный тест карточки. Новые переменные окружения не добавлялись.
+
+## 2026-11-25 — Пустой календарь объясняет отсутствие событий и синхронизируется с Google
+
+- Карточка календаря без событий на сегодня пишет «На сегодня событий нет» и больше не ведёт в настройки виджетов. Кнопка обновления вызывает `POST /api/v1/calendar/sync` с CSRF и подставляет полученный раздел. Если календарь не подключён, остаётся действие «Подключить».
+- Изменены `apps/web/src/features/dashboard/model/widget-status.ts`, `apps/web/src/features/dashboard/components/dashboard-board.tsx`, `apps/web/src/features/calendar/api/sync-calendar.ts`, `apps/web/src/features/calendar/index.ts`.
+- Проверки: unit-тест копирайта и запроса синхронизации, интеграционный тест обновления карточки. Новые переменные окружения не добавлялись.
+
+## 2026-11-25 — С интеграций убрана плашка «Контроль остаётся у вас»
+
+- Со страницы `/settings/integrations` удалена вводная заметка про отдельные подключения и токены. Карточки интеграций остаются.
+- Изменены `apps/web/src/features/integrations/components/integration-list.tsx` и `integration-list.module.scss`. Новые переменные окружения не добавлялись.
+
+## 2026-11-25 — Telegram подтверждает привязку и регистрирует webhook
+
+- После `/start` с одноразовым кодом бот пишет, что чат подключён, либо что ссылка устарела. `/start` без кода просит открыть новую ссылку из настроек. Сбой отправки не отменяет уже сохранённую привязку.
+- Если заданы `TELEGRAM_WEBHOOK_URL` и `TELEGRAM_WEBHOOK_SECRET`, API при старте вызывает `setWebhook` на `https://<хост>/api/v1/webhooks/telegram`.
+- Изменены `apps/api/src/modules/notifications/webhook.service.ts`, `apps/api/src/modules/integrations/telegram-client.ts`, `apps/api/src/app/create-backend.ts`, `apps/api/src/main.ts`, `apps/api/src/config/env.ts`.
+- Проверки: unit-тесты ответа бота и регистрации webhook. Новых имён переменных нет: читается уже описанный `TELEGRAM_WEBHOOK_URL`.
+
+## 2026-11-25 — Кнопка Telegram вызывает API привязки
+
+- «Подключить Telegram» на `/settings/integrations` вызывает `POST /api/v1/integrations/telegram/link` с CSRF и открывает только ссылку `https://t.me` или `https://telegram.me`. Пока ссылка жива, страница проверяет статус. «Отключить Telegram» вызывает `DELETE /api/v1/integrations/telegram`.
+- Статус читается из `GET /api/v1/integrations` на сервере и в браузере. Токен бота на клиент не попадает.
+- Изменены `apps/web/src/features/integrations/components/telegram-card.tsx`, `apps/web/src/features/integrations/api/connect-telegram.ts`, `apps/web/src/features/integrations/components/integration-list.tsx`, `apps/web/src/app/(protected)/settings/integrations/page.tsx`.
+- Проверки: unit-тесты ссылки и статуса, компонентные тесты карточки и списка. Новые переменные окружения не добавлялись.
+
+## 2026-11-25 — Worker больше не пишет холостой опрос в консоль
+
+- При `LOG_LEVEL=info` worker не печатает каждый цикл и успешные задачи `scan-due-timers` и `scan-routine-reminders`. Эти строки остались на `debug`. Запуск worker, доставка, таймер, новости, календарь и очистка по-прежнему пишутся как `info`. Повтор и отказ задачи — `warn`, сбой цикла — `error`.
+- Изменены `apps/api/src/worker-main.ts`, `apps/api/src/infrastructure/jobs/worker-log-level.ts`.
+- Проверки: unit-тест уровня журнала. Новые переменные окружения не добавлялись.
+
+## 2026-11-25 — Кнопка уведомлений браузера включает Web Push
+
+- «Включить уведомления» на `/settings/integrations` запрашивает разрешение, подписывает браузер и сохраняет подписку через `POST /api/v1/push/subscriptions`. Повторное нажатие выключает доставку на этом устройстве.
+- В локальный `.env` записаны ключи Web Push: `WEB_PUSH_PUBLIC_KEY`, `WEB_PUSH_PRIVATE_KEY` и `NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY`. Next читает публичный ключ из корневого `.env`.
+- Изменены `apps/web/src/features/integrations/components/browser-notifications-card.tsx`, `apps/web/src/features/integrations/api/browser-push.ts`, `apps/web/src/features/integrations/components/integration-list.tsx`, `apps/web/next.config.ts`.
+- Проверки: unit-тест сохранения подписки и компонентный тест списка интеграций проходят. Новых имён переменных нет, заполнены уже описанные ключи Web Push.
+
+## 2026-11-25 — Экран интеграций читает статус календаря
+
+- `/settings/integrations` запрашивает `GET /api/v1/integrations` и показывает «Подключено», если `google_calendar` уже `connected`. У подключённого календаря нет кнопки «Подключить календарь»: вместо неё текст, что доступ только на чтение. Карточка ещё раз проверяет статус в браузере, чтобы кнопка не возвращалась после перехода или перезагрузки.
+- Изменены `apps/web/src/app/(protected)/settings/integrations/page.tsx`, `apps/web/src/features/integrations/api/load-integrations.ts`, `apps/web/src/features/integrations/components/google-calendar-connect.tsx`, `apps/web/src/features/integrations/components/integration-list.tsx`.
+- Проверки: unit-тест загрузки статуса и компонентные тесты карточки проходят, eslint по изменённым файлам проходит. В браузере без сессии страница открывается и по-прежнему предлагает подключение. Новые переменные окружения не добавлялись.
+
 ## 2026-11-25 — С интеграций убран блок «Это устройство»
 
 - Секция уведомлений браузера, тихих часов и установки приложения удалена со страницы `/settings/integrations`. Место для погоды остаётся в карточке «Местоположение».

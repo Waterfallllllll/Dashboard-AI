@@ -1,7 +1,16 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 
 import { PageScaffold } from "@/components/ui/page-scaffold";
-import { IntegrationList, type CalendarConnectionStatus } from "@/features/integrations";
+import {
+  IntegrationList,
+  calendarCardStatus,
+  loadGoogleCalendarStatus,
+  loadTelegramStatus,
+  type CalendarConnectionStatus
+} from "@/features/integrations";
+import { internalApiOrigin } from "@/lib/api/internal-api-origin";
+import { readServerWebPushPublicKey } from "@/lib/web-push-public-key";
 
 export const metadata: Metadata = {
   title: "Интеграции"
@@ -13,6 +22,12 @@ type IntegrationsPageProps = Readonly<{
 
 export default async function IntegrationsPage({ searchParams }: IntegrationsPageProps) {
   const params = await searchParams;
+  const cookieHeader = (await cookies()).toString();
+  const origin = internalApiOrigin(process.env.INTERNAL_API_URL);
+  const [persistedCalendar, persistedTelegram] = await Promise.all([
+    loadGoogleCalendarStatus(origin, cookieHeader),
+    loadTelegramStatus(origin, cookieHeader)
+  ]);
 
   return (
     <PageScaffold
@@ -21,7 +36,11 @@ export default async function IntegrationsPage({ searchParams }: IntegrationsPag
       eyebrow="Настройки"
       title="Интеграции"
     >
-      <IntegrationList calendarStatus={calendarStatus(params.calendar)} />
+      <IntegrationList
+        calendarStatus={calendarCardStatus(persistedCalendar, calendarStatus(params.calendar))}
+        telegramStatus={persistedTelegram}
+        webPushPublicKey={readServerWebPushPublicKey()}
+      />
     </PageScaffold>
   );
 }

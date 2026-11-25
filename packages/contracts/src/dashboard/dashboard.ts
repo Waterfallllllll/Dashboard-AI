@@ -59,6 +59,7 @@ export const calendarSectionSchema = z.discriminatedUnion("status", [
 
 export const newsSectionSchema = z.discriminatedUnion("status", [
   z.strictObject({ status: z.literal("unavailable") }),
+  z.strictObject({ status: z.literal("pending") }),
   z.strictObject({ status: z.literal("empty"), updatedAt: utcDateTimeSchema.nullable() }),
   z.strictObject({
     status: z.literal("ready"),

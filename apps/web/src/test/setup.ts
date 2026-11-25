@@ -18,7 +18,11 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => navigationState.pathname
+  usePathname: () => navigationState.pathname,
+  useRouter: () => ({
+    push: vi.fn(),
+    refresh: vi.fn()
+  })
 }));
 
 afterEach(() => {

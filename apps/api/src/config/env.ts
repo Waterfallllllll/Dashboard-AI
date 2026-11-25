@@ -55,6 +55,7 @@ export type ApiRuntime = {
   readonly weatherApiBaseUrl: string;
   readonly telegram: TelegramBotConfig | null;
   readonly telegramWebhookSecret: string | null;
+  readonly telegramWebhookUrl: string | null;
   readonly googleCalendarWebhookToken: string | null;
   readonly googleCalendarWebhookUrl: string | null;
   readonly webPush: WebPushConfig | null;
@@ -81,6 +82,7 @@ export function readApiEnv(source: NodeJS.ProcessEnv): ApiRuntime {
       source.TELEGRAM_WEBHOOK_SECRET,
       "TELEGRAM_WEBHOOK_SECRET"
     ),
+    telegramWebhookUrl: readOptionalHttps(source.TELEGRAM_WEBHOOK_URL, "TELEGRAM_WEBHOOK_URL"),
     googleCalendarWebhookToken: readOptionalSecret(
       source.GOOGLE_CALENDAR_WEBHOOK_TOKEN,
       "GOOGLE_CALENDAR_WEBHOOK_TOKEN"
@@ -197,7 +199,10 @@ function readOptionalSecret(value: string | undefined, name: string): string | n
   return secret;
 }
 
-function readOptionalHttps(value: string | undefined): string | null {
+function readOptionalHttps(
+  value: string | undefined,
+  name = "GOOGLE_CALENDAR_WEBHOOK_URL"
+): string | null {
   const raw = value?.trim() ?? "";
 
   if (raw === "") {
@@ -209,11 +214,11 @@ function readOptionalHttps(value: string | undefined): string | null {
   try {
     url = new URL(raw);
   } catch {
-    throw new Error("GOOGLE_CALENDAR_WEBHOOK_URL должен быть https-адресом");
+    throw new Error(`${name} должен быть https-адресом`);
   }
 
   if (url.protocol !== "https:" || url.username !== "" || url.password !== "" || url.hash !== "") {
-    throw new Error("GOOGLE_CALENDAR_WEBHOOK_URL должен быть https-адресом");
+    throw new Error(`${name} должен быть https-адресом`);
   }
 
   return url.href;
@@ -244,7 +249,7 @@ function readWorker(source: NodeJS.ProcessEnv): WorkerSettings {
     id: readWorkerId(source.WORKER_ID),
     pollIntervalMs: readBoundedInt(
       source.JOB_POLL_INTERVAL_MS,
-      1000,
+      10_000,
       100,
       60_000,
       "JOB_POLL_INTERVAL_MS"

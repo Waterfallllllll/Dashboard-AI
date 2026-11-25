@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { ServiceWorkerRegistrar } from "@/features/notifications";
+import { ThemeInitScript } from "@/lib/theme/theme-init-script";
 
 import "@/styles/globals.scss";
 
@@ -15,16 +16,6 @@ const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"]
 });
-
-const themeInitializationScript = `
-  try {
-    const theme = localStorage.getItem("evergreen-theme");
-    if (theme === "light" || theme === "dark") {
-      document.documentElement.dataset.theme = theme;
-      document.documentElement.style.colorScheme = theme;
-    }
-  } catch {}
-`;
 
 export const metadata: Metadata = {
   applicationName: "Evergreen",
@@ -64,9 +55,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
       suppressHydrationWarning
     >
       <head>
-        <script dangerouslySetInnerHTML={{ __html: themeInitializationScript }} />
+        <ThemeInitScript />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <ServiceWorkerRegistrar />
         {children}
       </body>

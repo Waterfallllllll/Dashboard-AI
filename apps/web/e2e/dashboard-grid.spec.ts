@@ -1,9 +1,25 @@
 import { expect, test } from "@playwright/test";
 
+// eslint-disable-next-line no-restricted-imports -- общая фикстура ответа дашборда
+import { sampleDashboardBody } from "../src/features/dashboard/model/sample-dashboard";
+
 import { isMobileProject } from "./support/app";
 
 test.describe("сетка дашборда", () => {
-  test("показывает виджеты на мок-данных", async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
+    await page.route("**/api/v1/dashboard**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: sampleDashboardBody,
+          meta: { requestId: "request-1" }
+        })
+      })
+    );
+  });
+
+  test("показывает данные аккаунта вместо мок-баннера", async ({ page }) => {
     await page.goto("/dashboard");
 
     await expect(
@@ -14,12 +30,12 @@ test.describe("сетка дашборда", () => {
       "success"
     );
     await expect(page.getByRole("article", { name: "Погода" })).toContainText("Москва");
-    await expect(page.getByRole("article", { name: "Календарь" })).toContainText(
-      "Стендап команды"
-    );
+    await expect(page.getByRole("article", { name: "Календарь" })).toContainText("Стендап команды");
     await expect(page.getByRole("article", { name: "Рутины" })).toContainText("Погладить кота");
     await expect(page.getByRole("article", { name: "Таймер" })).toContainText("Работа");
     await expect(page.getByRole("article", { name: "Новости" })).toContainText("OpenAI");
+    await expect(page.getByText("Мок-данные")).toHaveCount(0);
+    await expect(page.getByText("API подключится позже")).toHaveCount(0);
   });
 
   test("действие в одном виджете не блокирует остальные", async ({ page }) => {

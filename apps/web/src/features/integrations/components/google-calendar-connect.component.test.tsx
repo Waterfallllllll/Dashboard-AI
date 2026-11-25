@@ -34,4 +34,11 @@ describe("GoogleCalendarConnect", () => {
       "/api/v1/auth/google"
     );
   });
+
+  it("не предлагает подключить календарь, если он уже подключён", () => {
+    render(<GoogleCalendarConnect status="connected" />);
+
+    expect(screen.queryByRole("button", { name: "Подключить календарь" })).not.toBeInTheDocument();
+    expect(screen.getByText("Календарь подключён. Доступ только на чтение.")).toBeInTheDocument();
+  });
 });

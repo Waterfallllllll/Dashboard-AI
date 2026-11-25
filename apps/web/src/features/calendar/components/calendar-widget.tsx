@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { formatInZone } from "@/lib/format/date-time";
 
+import type { CalendarEvent } from "../model/calendar-types";
 import { createMockCalendarEvents } from "../model/mock-events";
 import { getNextEvent, getVisibleEvents, presentCalendarEvents } from "../model/visible-events";
 
@@ -12,6 +13,7 @@ import styles from "./calendar-widget.module.scss";
 
 type CalendarWidgetProps = Readonly<{
   calendarScope?: "all" | "work";
+  events?: readonly CalendarEvent[];
   itemLimit?: number;
   now?: number;
   timeZone: string;
@@ -19,6 +21,7 @@ type CalendarWidgetProps = Readonly<{
 
 export function CalendarWidget({
   calendarScope,
+  events: eventsProp,
   itemLimit,
   now: nowProp,
   timeZone
@@ -26,7 +29,7 @@ export function CalendarWidget({
   const [capturedNow] = useState(() => nowProp ?? Date.now());
   const now = nowProp ?? capturedNow;
   const events = presentCalendarEvents(
-    getVisibleEvents(createMockCalendarEvents(now, timeZone), now),
+    getVisibleEvents(eventsProp ?? createMockCalendarEvents(now, timeZone), now),
     {
       ...(calendarScope !== undefined ? { calendarScope } : {}),
       ...(itemLimit !== undefined ? { itemLimit } : {})
