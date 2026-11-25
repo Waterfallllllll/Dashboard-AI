@@ -19,6 +19,13 @@ const weatherSectionResponseSchema = apiSuccessSchema(weatherSectionSchema);
 
 export function createWeatherController(weather: WeatherService) {
   return {
+    read: asyncHandler(async (req, res) => {
+      const actor = requireActor(req);
+      sendParsed(res, weatherLocationResponseSchema, 200, {
+        data: { location: await weather.current(actor) },
+        meta: { requestId: requestIdFrom(req) }
+      });
+    }),
     get: asyncHandler(async (req, res) => {
       const viewer = requireViewer(req);
       const query = parseRequest(weatherQuerySchema, req.query);

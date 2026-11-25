@@ -25,6 +25,11 @@
   background: var(--color-card);
 }
 
+.placeForm {
+  display: grid;
+  gap: var(--space-md);
+}
+
 .actions,
 .quiet,
 .card fieldset {

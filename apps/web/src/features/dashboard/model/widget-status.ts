@@ -106,6 +106,14 @@ export function getWidgetStatusCopy(
   }
 
   if (status === "disconnected") {
+    if (type === "weather") {
+      return {
+        title: "Место не задано",
+        description: "Укажите город или разрешите геолокацию, чтобы показать прогноз.",
+        action: { label: "Указать место", kind: "link", href: "/settings/integrations" }
+      };
+    }
+
     return {
       title: type === "calendar" ? "Календарь не подключён" : "Источник не подключён",
       description:

@@ -1,3 +1,34 @@
+## 2026-11-25 — Место для погоды сохраняется в аккаунт
+
+- Кнопки «Определить место», «Сохранить город» и «Удалить локацию» на `/settings/integrations` больше не пишут координаты в `localStorage`. Город ищется через `GET /api/v1/weather/places`, точка сохраняется через `PUT /api/v1/weather/location` с CSRF. `GET` и `DELETE /api/v1/weather/location` читают и стирают место в профиле.
+- Карточка погоды без места говорит «Место не задано» и ведёт в настройки. Прогноз по-прежнему запрашивает API после входа.
+- Изменены `apps/api/src/modules/weather/weather.controller.ts`, `apps/api/src/modules/weather/weather.routes.ts`, `apps/web/src/features/integrations/api/weather-place.ts`, `apps/web/src/features/integrations/components/device-permissions.tsx`, `apps/web/src/features/dashboard/model/widget-status.ts`, `docs/architecture.md`.
+- Проверки: `npm run lint` проходит. Unit- и компонентные тесты места, разрешений и статусов виджетов проходят. `npm run build` для web проходит. Playwright не запустился: в окружении нет исполняемого Chromium. В открытом браузере форма видна, `GET /api/v1/weather/location` отвечает 401 без сессии. Новые переменные окружения не добавлялись.
+
+## 2026-11-25 — Дашборд больше не ждёт внешние API
+
+- `GET /api/v1/dashboard` отдаёт новости из PostgreSQL сразу. RSS обновляется в фоне и не держит ответ до 4 секунд, если записи уже есть. Пустой кэш ждёт ленту не дольше 400 мс и по-прежнему возвращает ошибку, если источник отказал сразу.
+- Погода на дашборде берётся из памяти. Если снимка нет, общий ответ не ждёт Open-Meteo дольше 400 мс; карточка погоды догружается отдельным `GET /api/v1/weather` и не блокирует остальные виджеты. Часы видны сразу, повторная загрузка не стирает уже показанные карточки.
+- Интервал опроса worker по умолчанию и в локальном `.env` — 10 секунд (`JOB_POLL_INTERVAL_MS`).
+- Изменены `apps/api/src/modules/news/news.service.ts`, `apps/api/src/modules/weather/weather.service.ts`, `apps/api/src/modules/external-services.ts`, `apps/api/src/config/env.ts`, `apps/web/src/features/dashboard/api/load-dashboard.ts`, `apps/web/src/features/dashboard/components/dashboard-board.tsx`.
+- Проверки: unit-тесты новостей, погоды и загрузки секции, интеграционные тесты страницы дашборда. Новые переменные окружения не добавлялись, изменено значение `JOB_POLL_INTERVAL_MS`.
+
+## 2026-11-25 — Дашборд не ждёт полное обновление новостей
+
+- Обновление RSS блокировало `GET /api/v1/dashboard`: запись каждой новости отдельным запросом занимала минуты, прокси Next обрывал соединение через 30 секунд, и все виджеты показывали ошибку.
+- Новости пишутся одним `createMany`. Ответ дашборда не ждёт обновление дольше 4 секунд, любая секция ограничена 10 секундами.
+- На `<body>` добавлен `suppressHydrationWarning`: атрибут `data-intersub-modeplugin` ставит расширение браузера и давал ошибку гидратации.
+- Изменены `apps/api/src/modules/dashboard/dashboard.service.ts`, `apps/api/src/modules/news/news.service.ts`, `apps/api/src/modules/news/prisma-news.repository.ts`, `apps/web/src/app/layout.tsx`.
+- Проверки: unit-тесты дашборда и модели новостей прошли. Новые переменные окружения не добавлялись.
+
+## 2026-11-25 — Старт API под concurrently на Windows
+
+- `tsx watch` внутри `concurrently` зависал на импорте `googleapis`: общий stdin не давал API дойти до порта 4000, и главная получала 500.
+- Запуск API и worker переведён на `apps/api/scripts/watch-dev.mjs`, который стартует `tsx watch` с закрытым stdin.
+- Изменены `apps/api/package.json` и `apps/api/scripts/watch-dev.mjs`.
+- Проверка: после перезапуска `npm run dev` API пишет «API слушает порт», worker пишет «Worker запущен», `GET /api/v1/dashboard` отвечает 401 без сессии вместо обрыва соединения.
+- Новые переменные окружения не добавлялись.
+
 ## 2026-10-23 — Основа frontend
 
 - Реализованы дизайн-токены, светлая/тёмная темы с системным режимом, адаптивный app shell и маршруты MVP.

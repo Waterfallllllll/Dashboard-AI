@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+
+import type { WeatherPlace } from "@dashboard/contracts";
 
 import {
-  getDeviceLocationServerSnapshot,
-  getDeviceLocationSnapshot,
-  locationFromCoordinates,
-  locationLabel,
-  parseCity,
-  saveDeviceLocation,
-  subscribeDeviceLocation
-} from "@/features/location";
+  WeatherPlaceError,
+  clearWeatherPlace,
+  loadWeatherPlace,
+  saveWeatherPlace,
+  searchWeatherPlaces
+} from "../api/weather-place";
+import { locationFromCoordinates, parseCity } from "@/features/location";
 import {
   getNotificationServerSnapshot,
   getNotificationSnapshot,
@@ -24,23 +25,51 @@ import {
 import styles from "./device-permissions.module.scss";
 
 export function DevicePermissions() {
-  const location = useSyncExternalStore(
-    subscribeDeviceLocation,
-    getDeviceLocationSnapshot,
-    getDeviceLocationServerSnapshot
-  );
   const notifications = useSyncExternalStore(
     subscribeNotifications,
     getNotificationSnapshot,
     getNotificationServerSnapshot
   );
   const [city, setCity] = useState("");
+  const [cityInvalid, setCityInvalid] = useState(false);
+  const [place, setPlace] = useState<WeatherPlace | null>(null);
+  const [placeKnown, setPlaceKnown] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [locationMessage, setLocationMessage] = useState(
-    "Геолокация не запрашивается, пока вы сами не нажмёте кнопку."
+    "Геолокация не запрашивается, пока вы сами не нажмёте кнопку. Координаты сохраняются с точностью около километра."
   );
   const [permission, setPermission] = useState<BrowserPermission>("default");
   const [saveError, setSaveError] = useState("");
-  const place = locationLabel(location);
+  const placeRequest = useRef(0);
+  const cityInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const request = ++placeRequest.current;
+    const controller = new AbortController();
+
+    void loadWeatherPlace(fetch, controller.signal).then(
+      (location) => {
+        if (request !== placeRequest.current) {
+          return;
+        }
+
+        setPlace(location);
+        setPlaceKnown(true);
+      },
+      (error: unknown) => {
+        if (request !== placeRequest.current || isAbortError(error)) {
+          return;
+        }
+
+        setPlaceKnown(true);
+        setLocationMessage(messageFrom(error, "Не удалось прочитать сохранённое место."));
+      }
+    );
+
+    return () => {
+      controller.abort();
+    };
+  }, []);
 
   async function detectPlace() {
     if (typeof navigator === "undefined" || !navigator.geolocation) {
@@ -48,20 +77,26 @@ export function DevicePermissions() {
       return;
     }
 
+    setBusy(true);
+    setSaveError("");
     setLocationMessage("Запрашиваем сокращённые координаты…");
 
     try {
       const position = await requestPosition();
       const next = locationFromCoordinates(position.coords.latitude, position.coords.longitude);
 
-      if (!next || !saveDeviceLocation(next)) {
-        setSaveError("Не удалось сохранить место на этом устройстве.");
+      if (!next || next.kind !== "coordinates") {
+        setSaveError("Не удалось сохранить место.");
         return;
       }
 
-      setSaveError("");
+      const saved = await rememberPlace({
+        latitude: next.latitude,
+        longitude: next.longitude,
+        label: `${next.latitude.toFixed(2)}, ${next.longitude.toFixed(2)}`
+      });
       setLocationMessage(
-        "Сохранили координаты с точностью около километра. Прогноз останется демонстрационным, пока не подключён API погоды."
+        `Место «${saved.label}» сохранено. Откройте дашборд, чтобы увидеть прогноз.`
       );
     } catch (error) {
       const denied =
@@ -69,29 +104,76 @@ export function DevicePermissions() {
       setLocationMessage(
         denied
           ? "Браузер запретил доступ к месту. Укажите город вручную или разрешите геолокацию в настройках сайта."
-          : "Не удалось определить место. Укажите город вручную."
+          : messageFrom(error, "Не удалось определить место. Укажите город вручную.")
       );
+    } finally {
+      setBusy(false);
     }
   }
 
-  function saveCity() {
+  async function saveCity() {
     const nextCity = parseCity(city);
 
-    if (!nextCity) {
-      setLocationMessage("Введите город, не длиннее 80 символов.");
+    if (!nextCity || nextCity.length < 2) {
+      setCityInvalid(true);
+      setLocationMessage(
+        nextCity ? "Введите хотя бы два символа." : "Введите город, не длиннее 80 символов."
+      );
+      cityInputRef.current?.focus();
       return;
     }
 
-    if (!saveDeviceLocation({ kind: "city", city: nextCity })) {
-      setSaveError("Не удалось сохранить город на этом устройстве.");
-      return;
-    }
-
+    setBusy(true);
     setSaveError("");
-    setCity("");
-    setLocationMessage(
-      `Город «${nextCity}» сохранён. Прогноз погоды останется демонстрационным до API.`
-    );
+
+    try {
+      const places = await searchWeatherPlaces(nextCity);
+      const found = places[0];
+
+      if (!found) {
+        setCityInvalid(true);
+        setLocationMessage("Такой город не найден. Проверьте написание.");
+        cityInputRef.current?.focus();
+        return;
+      }
+
+      const saved = await rememberPlace(found);
+      setCity("");
+      setCityInvalid(false);
+      setLocationMessage(
+        `Место «${saved.label}» сохранено. Откройте дашборд, чтобы увидеть прогноз.`
+      );
+    } catch (error) {
+      setLocationMessage(messageFrom(error, "Не удалось сохранить город."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removePlace() {
+    setBusy(true);
+    setSaveError("");
+
+    try {
+      placeRequest.current += 1;
+      await clearWeatherPlace();
+      setPlace(null);
+      setPlaceKnown(true);
+      setLocationMessage("Место удалено. Виджет погоды снова попросит указать город.");
+    } catch (error) {
+      setLocationMessage(messageFrom(error, "Не удалось удалить место."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rememberPlace(next: WeatherPlace): Promise<WeatherPlace> {
+    placeRequest.current += 1;
+    const saved = await saveWeatherPlace(next);
+    setPlace(saved);
+    setPlaceKnown(true);
+    setSaveError("");
+    return saved;
   }
 
   async function enableNotifications() {
@@ -111,38 +193,54 @@ export function DevicePermissions() {
       </header>
 
       <article className={styles.card}>
-        <h3>Место для погоды</h3>
-        <p>{place ? `Сейчас: ${place}` : "Город не задан, виджет показывает Москву."}</p>
-        <p>{locationMessage}</p>
-        <div className={styles.actions}>
-          <button onClick={() => void detectPlace()} type="button">
-            Определить место
-          </button>
-          <button
-            onClick={() => {
-              if (saveDeviceLocation(null)) {
-                setSaveError("");
-                setLocationMessage("Локация удалена. Виджет снова показывает Москву.");
-              }
-            }}
-            type="button"
-          >
-            Удалить локацию
-          </button>
-        </div>
-        <label>
-          Город
+        <form
+          aria-labelledby="weather-place-title"
+          className={styles.placeForm}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveCity();
+          }}
+        >
+          <h3 id="weather-place-title">Место для погоды</h3>
+          <p>
+            {place
+              ? `Сейчас: ${place.label}`
+              : placeKnown
+                ? "Место не задано. Виджет погоды ждёт город или геолокацию."
+                : "Проверяем сохранённое место…"}
+          </p>
+          <p id="weather-place-status" role="status">
+            {locationMessage}
+          </p>
+          <div className={styles.actions}>
+            <button disabled={busy} onClick={() => void detectPlace()} type="button">
+              Определить место
+            </button>
+            <button disabled={busy || !place} onClick={() => void removePlace()} type="button">
+              Удалить локацию
+            </button>
+          </div>
+          <label htmlFor="weather-city">Город</label>
           <input
+            aria-describedby="weather-place-status"
+            aria-invalid={cityInvalid}
+            autoComplete="address-level2"
+            disabled={busy}
+            enterKeyHint="done"
+            id="weather-city"
             maxLength={80}
+            name="city"
             onChange={(event) => {
               setCity(event.currentTarget.value);
+              setCityInvalid(false);
             }}
+            ref={cityInputRef}
             value={city}
           />
-        </label>
-        <button onClick={saveCity} type="button">
-          Сохранить город
-        </button>
+          <button disabled={busy} type="submit">
+            Сохранить город
+          </button>
+        </form>
       </article>
 
       <article className={styles.card}>
@@ -256,6 +354,14 @@ function permissionMessage(permission: BrowserPermission): string {
     case "default":
       return "Системное разрешение ещё не запрашивалось.";
   }
+}
+
+function messageFrom(error: unknown, fallback: string): string {
+  return error instanceof WeatherPlaceError ? error.message : fallback;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
 }
 
 function requestPosition(): Promise<GeolocationPosition> {
