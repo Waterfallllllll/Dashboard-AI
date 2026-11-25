@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { IntegrationList } from "./integration-list";
@@ -14,7 +14,16 @@ describe("IntegrationList", () => {
 
     expect(screen.getByRole("button", { name: "Подключить календарь" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Подключить Telegram" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Настроить локацию" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Включить уведомления" })).toBeDisabled();
+
+    const location = screen.getByRole("heading", { name: "Местоположение" }).closest("li");
+
+    expect(location).not.toBeNull();
+
+    if (location) {
+      expect(within(location).getByRole("button", { name: "Определить место" })).toBeEnabled();
+      expect(within(location).getByRole("button", { name: "Сохранить город" })).toBeEnabled();
+      expect(within(location).queryByText("Доступно после подключения API")).not.toBeInTheDocument();
+    }
   });
 });

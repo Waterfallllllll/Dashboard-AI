@@ -1,9 +1,10 @@
-import { BellRing, CalendarDays, LockKeyhole, MapPin, Send } from "lucide-react";
+import { BellRing, CalendarDays, LockKeyhole, Send } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 
 import { GoogleCalendarConnect, type CalendarConnectionStatus } from "./google-calendar-connect";
+import { LocationCard } from "./location-card";
 
 import styles from "./integration-list.module.scss";
 
@@ -40,16 +41,6 @@ const integrations: readonly IntegrationCard[] = [
     tone: "neutral"
   },
   {
-    id: "location",
-    title: "Местоположение",
-    description: "Город или сокращённые координаты используются только для прогноза погоды.",
-    detail: "Разрешение браузера будет запрошено только после явного нажатия.",
-    action: "Настроить локацию",
-    status: "Не настроено",
-    icon: MapPin,
-    tone: "warning"
-  },
-  {
     id: "browser-notifications",
     title: "Уведомления браузера",
     description: "Web Push сообщает о завершении рабочего интервала, даже если вкладка закрыта.",
@@ -66,6 +57,9 @@ type IntegrationListProps = Readonly<{
 }>;
 
 export function IntegrationList({ calendarStatus = null }: IntegrationListProps) {
+  const beforeLocation = integrations.slice(0, 2);
+  const afterLocation = integrations.slice(2);
+
   return (
     <div className={styles.wrapper}>
       <aside className={styles.privacyNote}>
@@ -80,47 +74,48 @@ export function IntegrationList({ calendarStatus = null }: IntegrationListProps)
       </aside>
 
       <ul className={styles.grid} role="list">
-        {integrations.map(
-          ({ action, description, detail, icon: Icon, id, status, title, tone }) => (
-            <li className={styles.card} key={title}>
-              <div className={styles.cardHeader}>
-                <div aria-hidden="true" className={styles.icon}>
-                  <Icon strokeWidth={1.8} />
-                </div>
-                <StatusBadge
-                  tone={
-                    id === "google-calendar" && calendarStatus === "connected" ? "neutral" : tone
-                  }
-                >
-                  {id === "google-calendar" && calendarStatus === "connected"
-                    ? "Подключено"
-                    : status}
-                </StatusBadge>
-              </div>
-
-              <div className={styles.cardCopy}>
-                <h2>{title}</h2>
-                <p>{description}</p>
-              </div>
-
-              <p className={styles.detail}>{detail}</p>
-
-              <div className={styles.cardFooter}>
-                {id === "google-calendar" ? (
-                  <GoogleCalendarConnect status={calendarStatus} />
-                ) : (
-                  <>
-                    <button aria-describedby={`${id}-availability`} disabled type="button">
-                      {action}
-                    </button>
-                    <span id={`${id}-availability`}>Доступно после подключения API</span>
-                  </>
-                )}
-              </div>
-            </li>
-          )
-        )}
+        {beforeLocation.map((item) => renderIntegration(item, calendarStatus))}
+        <LocationCard />
+        {afterLocation.map((item) => renderIntegration(item, calendarStatus))}
       </ul>
     </div>
+  );
+}
+
+function renderIntegration(item: IntegrationCard, calendarStatus: CalendarConnectionStatus | null) {
+  const { action, description, detail, icon: Icon, id, status, title, tone } = item;
+  const calendarConnected = id === "google-calendar" && calendarStatus === "connected";
+
+  return (
+    <li className={styles.card} key={title}>
+      <div className={styles.cardHeader}>
+        <div aria-hidden="true" className={styles.icon}>
+          <Icon strokeWidth={1.8} />
+        </div>
+        <StatusBadge tone={calendarConnected ? "neutral" : tone}>
+          {calendarConnected ? "Подключено" : status}
+        </StatusBadge>
+      </div>
+
+      <div className={styles.cardCopy}>
+        <h2>{title}</h2>
+        <p>{description}</p>
+      </div>
+
+      <p className={styles.detail}>{detail}</p>
+
+      <div className={styles.cardFooter}>
+        {id === "google-calendar" ? (
+          <GoogleCalendarConnect status={calendarStatus} />
+        ) : (
+          <>
+            <button aria-describedby={`${id}-availability`} disabled type="button">
+              {action}
+            </button>
+            <span id={`${id}-availability`}>Доступно после подключения API</span>
+          </>
+        )}
+      </div>
+    </li>
   );
 }

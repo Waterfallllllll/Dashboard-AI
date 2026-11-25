@@ -1,3 +1,9 @@
+## 2026-11-25 — Карточка «Местоположение» сохраняет город
+
+- На `/settings/integrations` карточка «Местоположение» больше не заглушка. В ней город, геолокация и удаление места. Статус становится «Настроено», когда точка записана в аккаунт.
+- Изменены `apps/web/src/features/integrations/components/integration-list.tsx`, `location-card.tsx`, `weather-place-form.tsx`, `device-permissions.tsx`.
+- Новые переменные окружения не добавлялись.
+
 ## 2026-11-25 — Место для погоды сохраняется в аккаунт
 
 - Кнопки «Определить место», «Сохранить город» и «Удалить локацию» на `/settings/integrations` больше не пишут координаты в `localStorage`. Город ищется через `GET /api/v1/weather/places`, точка сохраняется через `PUT /api/v1/weather/location` с CSRF. `GET` и `DELETE /api/v1/weather/location` читают и стирают место в профиле.

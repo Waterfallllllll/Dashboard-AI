@@ -3,15 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithUser } from "@/test/render";
 
-import { resetDeviceLocationStoreForTests } from "@/features/location";
 import { resetNotificationStoreForTests } from "@/features/notifications";
 
 import { DevicePermissions } from "./device-permissions";
+import { WeatherPlaceForm } from "./weather-place-form";
 
 describe("DevicePermissions", () => {
   beforeEach(() => {
     window.localStorage.clear();
-    resetDeviceLocationStoreForTests();
     resetNotificationStoreForTests();
   });
 
@@ -21,7 +20,7 @@ describe("DevicePermissions", () => {
       configurable: true,
       value: { getCurrentPosition }
     });
-    const { user } = renderWithUser(<DevicePermissions />);
+    const { user } = renderWithUser(<WeatherPlaceForm />);
 
     expect(getCurrentPosition).not.toHaveBeenCalled();
     await user.click(screen.getByRole("button", { name: "Определить место" }));

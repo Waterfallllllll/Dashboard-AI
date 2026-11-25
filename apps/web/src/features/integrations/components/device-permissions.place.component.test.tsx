@@ -3,9 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithUser } from "@/test/render";
 
-import { resetNotificationStoreForTests } from "@/features/notifications";
-
-import { DevicePermissions } from "./device-permissions";
+import { LocationCard } from "./location-card";
 
 const session = {
   data: {
@@ -38,7 +36,6 @@ function jsonResponse(status: number, body: unknown): Response {
 describe("сохранение места для погоды", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
-    resetNotificationStoreForTests();
   });
 
   it("записывает найденный город в аккаунт", async () => {
@@ -63,12 +60,13 @@ describe("сохранение места для погоды", () => {
       return jsonResponse(200, { data: { location: moscow }, meta: { requestId: "request-3" } });
     });
     vi.stubGlobal("fetch", fetchImpl);
-    const { user } = renderWithUser(<DevicePermissions />);
+    const { user } = renderWithUser(<LocationCard />);
 
     await user.type(screen.getByLabelText("Город"), "Москва");
     await user.click(screen.getByRole("button", { name: "Сохранить город" }));
 
     expect(await screen.findByText("Сейчас: Москва, Россия")).toBeInTheDocument();
+    expect(screen.getByText("Настроено")).toBeInTheDocument();
     expect(fetchImpl).toHaveBeenCalledWith(
       "/api/v1/weather/location",
       expect.objectContaining({ method: "PUT" })
