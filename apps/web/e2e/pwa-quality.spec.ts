@@ -95,14 +95,8 @@ test.describe("PWA, доступность и производительност
     await expect(page.getByRole("button", { name: "Старт" })).toBeVisible();
   });
 
-  test("запрашивает место и уведомления только по кнопке", async ({ page }) => {
-    await page.context().grantPermissions(["notifications"]);
+  test("запрашивает место только по кнопке", async ({ page }) => {
     await page.goto("/settings/integrations");
-
-    await expect(page.getByRole("button", { name: "Включить уведомления" })).toBeDisabled();
-    await expect(page.getByText("Системное разрешение ещё не запрашивалось.")).toBeVisible();
-    await page.getByRole("button", { name: "Разрешить уведомления" }).click();
-    await expect(page.getByText(/Браузер разрешил уведомления/)).toBeVisible();
 
     await page.getByRole("button", { name: "Определить место" }).click();
     await expect(page.getByText(/запретил доступ к месту|не отдаёт координаты/)).toBeVisible();

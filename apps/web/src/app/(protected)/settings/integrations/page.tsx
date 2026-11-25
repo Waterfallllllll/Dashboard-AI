@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
 
 import { PageScaffold } from "@/components/ui/page-scaffold";
-import {
-  DevicePermissions,
-  IntegrationList,
-  type CalendarConnectionStatus
-} from "@/features/integrations";
+import { IntegrationList, type CalendarConnectionStatus } from "@/features/integrations";
 
 export const metadata: Metadata = {
   title: "Интеграции"
@@ -26,7 +22,6 @@ export default async function IntegrationsPage({ searchParams }: IntegrationsPag
       title="Интеграции"
     >
       <IntegrationList calendarStatus={calendarStatus(params.calendar)} />
-      <DevicePermissions />
     </PageScaffold>
   );
 }
