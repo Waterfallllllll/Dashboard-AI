@@ -33,6 +33,7 @@ export function WeatherPlaceForm({ onPlaceChange }: WeatherPlaceFormProps) {
   const placeRequest = useRef(0);
   const cityInputRef = useRef<HTMLInputElement>(null);
   const onPlaceChangeRef = useRef(onPlaceChange);
+  const statusOwnedByUser = useRef(false);
 
   function publish(next: WeatherPlace | null): void {
     setPlace(next);
@@ -66,7 +67,10 @@ export function WeatherPlaceForm({ onPlaceChange }: WeatherPlaceFormProps) {
         setPlace(null);
         setPlaceKnown(true);
         onPlaceChangeRef.current?.(null);
-        setLocationMessage(messageFrom(error, "Не удалось прочитать сохранённое место."));
+
+        if (!statusOwnedByUser.current) {
+          setLocationMessage(messageFrom(error, "Не удалось прочитать сохранённое место."));
+        }
       }
     );
 
@@ -76,8 +80,10 @@ export function WeatherPlaceForm({ onPlaceChange }: WeatherPlaceFormProps) {
   }, []);
 
   async function detectPlace() {
+    statusOwnedByUser.current = true;
+
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      setLocationMessage("Этот браузер не отдаёт координаты. Укажите город вручную.");
+      setLocationMessage(COORDINATES_UNAVAILABLE_MESSAGE);
       return;
     }
 
@@ -85,8 +91,17 @@ export function WeatherPlaceForm({ onPlaceChange }: WeatherPlaceFormProps) {
     setSaveError("");
     setLocationMessage("Запрашиваем сокращённые координаты…");
 
+    let position: GeolocationPosition;
+
     try {
-      const position = await requestPosition();
+      position = await requestPosition();
+    } catch (error) {
+      setLocationMessage(geolocationFailureMessage(error));
+      setBusy(false);
+      return;
+    }
+
+    try {
       const next = locationFromCoordinates(position.coords.latitude, position.coords.longitude);
 
       if (!next || next.kind !== "coordinates") {
@@ -103,19 +118,14 @@ export function WeatherPlaceForm({ onPlaceChange }: WeatherPlaceFormProps) {
         `Место «${saved.label}» сохранено. Откройте дашборд, чтобы увидеть прогноз.`
       );
     } catch (error) {
-      const denied =
-        typeof error === "object" && error !== null && "code" in error && error.code === 1;
-      setLocationMessage(
-        denied
-          ? "Браузер запретил доступ к месту. Укажите город вручную или разрешите геолокацию в настройках сайта."
-          : messageFrom(error, "Не удалось определить место. Укажите город вручную.")
-      );
+      setLocationMessage(messageFrom(error, "Не удалось определить место. Укажите город вручную."));
     } finally {
       setBusy(false);
     }
   }
 
   async function saveCity() {
+    statusOwnedByUser.current = true;
     const nextCity = parseCity(city);
 
     if (!nextCity || nextCity.length < 2) {
@@ -155,6 +165,7 @@ export function WeatherPlaceForm({ onPlaceChange }: WeatherPlaceFormProps) {
   }
 
   async function removePlace() {
+    statusOwnedByUser.current = true;
     setBusy(true);
     setSaveError("");
 
@@ -238,12 +249,60 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === "AbortError";
 }
 
+const COORDINATES_UNAVAILABLE_MESSAGE =
+  "Этот браузер не отдаёт координаты. Укажите город вручную.";
+const GEOLOCATION_WAIT_MS = 8_000;
+
+function geolocationFailureMessage(error: unknown): string {
+  return readGeolocationCode(error) === 1
+    ? "Браузер запретил доступ к месту. Укажите город вручную или разрешите геолокацию в настройках сайта."
+    : COORDINATES_UNAVAILABLE_MESSAGE;
+}
+
+function readGeolocationCode(error: unknown): number | null {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return null;
+  }
+
+  return typeof error.code === "number" ? error.code : null;
+}
+
 function requestPosition(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
-      enableHighAccuracy: false,
-      maximumAge: 300_000,
-      timeout: 8_000
-    });
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      reject({ code: 3 });
+    }, GEOLOCATION_WAIT_MS);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(position);
+      },
+      (error) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        window.clearTimeout(timer);
+        reject(error);
+      },
+      {
+        enableHighAccuracy: false,
+        maximumAge: 300_000,
+        timeout: GEOLOCATION_WAIT_MS
+      }
+    );
   });
 }

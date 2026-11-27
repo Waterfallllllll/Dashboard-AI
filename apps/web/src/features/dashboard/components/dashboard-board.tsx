@@ -611,7 +611,7 @@ function statusFor(
     return "loading";
   }
 
-  if (type === "datetime") {
+  if (type === "datetime" || (type === "timer" && loadState.status !== "ready")) {
     return "success";
   }
 
