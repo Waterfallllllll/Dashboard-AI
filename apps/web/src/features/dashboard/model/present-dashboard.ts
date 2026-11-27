@@ -59,7 +59,7 @@ export function presentDashboard(dashboard: Dashboard, timeZone: string): Presen
     },
     weather: presentWeather(dashboard.weather, accountZone),
     calendar: presentCalendar(dashboard.calendar),
-    routines: presentRoutines(dashboard.routines),
+    routines: presentRoutines(dashboard.routines, dashboard.date),
     timer: presentTimer(dashboard.timer),
     news: presentNews(dashboard.news)
   };
@@ -157,10 +157,23 @@ function presentNews(section: Dashboard["news"]): PresentedSection<readonly News
 }
 
 function presentRoutines(
-  section: Dashboard["routines"]
+  section: Dashboard["routines"],
+  anchor: string
 ): PresentedSection<readonly RoutineOccurrence[]> {
   if (section.status !== "ready") {
     return { status: "error", data: [], updatedAt: null };
+  }
+
+  const window = section.days;
+
+  if (window && window[1]?.date === anchor) {
+    const items = occurrencesFromWindow(window, anchor);
+
+    return {
+      status: items.length === 0 ? "empty" : "success",
+      data: items,
+      updatedAt: null
+    };
   }
 
   const source = readRoutineItems(section.day);
@@ -169,20 +182,55 @@ function presentRoutines(
     return { status: "error", data: [], updatedAt: null };
   }
 
-  const items = source
+  return {
+    status: source.some((item) => item.status !== "hidden") ? "success" : "empty",
+    data: toOccurrences(source, 0),
+    updatedAt: null
+  };
+}
+
+const WINDOW_OFFSETS = [-1, 0, 1] as const;
+
+type RoutineWindowDay = Extract<Dashboard["routines"], { status: "ready" }>["day"];
+
+function occurrencesFromWindow(
+  days: readonly RoutineWindowDay[],
+  anchor: string
+): RoutineOccurrence[] {
+  return WINDOW_OFFSETS.flatMap((offset, index) => {
+    const day = days[index];
+
+    if (!day || day.date !== shiftIsoDate(anchor, offset)) {
+      return [];
+    }
+
+    return toOccurrences(day.items, offset);
+  });
+}
+
+function toOccurrences(
+  items: readonly RoutineDayItem[],
+  dayOffset: RoutineOccurrence["dayOffset"]
+): RoutineOccurrence[] {
+  return items
     .filter((item) => item.status !== "hidden")
     .map((item) => ({
       id: item.id,
       title: item.title,
-      dayOffset: 0 as const,
+      dayOffset,
       done: item.status === "done"
     }));
+}
 
-  return {
-    status: items.length === 0 ? "empty" : "success",
-    data: items,
-    updatedAt: null
-  };
+function shiftIsoDate(isoDate: string, days: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+
+  if (!match) {
+    return isoDate;
+  }
+
+  const utc = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days));
+  return utc.toISOString().slice(0, 10);
 }
 
 function presentTimer(section: Dashboard["timer"]): PresentedSection<TimerSession | null> {

@@ -1,7 +1,13 @@
 import { SECTION_ERROR_MESSAGE } from "@dashboard/contracts";
-import type { CalendarSection, Dashboard, NewsSection, WeatherSection } from "@dashboard/contracts";
+import type {
+  CalendarSection,
+  Dashboard,
+  NewsSection,
+  RoutineDay,
+  WeatherSection
+} from "@dashboard/contracts";
 
-import { localDateInTimeZone } from "../../shared/local-date.js";
+import { addDays, localDateInTimeZone } from "../../shared/local-date.js";
 import type { Viewer } from "../../shared/http/require-actor.js";
 import type { RoutinesService } from "../routines/routines.service.js";
 import type { TimersService } from "../timers/timers.service.js";
@@ -49,7 +55,7 @@ export class DashboardService {
     const [datetime, widgets, routines, timer, weather, calendar, news] = await Promise.allSettled([
       Promise.resolve(datetimeSection(viewer, now)),
       withDeadline(this.widgets.get(viewer)),
-      withDeadline(this.routines.listDay(viewer, date, today)),
+      withDeadline(loadRoutineWindow(this.routines, viewer, date, today)),
       withDeadline(this.timers.current(viewer, date, viewer.timezone)),
       withDeadline(this.weather.load(viewer, date)),
       withDeadline(this.calendar.load(viewer, date)),
@@ -61,13 +67,32 @@ export class DashboardService {
       generatedAt: now.toISOString(),
       datetime: mapSection(datetime, (section) => section),
       widgets: mapSection(widgets, (preferences) => ({ status: "ready" as const, preferences })),
-      routines: mapSection(routines, (day) => ({ status: "ready" as const, day })),
+      routines: mapSection(routines, (window) => ({
+        status: "ready" as const,
+        day: window.day,
+        days: window.days
+      })),
       timer: mapSection(timer, (snapshot) => ({ status: "ready" as const, timer: snapshot })),
       weather: externalSection(weather),
       calendar: externalSection(calendar),
       news: externalSection(news)
     };
   }
+}
+
+async function loadRoutineWindow(
+  routines: RoutinesService,
+  viewer: Viewer,
+  date: string,
+  today: string
+): Promise<{ day: RoutineDay; days: [RoutineDay, RoutineDay, RoutineDay] }> {
+  const [yesterday, day, tomorrow] = await Promise.all([
+    routines.listDay(viewer, addDays(date, -1), today),
+    routines.listDay(viewer, date, today),
+    routines.listDay(viewer, addDays(date, 1), today)
+  ]);
+
+  return { day, days: [yesterday, day, tomorrow] };
 }
 
 function datetimeSection(viewer: Viewer, now: Date): ReadyDatetime {

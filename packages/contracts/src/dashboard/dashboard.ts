@@ -92,10 +92,13 @@ export const widgetsSectionSchema = z.discriminatedUnion("status", [
   sectionErrorSchema
 ]);
 
+const routineWindowSchema = z.tuple([routineDaySchema, routineDaySchema, routineDaySchema]);
+
 export const routinesSectionSchema = z.discriminatedUnion("status", [
   z.strictObject({
     status: z.literal("ready"),
-    day: routineDaySchema
+    day: routineDaySchema,
+    days: routineWindowSchema.optional()
   }),
   sectionErrorSchema
 ]);
