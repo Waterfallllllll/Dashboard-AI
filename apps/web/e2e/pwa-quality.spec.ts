@@ -77,17 +77,78 @@ test.describe("PWA, доступность и производительност
     await expect(page.locator("#main-content")).toBeFocused();
   });
 
-  test("сохраняет рутину, выполнение и состояние таймера", async ({ page }) => {
+  test("сохраняет рутину в список активных и состояние таймера", async ({ page }) => {
+    const created = {
+      id: "550e8400-e29b-41d4-a716-446655440010",
+      title: "Проверить PWA",
+      description: null,
+      startDate: "2026-11-27",
+      endDate: null,
+      recurrence: { kind: "daily" },
+      reminderLocalTime: null,
+      timezone: "Europe/Moscow",
+      status: "active",
+      createdAt: "2026-11-27T06:00:00.000Z",
+      updatedAt: "2026-11-27T06:00:00.000Z"
+    };
+    let stored: typeof created | null = null;
+
+    await page.route("**/api/v1/auth/session", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: {
+            user: {
+              id: "64b7f0c2a1d4e8f01a2b3c4d",
+              displayName: "Илья",
+              avatarUrl: null,
+              locale: "ru",
+              timezone: "Europe/Moscow",
+              timeFormat: "24",
+              theme: "light",
+              createdAt: "2026-11-11T08:30:00.000Z",
+              updatedAt: "2026-11-11T08:30:00.000Z"
+            },
+            expiresAt: "2026-11-25T08:30:00.000Z",
+            csrfToken: "a".repeat(43)
+          },
+          meta: { requestId: "request-1" }
+        })
+      });
+    });
+    await page.route("**/api/v1/routine-rules**", async (route) => {
+      if (route.request().method() === "POST") {
+        stored = { ...created, title: (route.request().postDataJSON() as { title: string }).title };
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({ data: stored, meta: { requestId: "request-2" } })
+        });
+        return;
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          data: stored ? [stored] : [],
+          meta: { requestId: "request-1", page: { nextCursor: null } }
+        })
+      });
+    });
+
     await page.goto("/settings/routines");
     await page.getByLabel("Название").fill("Проверить PWA");
     await page.getByRole("button", { name: "Сохранить рутину" }).click();
-    await expect(page.getByText("Сохранено на этом устройстве.")).toBeVisible();
+    await expect(page.getByText("Рутина добавлена в список активных.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Активные" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Проверить PWA" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "На этом устройстве" })).toHaveCount(0);
 
+    await page.unroute("**/api/v1/auth/session");
+    await page.unroute("**/api/v1/routine-rules**");
     await page.goto("/dashboard");
-    const checkbox = page.getByRole("checkbox", { name: "Проверить PWA" });
-    await checkbox.check();
-    await expect(checkbox).toBeChecked();
 
     await page.getByRole("button", { name: "Старт" }).click();
     await expect(page.getByRole("button", { name: "Пауза" })).toBeVisible();

@@ -1,35 +1,23 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
+
+import type { RoutineRuleCreate } from "@dashboard/contracts";
 
 import { useTickingNow } from "@/lib/browser/use-ticking-now";
 import { formatInZone, getSystemTimeZone } from "@/lib/format/date-time";
 
 import {
-  getRoutineLibraryServerSnapshot,
-  getRoutineLibrarySnapshot,
-  replaceRoutineLibrary,
-  subscribeRoutineLibrary,
-  updateRoutineLibrary
-} from "../model/routine-library-store";
+  RoutineRulesError,
+  createRoutineRule,
+  type CreateRoutineRule
+} from "../api/routine-rules-client";
+import { notifyAccountRoutinesChanged } from "../model/account-routine-refresh";
 import {
-  createRoutine,
-  describeSchedule,
-  endSeries,
-  hasDuplicateTitle,
-  hideOccurrence,
   parseRoutineDraft,
-  setRoutineStatus,
-  templateFilterStatus,
-  upcomingDates,
-  updateRoutine,
-  type RoutineActivity,
   type RoutineDraft,
-  type RoutineEditScope,
   type RoutineField,
-  type RoutineLibrary,
   type RoutineRecurrence,
-  type RoutineTemplate,
   type Weekday
 } from "../model/routine-rules";
 
@@ -45,123 +33,63 @@ const WEEKDAYS: readonly Readonly<{ day: Weekday; label: string }>[] = [
   { day: 0, label: "Вс" }
 ];
 
-const FILTERS = [
-  { value: "active", label: "Текущие" },
-  { value: "paused", label: "На паузе" },
-  { value: "completed", label: "Завершённые дела" }
-] as const;
+type RoutineLibraryEditorProps = Readonly<{
+  createRule?: CreateRoutineRule;
+}>;
 
-type FilterValue = (typeof FILTERS)[number]["value"];
+function accountRecurrence(recurrence: RoutineRecurrence): RoutineRuleCreate["recurrence"] {
+  if (recurrence.kind === "days") {
+    return { kind: "weekly", days: [...recurrence.days] };
+  }
 
-export function RoutineLibraryEditor() {
+  return { kind: recurrence.kind };
+}
+
+function toAccountCreate(draft: RoutineDraft): RoutineRuleCreate {
+  return {
+    title: draft.title,
+    description: draft.description.length === 0 ? null : draft.description,
+    startDate: draft.startDate,
+    endDate: draft.endDate,
+    recurrence: accountRecurrence(draft.recurrence),
+    reminderLocalTime: draft.reminderTime,
+    status: draft.status
+  };
+}
+
+function newIdempotencyKey(): string {
+  const suffix =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`;
+
+  return `routine-${suffix}`;
+}
+
+export function RoutineLibraryEditor({ createRule = createRoutineRule }: RoutineLibraryEditorProps) {
   const formId = useId();
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  const snapshot = useSyncExternalStore(
-    subscribeRoutineLibrary,
-    getRoutineLibrarySnapshot,
-    getRoutineLibraryServerSnapshot
-  );
   const now = useTickingNow(false);
   const [timeZone] = useState(getSystemTimeZone);
   const today = formatInZone(now, timeZone, "yyyy-MM-dd");
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<FilterValue>("active");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState("");
-  const [openEnded, setOpenEnded] = useState(true);
   const [recurrenceKind, setRecurrenceKind] = useState<RoutineRecurrence["kind"]>("daily");
   const [days, setDays] = useState<Weekday[]>([1, 2, 3, 4, 5]);
   const [reminderTime, setReminderTime] = useState("");
-  const [status, setStatus] = useState<RoutineActivity>("active");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [scopeDate, setScopeDate] = useState(today);
   const [errors, setErrors] = useState<Partial<Record<RoutineField, string>>>({});
-  const [undo, setUndo] = useState<RoutineLibrary | null>(null);
-  const [pendingDraft, setPendingDraft] = useState<RoutineDraft | null>(null);
-
-  useEffect(() => {
-    if (!undo) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setUndo(null);
-    }, 5_000);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [undo]);
-
-  useEffect(() => {
-    const dialog = dialogRef.current;
-
-    if (!dialog) {
-      return;
-    }
-
-    if (pendingDraft && !dialog.open) {
-      if (typeof dialog.showModal === "function") {
-        dialog.showModal();
-      } else {
-        dialog.setAttribute("open", "");
-      }
-    }
-
-    if (!pendingDraft && dialog.open) {
-      if (typeof dialog.close === "function") {
-        dialog.close();
-      } else {
-        dialog.removeAttribute("open");
-      }
-    }
-  }, [pendingDraft]);
-
-  const normalizedQuery = query.trim().toLocaleLowerCase("ru");
-  const visible = snapshot.library.templates.filter((template) => {
-    const matchesStatus = templateFilterStatus(template, today) === filter;
-    const matchesQuery =
-      normalizedQuery.length === 0 ||
-      template.title.toLocaleLowerCase("ru").includes(normalizedQuery);
-
-    return matchesStatus && matchesQuery;
-  });
-  const duplicate = editingId
-    ? hasDuplicateTitle(snapshot.library, title, editingId)
-    : hasDuplicateTitle(snapshot.library, title);
-
-  function remember(next: RoutineLibrary) {
-    setUndo(snapshot.library);
-    replaceRoutineLibrary(next);
-  }
-
-  function fill(template: RoutineTemplate) {
-    setEditingId(template.id);
-    setTitle(template.title);
-    setDescription(template.description);
-    setStartDate(template.startDate);
-    setEndDate(template.endDate ?? "");
-    setOpenEnded(template.endDate === null);
-    setRecurrenceKind(template.recurrence.kind);
-    setDays(template.recurrence.kind === "days" ? [...template.recurrence.days] : [1, 2, 3, 4, 5]);
-    setReminderTime(template.reminderTime ?? "");
-    setStatus(template.status);
-    setScopeDate(today < template.startDate ? template.startDate : today);
-    setErrors({});
-  }
+  const [saving, setSaving] = useState(false);
+  const [accountMessage, setAccountMessage] = useState("");
+  const [accountError, setAccountError] = useState("");
 
   function resetForm() {
-    setEditingId(null);
     setTitle("");
     setDescription("");
     setStartDate(today);
     setEndDate("");
-    setOpenEnded(true);
     setRecurrenceKind("daily");
     setReminderTime("");
-    setStatus("active");
     setErrors({});
   }
 
@@ -173,19 +101,6 @@ export function RoutineLibraryEditor() {
     return { kind: recurrenceKind };
   }
 
-  function apply(draft: RoutineDraft, scope: RoutineEditScope) {
-    const current = snapshot.library;
-
-    const next =
-      editingId === null
-        ? createRoutine(current, draft)
-        : updateRoutine(current, editingId, draft, scope, scopeDate);
-
-    remember(next);
-    resetForm();
-    setPendingDraft(null);
-  }
-
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsed = parseRoutineDraft({
@@ -193,339 +108,287 @@ export function RoutineLibraryEditor() {
       description,
       startDate,
       endDate,
-      openEnded,
+      openEnded: endDate.trim() === "",
       recurrence: recurrence(),
       reminderTime,
-      status
+      status: "active"
     });
 
     if (!parsed.ok) {
       setErrors(parsed.fieldErrors);
+      const firstField = (
+        ["title", "description", "startDate", "endDate", "recurrence", "reminderTime"] as const
+      ).find((field) => parsed.fieldErrors[field]);
+      const fieldId =
+        firstField === "startDate"
+          ? "routine-editor-start"
+          : firstField === "endDate"
+            ? "routine-editor-end"
+            : firstField === "reminderTime"
+              ? "routine-editor-reminder"
+              : firstField
+                ? `routine-editor-${firstField}`
+                : null;
+
+      if (fieldId) {
+        document.getElementById(fieldId)?.focus();
+      }
+
       return;
     }
 
     setErrors({});
-    const current = snapshot.library.templates.find((template) => template.id === editingId);
+    setAccountError("");
+    setAccountMessage("");
+    void saveToAccount(parsed.draft);
+  }
 
-    if (current && current.recurrence.kind !== "once" && parsed.draft.recurrence.kind !== "once") {
-      setPendingDraft(parsed.draft);
-      return;
+  async function saveToAccount(draft: RoutineDraft) {
+    setSaving(true);
+
+    try {
+      await createRule(toAccountCreate(draft), newIdempotencyKey());
+      resetForm();
+      setAccountMessage("Рутина добавлена в список активных.");
+      notifyAccountRoutinesChanged();
+
+      try {
+        document.getElementById("account-routines")?.scrollIntoView({ block: "start" });
+      } catch {
+        // В тестовой среде прокрутка страницы не реализована.
+      }
+    } catch (error) {
+      if (error instanceof RoutineRulesError) {
+        setAccountError(error.message);
+        applyFieldErrors(error.fieldErrors);
+        return;
+      }
+
+      setAccountError("Не удалось создать рутину.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function applyFieldErrors(fieldErrors: Readonly<Record<string, readonly string[]>>) {
+    const next: Partial<Record<RoutineField, string>> = {};
+    const reminder = fieldErrors.reminderLocalTime?.[0];
+
+    if (fieldErrors.title?.[0]) {
+      next.title = fieldErrors.title[0];
     }
 
-    apply(parsed.draft, "template");
+    if (fieldErrors.description?.[0]) {
+      next.description = fieldErrors.description[0];
+    }
+
+    if (fieldErrors.startDate?.[0]) {
+      next.startDate = fieldErrors.startDate[0];
+    }
+
+    if (fieldErrors.endDate?.[0]) {
+      next.endDate = fieldErrors.endDate[0];
+    }
+
+    if (fieldErrors.recurrence?.[0]) {
+      next.recurrence = fieldErrors.recurrence[0];
+    }
+
+    if (reminder) {
+      next.reminderTime = reminder;
+    }
+
+    if (Object.keys(next).length > 0) {
+      setErrors(next);
+    }
   }
 
   return (
-    <section aria-labelledby={`${formId}-title`} className={styles.editor}>
+    <section aria-labelledby={`${formId}-title`} className={styles.editor} id="routine-editor">
       <header>
         <h2 id={`${formId}-title`}>Ваши рутины</h2>
-        <p>
-          Дела сохраняются на этом устройстве и сразу попадают в виджет. Общий аккаунт подключится
-          вместе с API.
-        </p>
+        <p>Новая рутина сохраняется в аккаунт и появляется в списке «Активные» выше.</p>
       </header>
 
-      <form className={styles.form} onSubmit={handleSubmit}>
-        <label>
-          Название
+      <form aria-labelledby={`${formId}-title`} className={styles.form} onSubmit={handleSubmit}>
+        <p className={styles.lead}>После сохранения она появится среди активных.</p>
+        <div className={styles.field}>
+          <label htmlFor="routine-editor-title">Название</label>
           <input
+            aria-describedby={errors.title ? "routine-editor-title-error" : undefined}
+            aria-invalid={errors.title ? true : undefined}
+            id="routine-editor-title"
             maxLength={120}
+            name="title"
             onChange={(event) => {
               setTitle(event.currentTarget.value);
             }}
             required
             value={title}
           />
-        </label>
-        {errors.title ? <p role="alert">{errors.title}</p> : null}
-        {duplicate ? (
-          <p role="status">Уже есть рутина с таким названием. Можно сохранить ещё одну.</p>
-        ) : null}
-        <label>
-          Описание
+          {errors.title ? (
+            <p id="routine-editor-title-error" role="alert">
+              {errors.title}
+            </p>
+          ) : null}
+        </div>
+        <div className={styles.field}>
+          <label htmlFor="routine-editor-description">Описание</label>
           <textarea
+            aria-describedby={
+              errors.description
+                ? "routine-editor-description-error"
+                : "routine-editor-description-hint"
+            }
+            aria-invalid={errors.description ? true : undefined}
+            id="routine-editor-description"
             maxLength={500}
+            name="description"
             onChange={(event) => {
               setDescription(event.currentTarget.value);
             }}
             value={description}
           />
-        </label>
-        {errors.description ? <p role="alert">{errors.description}</p> : null}
-        <label>
-          Дата начала
-          <input
-            onChange={(event) => {
-              setStartDate(event.currentTarget.value);
-            }}
-            type="date"
-            value={startDate}
-          />
-        </label>
-        {errors.startDate ? <p role="alert">{errors.startDate}</p> : null}
-        <label>
-          <input
-            checked={openEnded}
-            onChange={(event) => {
-              setOpenEnded(event.currentTarget.checked);
-            }}
-            type="checkbox"
-          />
-          Без даты окончания
-        </label>
-        {openEnded ? null : (
-          <label>
-            Дата окончания
-            <input
-              onChange={(event) => {
-                setEndDate(event.currentTarget.value);
-              }}
-              type="date"
-              value={endDate}
-            />
-          </label>
-        )}
-        {errors.endDate ? <p role="alert">{errors.endDate}</p> : null}
-        <label>
-          Повторение
-          <select
-            onChange={(event) => {
-              setRecurrenceKind(event.currentTarget.value as RoutineRecurrence["kind"]);
-            }}
-            value={recurrenceKind}
-          >
-            <option value="daily">Ежедневно</option>
-            <option value="weekdays">По рабочим дням</option>
-            <option value="days">Выбранные дни</option>
-            <option value="once">Однократно</option>
-          </select>
-        </label>
-        {recurrenceKind === "days" ? (
-          <fieldset>
-            <legend>Дни недели</legend>
-            {WEEKDAYS.map((item) => (
-              <label key={item.day}>
-                <input
-                  checked={days.includes(item.day)}
-                  onChange={() => {
-                    setDays((current) =>
-                      current.includes(item.day)
-                        ? current.filter((day) => day !== item.day)
-                        : [...current, item.day]
-                    );
-                  }}
-                  type="checkbox"
-                />
-                {item.label}
-              </label>
-            ))}
-          </fieldset>
-        ) : null}
-        {errors.recurrence ? <p role="alert">{errors.recurrence}</p> : null}
-        <label>
-          Время напоминания
-          <input
-            onChange={(event) => {
-              setReminderTime(event.currentTarget.value);
-            }}
-            type="time"
-            value={reminderTime}
-          />
-        </label>
-        {errors.reminderTime ? <p role="alert">{errors.reminderTime}</p> : null}
-        <label>
-          <input
-            checked={status === "active"}
-            onChange={(event) => {
-              setStatus(event.currentTarget.checked ? "active" : "paused");
-            }}
-            type="checkbox"
-          />
-          Рутина активна
-        </label>
-        <div className={styles.actions}>
-          <button type="submit">{editingId ? "Сохранить изменения" : "Сохранить рутину"}</button>
-          {editingId ? (
-            <button onClick={resetForm} type="button">
-              Отменить редактирование
-            </button>
+          <p className={styles.hint} id="routine-editor-description-hint">
+            Необязательно.
+          </p>
+          {errors.description ? (
+            <p id="routine-editor-description-error" role="alert">
+              {errors.description}
+            </p>
           ) : null}
         </div>
-      </form>
-
-      <div className={styles.toolbar}>
-        <label>
-          Поиск по своим рутинам
-          <input
-            onChange={(event) => {
-              setQuery(event.currentTarget.value);
-            }}
-            type="search"
-            value={query}
-          />
-        </label>
-        <fieldset>
-          <legend>Показать</legend>
-          {FILTERS.map((item) => (
-            <label key={item.value}>
+        <div className={styles.schedule}>
+          <h3>Когда выполнять</h3>
+          <div className={styles.dates}>
+            <div className={styles.field}>
+              <label htmlFor="routine-editor-start">Дата начала</label>
               <input
-                checked={filter === item.value}
-                name="library-filter"
-                onChange={() => {
-                  setFilter(item.value);
+                aria-describedby={errors.startDate ? "routine-editor-start-error" : undefined}
+                aria-invalid={errors.startDate ? true : undefined}
+                id="routine-editor-start"
+                name="startDate"
+                onChange={(event) => {
+                  setStartDate(event.currentTarget.value);
                 }}
-                type="radio"
-                value={item.value}
+                type="date"
+                value={startDate}
               />
-              {item.label}
-            </label>
-          ))}
-        </fieldset>
-      </div>
-
-      {visible.length === 0 ? (
-        <h3>Своих рутин пока нет</h3>
-      ) : (
-        <ul className={styles.list}>
-          {visible.map((template) => (
-            <li key={template.id}>
-              <h3>{template.title}</h3>
-              <p>{describeSchedule(template)}</p>
-              <p>
-                {upcomingDates(template, today, 3).length > 0
-                  ? `Ближайшие даты: ${upcomingDates(template, today, 3).join(", ")}`
-                  : "Новые экземпляры не создаются"}
+              {errors.startDate ? (
+                <p id="routine-editor-start-error" role="alert">
+                  {errors.startDate}
+                </p>
+              ) : null}
+            </div>
+            <div className={styles.field}>
+              <label htmlFor="routine-editor-end">Дата окончания</label>
+              <input
+                aria-describedby={
+                  errors.endDate ? "routine-editor-end-error" : "routine-editor-end-hint"
+                }
+                aria-invalid={errors.endDate ? true : undefined}
+                id="routine-editor-end"
+                min={startDate}
+                name="endDate"
+                onChange={(event) => {
+                  setEndDate(event.currentTarget.value);
+                }}
+                type="date"
+                value={endDate}
+              />
+              <p className={styles.hint} id="routine-editor-end-hint">
+                Необязательно. Пустое поле — рутина без конца.
               </p>
-              <div className={styles.actions}>
-                <button
-                  onClick={() => {
-                    fill(template);
-                  }}
-                  type="button"
-                >
-                  Изменить «{template.title}»
-                </button>
-                <button
-                  onClick={() => {
-                    remember(
-                      setRoutineStatus(
-                        snapshot.library,
-                        template.id,
-                        template.status === "paused" ? "active" : "paused"
-                      )
-                    );
-                  }}
-                  type="button"
-                >
-                  {template.status === "paused" ? "Возобновить" : "Приостановить"} «{template.title}
-                  »
-                </button>
-                <label>
-                  Дата экземпляра
-                  <input
-                    onChange={(event) => {
-                      setScopeDate(event.currentTarget.value);
+              {errors.endDate ? (
+                <p id="routine-editor-end-error" role="alert">
+                  {errors.endDate}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          <div className={styles.field}>
+            <label htmlFor="routine-editor-recurrence">Повторение</label>
+            <select
+              aria-describedby={errors.recurrence ? "routine-editor-recurrence-error" : undefined}
+              aria-invalid={errors.recurrence ? true : undefined}
+              id="routine-editor-recurrence"
+              name="recurrence"
+              onChange={(event) => {
+                setRecurrenceKind(event.currentTarget.value as RoutineRecurrence["kind"]);
+              }}
+              value={recurrenceKind}
+            >
+              <option value="daily">Ежедневно</option>
+              <option value="weekdays">По рабочим дням</option>
+              <option value="days">В выбранные дни</option>
+              <option value="once">Один раз</option>
+            </select>
+          </div>
+          {recurrenceKind === "days" ? (
+            <fieldset className={styles.days}>
+              <legend>Дни недели</legend>
+              {WEEKDAYS.map((item) => {
+                const selected = days.includes(item.day);
+
+                return (
+                  <button
+                    aria-pressed={selected}
+                    key={item.day}
+                    onClick={() => {
+                      setDays((current) =>
+                        current.includes(item.day)
+                          ? current.filter((day) => day !== item.day)
+                          : [...current, item.day]
+                      );
                     }}
-                    type="date"
-                    value={scopeDate}
-                  />
-                </label>
-                <button
-                  onClick={() => {
-                    remember(hideOccurrence(snapshot.library, template.id, scopeDate));
-                  }}
-                  type="button"
-                >
-                  Скрыть в этот день
-                </button>
-                <button
-                  onClick={() => {
-                    remember(endSeries(snapshot.library, template.id, scopeDate));
-                  }}
-                  type="button"
-                >
-                  Удалить серию «{template.title}»
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <p aria-live="polite">
-        {snapshot.saveStatus === "error"
-          ? "Не удалось сохранить рутины. Показан последний удачный вариант."
-          : snapshot.saveStatus === "pending"
-            ? "Сохраняем…"
-            : snapshot.saveStatus === "saved"
-              ? "Сохранено на этом устройстве."
-              : "Изменения рутин сохраняются на этом устройстве."}
-      </p>
-      {undo ? (
-        <button
-          onClick={() => {
-            updateRoutineLibrary(() => undo);
-            setUndo(null);
-          }}
-          type="button"
-        >
-          Отменить удаление или изменение
-        </button>
-      ) : null}
-
-      <dialog aria-labelledby={`${formId}-scope`} className={styles.dialog} ref={dialogRef}>
-        <h2 id={`${formId}-scope`}>К каким датам применить изменение?</h2>
-        <label>
-          Дата, с которой меняем
-          <input
-            onChange={(event) => {
-              setScopeDate(event.currentTarget.value);
-            }}
-            type="date"
-            value={scopeDate}
-          />
-        </label>
+                    type="button"
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
+            </fieldset>
+          ) : null}
+          {errors.recurrence ? (
+            <p id="routine-editor-recurrence-error" role="alert">
+              {errors.recurrence}
+            </p>
+          ) : null}
+          <div className={styles.field}>
+            <label htmlFor="routine-editor-reminder">Время напоминания</label>
+            <input
+              aria-describedby={
+                errors.reminderTime
+                  ? "routine-editor-reminder-error"
+                  : "routine-editor-reminder-hint"
+              }
+              aria-invalid={errors.reminderTime ? true : undefined}
+              id="routine-editor-reminder"
+              name="reminderTime"
+              onChange={(event) => {
+                setReminderTime(event.currentTarget.value);
+              }}
+              type="time"
+              value={reminderTime}
+            />
+            <p className={styles.hint} id="routine-editor-reminder-hint">
+              Необязательно.
+            </p>
+            {errors.reminderTime ? (
+              <p id="routine-editor-reminder-error" role="alert">
+                {errors.reminderTime}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        {accountError ? <p role="alert">{accountError}</p> : null}
+        {accountMessage ? <p role="status">{accountMessage}</p> : null}
         <div className={styles.actions}>
-          <button
-            onClick={() => {
-              if (pendingDraft) {
-                apply(pendingDraft, "date");
-              }
-            }}
-            type="button"
-          >
-            Только эту дату
-          </button>
-          <button
-            onClick={() => {
-              if (pendingDraft) {
-                apply(pendingDraft, "following");
-              }
-            }}
-            type="button"
-          >
-            Эту и следующие
-          </button>
-          <button
-            onClick={() => {
-              if (pendingDraft) {
-                apply(pendingDraft, "template");
-              }
-            }}
-            type="button"
-          >
-            Весь шаблон
-          </button>
-          <button
-            onClick={() => {
-              setPendingDraft(null);
-            }}
-            type="button"
-          >
-            Не менять
+          <button disabled={saving} type="submit">
+            {saving ? "Сохраняем…" : "Сохранить рутину"}
           </button>
         </div>
-      </dialog>
+      </form>
     </section>
   );
 }

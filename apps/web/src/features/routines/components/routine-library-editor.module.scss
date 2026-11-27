@@ -21,26 +21,37 @@
 }
 
 .form,
-.toolbar,
-.list,
 .actions {
   display: grid;
   gap: var(--space-md);
 }
 
-.form label,
-.toolbar label,
-.actions label {
+.form {
+  container-type: inline-size;
+  gap: var(--space-lg);
+}
+
+.lead,
+.hint {
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--text-body-sm);
+}
+
+.field {
   display: grid;
   gap: var(--space-xs);
+}
+
+.field label,
+.schedule > h3,
+.days > legend {
   font: var(--text-label-lg);
 }
 
 .form input,
 .form textarea,
-.form select,
-.toolbar input,
-.actions input {
+.form select {
   box-sizing: border-box;
   min-block-size: var(--size-touch);
   inline-size: 100%;
@@ -50,21 +61,60 @@
   background: var(--color-card);
   color: var(--color-text);
   font: var(--text-body-md);
+  font-size: max(1rem, 1em);
 }
 
 .form textarea {
   min-block-size: 6rem;
   padding-block: var(--space-sm);
+  resize: vertical;
 }
 
-.form fieldset,
-.toolbar fieldset {
+.form [role="alert"] {
+  margin: 0;
+  color: var(--color-error);
+  font: var(--text-body-sm);
+}
+
+.schedule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  min-inline-size: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.dates {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.days {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-sm);
   border: 0;
   margin: 0;
   padding: 0;
+}
+
+.schedule > h3 {
+  margin: 0;
+}
+
+.days > legend {
+  flex-basis: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+@container (min-width: 36rem) {
+  .dates {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
 }
 
 .actions button,
@@ -84,36 +134,19 @@
   border-color: var(--color-primary);
   background: var(--color-primary);
   color: var(--color-text-on-primary);
-}
 
-.list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-
-  li {
-    display: grid;
-    gap: var(--space-sm);
-    border-block-start: 1px solid var(--color-border-subtle);
-    padding-block-start: var(--space-md);
+  &:disabled {
+    opacity: 0.58;
   }
 }
 
-.dialog {
-  inline-size: min(28rem, calc(100% - 2rem));
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  background: var(--color-card);
-  color: var(--color-text);
+.days button {
+  min-inline-size: var(--size-touch);
+  padding-inline: var(--space-md);
 
-  &::backdrop {
-    background: rgb(0 0 0 / 45%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dialog {
-    transition: none;
+  &[aria-pressed="true"] {
+    border-color: var(--color-primary);
+    background: var(--color-primary);
+    color: var(--color-text-on-primary);
   }
 }
