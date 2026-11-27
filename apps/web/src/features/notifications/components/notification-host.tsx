@@ -13,6 +13,8 @@ import { listOnDate } from "@/features/routines";
 
 import { publishProductNotice } from "../model/notification-center";
 import {
+  APP_NOTICE_VISIBLE_MS,
+  dismissAppNotice,
   getNotificationServerSnapshot,
   getNotificationSnapshot,
   subscribeNotifications
@@ -60,6 +62,21 @@ export function NotificationHost() {
   }, [library.library]);
 
   const notice = notifications.notice;
+
+  useEffect(() => {
+    if (!notice) {
+      return;
+    }
+
+    const key = notice.key;
+    const timeoutId = window.setTimeout(() => {
+      dismissAppNotice(key);
+    }, APP_NOTICE_VISIBLE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [notice]);
 
   return (
     <div aria-live="polite" className={styles.host}>
