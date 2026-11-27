@@ -5,6 +5,8 @@ import {
   type NotificationPreferences
 } from "./notification-preferences";
 
+export const APP_NOTICE_VISIBLE_MS = 6_000;
+
 export type AppNotice = Readonly<{
   key: string;
   title: string;
@@ -23,6 +25,7 @@ const SERVER_SNAPSHOT: NotificationSnapshot = {
 
 let snapshot: NotificationSnapshot = SERVER_SNAPSHOT;
 let loaded = false;
+let hideNoticeTimer: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<() => void>();
 
 export function getNotificationPreferencesSnapshot(): NotificationPreferences {
@@ -72,10 +75,27 @@ export function publishAppNotice(notice: AppNotice): void {
     ...snapshot,
     notice
   };
+  scheduleNoticeHide(notice.key);
+  emit();
+}
+
+export function dismissAppNotice(key?: string): void {
+  if (snapshot.notice === null || (key !== undefined && snapshot.notice.key !== key)) {
+    return;
+  }
+
+  window.clearTimeout(hideNoticeTimer);
+  hideNoticeTimer = undefined;
+  snapshot = {
+    ...snapshot,
+    notice: null
+  };
   emit();
 }
 
 export function resetNotificationStoreForTests(): void {
+  window.clearTimeout(hideNoticeTimer);
+  hideNoticeTimer = undefined;
   loaded = false;
   snapshot = SERVER_SNAPSHOT;
 }
@@ -112,6 +132,13 @@ function handleStorage(event: StorageEvent): void {
     preferences: parseNotificationPreferences(event.newValue)
   };
   emit();
+}
+
+function scheduleNoticeHide(key: string): void {
+  window.clearTimeout(hideNoticeTimer);
+  hideNoticeTimer = window.setTimeout(() => {
+    dismissAppNotice(key);
+  }, APP_NOTICE_VISIBLE_MS);
 }
 
 function emit(): void {
