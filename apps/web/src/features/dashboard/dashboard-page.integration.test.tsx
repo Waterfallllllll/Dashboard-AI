@@ -31,7 +31,9 @@ describe("страница дашборда", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Ваш день в одном месте" })
     ).toBeInTheDocument();
-    expect(await screen.findByText("Москва")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("article", { name: "Погода" })).toHaveTextContent("Москва");
+    });
     expect(screen.getByRole("article", { name: "Дата и время" })).toHaveAttribute(
       "data-status",
       "success"
@@ -71,7 +73,9 @@ describe("страница дашборда", () => {
       />
     );
 
-    expect(await screen.findByText("Москва")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("article", { name: "Погода" })).toHaveTextContent("Москва");
+    });
     await user.click(screen.getByRole("button", { name: "Повторить" }));
 
     await waitFor(() => {
@@ -84,7 +88,7 @@ describe("страница дашборда", () => {
       "data-status",
       "success"
     );
-    expect(screen.getByText("Москва")).toBeInTheDocument();
+    expect(screen.getByRole("article", { name: "Погода" })).toHaveTextContent("Москва");
     expect(screen.getByRole("article", { name: "Таймер" })).toHaveTextContent("Работа");
   });
 
