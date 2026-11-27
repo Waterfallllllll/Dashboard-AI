@@ -93,31 +93,15 @@
 
 .scene[data-scene="rain"] .precip,
 .scene[data-scene="storm"] .precip {
-  inset: -45%;
-  opacity: 0.62;
-  rotate: 18deg;
-  translate: 0 0;
-  background-image:
-    radial-gradient(
-      ellipse 1.2px 9px at 22% 28%,
-      rgb(255 255 255 / 84%) 0 55%,
-      transparent 72%
-    ),
-    radial-gradient(
-      ellipse 1px 7px at 68% 74%,
-      rgb(255 255 255 / 48%) 0 55%,
-      transparent 74%
-    );
-  background-size:
-    22px 64px,
-    31px 32px;
-  background-position:
-    0 0,
-    13px 11px;
+  inset-block: -80px 0;
+  inset-inline: 0;
+  opacity: 0.72;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='80' viewBox='0 0 48 80'%3E%3Cg fill='none' stroke='white' stroke-linecap='round' stroke-width='1.35'%3E%3Cpath d='M9 10 L5 24' stroke-opacity='.9'/%3E%3Cpath d='M27 16 L24 27' stroke-opacity='.4'/%3E%3Cpath d='M40 8 L36 21' stroke-opacity='.65'/%3E%3Cpath d='M16 36 L12 50' stroke-opacity='.55'/%3E%3Cpath d='M34 38 L30 52' stroke-opacity='.85'/%3E%3Cpath d='M7 58 L4 70' stroke-opacity='.45'/%3E%3Cpath d='M28 60 L24 73' stroke-opacity='.7'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 48px 80px;
 }
 
 .scene[data-scene="storm"] .precip {
-  opacity: 0.78;
+  opacity: 0.86;
 }
 
 .scene[data-scene="snow"] .precip {
@@ -191,7 +175,7 @@
 
   .scene[data-scene="rain"] .precip,
   .scene[data-scene="storm"] .precip {
-    animation: rain 0.8s linear infinite;
+    animation: rain 1.15s linear infinite;
   }
 
   .scene[data-scene="snow"] .precip {
@@ -224,8 +208,12 @@
 }
 
 @keyframes rain {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+
   to {
-    translate: 0 64px;
+    transform: translate3d(0, 80px, 0);
   }
 }
 
