@@ -553,7 +553,6 @@ function WidgetBody({
         <TimerWidget
           configurable
           key={presented?.generatedAt ?? "pending"}
-          now={now}
           persist={false}
           {...(presented?.timer.data ? { initialSession: presented.timer.data } : {})}
         />
