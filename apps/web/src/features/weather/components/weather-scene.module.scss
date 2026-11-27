@@ -88,17 +88,36 @@
 
 .precip {
   opacity: 0;
-  background-image: repeating-linear-gradient(
-    -22deg,
-    transparent 0 14px,
-    rgb(255 255 255 / 38%) 14px 15px
-  );
-  background-size: 28px 52px;
+  background-repeat: repeat;
 }
 
 .scene[data-scene="rain"] .precip,
 .scene[data-scene="storm"] .precip {
-  opacity: 0.55;
+  inset: -45%;
+  opacity: 0.62;
+  rotate: 18deg;
+  translate: 0 0;
+  background-image:
+    radial-gradient(
+      ellipse 1.2px 9px at 22% 28%,
+      rgb(255 255 255 / 84%) 0 55%,
+      transparent 72%
+    ),
+    radial-gradient(
+      ellipse 1px 7px at 68% 74%,
+      rgb(255 255 255 / 48%) 0 55%,
+      transparent 74%
+    );
+  background-size:
+    22px 64px,
+    31px 32px;
+  background-position:
+    0 0,
+    13px 11px;
+}
+
+.scene[data-scene="storm"] .precip {
+  opacity: 0.78;
 }
 
 .scene[data-scene="snow"] .precip {
@@ -206,7 +225,7 @@
 
 @keyframes rain {
   to {
-    transform: translateY(52px);
+    translate: 0 64px;
   }
 }
 
