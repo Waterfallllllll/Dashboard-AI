@@ -480,21 +480,25 @@ function AccountStatus({ account }: Readonly<{ account: AccountState }>) {
 function AccountAvatar({ url }: Readonly<{ url: string | null }>) {
   const [failed, setFailed] = useState(false);
 
-  if (!url || failed) {
+  if (!url) {
     return <UserRound />;
   }
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- адрес аватара задаёт Google и может быть любым https-хостом
-    <img
-      alt=""
-      height={48}
-      onError={() => {
-        setFailed(true);
-      }}
-      referrerPolicy="no-referrer"
-      src={url}
-      width={48}
-    />
+    <>
+      {failed ? <UserRound /> : null}
+      {/* eslint-disable-next-line @next/next/no-img-element -- адрес аватара задаёт Google и может быть любым https-хостом */}
+      <img
+        alt=""
+        height={48}
+        hidden={failed}
+        onError={() => {
+          setFailed(true);
+        }}
+        referrerPolicy="no-referrer"
+        src={url}
+        width={48}
+      />
+    </>
   );
 }
