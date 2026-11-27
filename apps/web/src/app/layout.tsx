@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import type { ReactNode } from "react";
 
-import { ServiceWorkerRegistrar } from "@/features/notifications";
+import { ServiceWorkerRegistrar, StaticCacheResetScript } from "@/features/notifications";
 import { ThemeInitScript } from "@/lib/theme/theme-init-script";
 
 import "@/styles/globals.scss";
@@ -56,6 +56,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
     >
       <head>
         <ThemeInitScript />
+        <StaticCacheResetScript />
       </head>
       <body suppressHydrationWarning>
         <ServiceWorkerRegistrar />

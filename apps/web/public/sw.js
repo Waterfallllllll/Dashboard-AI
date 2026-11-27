@@ -1,7 +1,7 @@
 import { parsePushMessage, safeNotificationPath } from "./push-contract.js";
 
 const SHELL_CACHE = "evergreen-shell-v1";
-const STATIC_CACHE = "evergreen-static-v1";
+const STATIC_CACHE = "evergreen-static-v2";
 const STATIC_CACHE_LIMIT = 60;
 const SHELL_URLS = ["/offline.html", "/icons/icon-192.png", "/icons/icon-512.png"];
 
@@ -45,7 +45,12 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(immutableStatic(event.request));
+    return;
+  }
+
+  if (url.pathname.startsWith("/icons/")) {
     event.respondWith(cacheFirstStatic(event.request));
   }
 });
@@ -87,6 +92,28 @@ async function networkFirstNavigation(request) {
     const cache = await caches.open(SHELL_CACHE);
     return (await cache.match("/offline.html")) ?? Response.error();
   }
+}
+
+async function immutableStatic(request) {
+  const cache = await caches.open(STATIC_CACHE);
+  const cached = await cache.match(request);
+
+  if (cached && isImmutable(cached)) {
+    return cached;
+  }
+
+  const response = await fetch(request);
+
+  if (response.ok && isImmutable(response)) {
+    await cache.put(request, response.clone());
+    await trimCache(cache, STATIC_CACHE_LIMIT);
+  }
+
+  return response;
+}
+
+function isImmutable(response) {
+  return (response.headers.get("cache-control") ?? "").includes("immutable");
 }
 
 async function cacheFirstStatic(request) {
