@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   AccountSessionError,
+  deleteAccount,
   loadAccountSession,
   signOutAccount,
   visibleAvatarUrl
@@ -98,5 +99,26 @@ describe("сессия профиля", () => {
     });
 
     await expect(signOutAccount(session.data.csrfToken, fetchImpl)).resolves.toBeUndefined();
+  });
+
+  it("удаляет аккаунт с токеном защиты", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input, init) => {
+      expect(input).toBe("/api/v1/account");
+      expect(init?.method).toBe("DELETE");
+      expect(new Headers(init?.headers).get(CSRF_HEADER)).toBe(session.data.csrfToken);
+      return jsonResponse(200, { data: { deleted: true }, meta: { requestId: "request-2" } });
+    });
+
+    await expect(deleteAccount(session.data.csrfToken, fetchImpl)).resolves.toBeUndefined();
+  });
+
+  it("не считает сломанный ответ удалением", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse(200, { data: { deleted: false } })
+    );
+
+    await expect(deleteAccount(session.data.csrfToken, fetchImpl)).rejects.toMatchObject({
+      code: "delete"
+    });
   });
 });

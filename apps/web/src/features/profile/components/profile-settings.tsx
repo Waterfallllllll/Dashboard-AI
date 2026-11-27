@@ -2,13 +2,18 @@
 
 import { Clock3, Globe2, LogOut, ShieldAlert, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { StatusBadge } from "@/components/ui/status-badge";
 import { ThemeControl } from "@/components/ui/theme-control";
 
-import { loadAccountSession, signOutAccount, type AccountView } from "../api/account-session";
+import {
+  deleteAccount,
+  loadAccountSession,
+  signOutAccount,
+  type AccountView
+} from "../api/account-session";
 import {
   PROFILE_PREFERENCES_STORAGE_KEY,
   isTimezoneValue,
@@ -22,7 +27,9 @@ type AccountState = AccountView | { readonly status: "loading" } | { readonly st
 type ProfileSettingsProps = Readonly<{
   loadSession?: typeof loadAccountSession;
   signOut?: typeof signOutAccount;
+  removeAccount?: typeof deleteAccount;
   onSignedOut?: () => void;
+  onAccountDeleted?: () => void;
 }>;
 
 const accountCopy: Readonly<Record<AccountState["status"], string>> = {
@@ -35,14 +42,23 @@ const accountCopy: Readonly<Record<AccountState["status"], string>> = {
 export function ProfileSettings({
   loadSession = loadAccountSession,
   signOut = signOutAccount,
-  onSignedOut
+  removeAccount = deleteAccount,
+  onSignedOut,
+  onAccountDeleted
 }: ProfileSettingsProps) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const deleteDialogRef = useRef<HTMLDialogElement>(null);
+  const deletingRef = useRef(false);
+  const deleteTitleId = useId();
+  const deleteDescriptionId = useId();
   const [saveStatus, setSaveStatus] = useState("");
   const [account, setAccount] = useState<AccountState>({ status: "loading" });
   const [signingOut, setSigningOut] = useState(false);
   const [sessionNotice, setSessionNotice] = useState("");
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteNotice, setDeleteNotice] = useState("");
 
   useEffect(() => {
     let ignore = false;
@@ -141,6 +157,52 @@ export function ProfileSettings({
       setSessionNotice("Не удалось выйти. Повторите попытку.");
     } finally {
       setSigningOut(false);
+    }
+  }
+
+  useEffect(() => {
+    const dialog = deleteDialogRef.current;
+
+    if (!dialog || !confirmingDelete) {
+      return;
+    }
+
+    if (!dialog.open) {
+      openModal(dialog);
+    }
+
+    return attachLightDismiss(dialog);
+  }, [confirmingDelete]);
+
+  async function handleDelete(): Promise<void> {
+    if (account.status !== "authenticated" || deletingRef.current) {
+      return;
+    }
+
+    deletingRef.current = true;
+    setDeleting(true);
+    setDeleteNotice("");
+
+    try {
+      await removeAccount(account.csrfToken);
+      setAccount({ status: "anonymous" });
+      const dialog = deleteDialogRef.current;
+
+      if (dialog) {
+        closeModal(dialog);
+      }
+
+      if (onAccountDeleted) {
+        onAccountDeleted();
+      } else {
+        router.push("/login");
+        router.refresh();
+      }
+    } catch {
+      setDeleteNotice("Не удалось удалить аккаунт. Повторите попытку.");
+    } finally {
+      deletingRef.current = false;
+      setDeleting(false);
     }
   }
 
@@ -269,14 +331,134 @@ export function ProfileSettings({
           <div>
             <h2 id="danger-heading">Удаление аккаунта</h2>
             <p>Удаляет профиль, интеграции, историю и отложенные задачи без восстановления.</p>
+            {deleteNotice && !confirmingDelete ? (
+              <p aria-live="polite" className={styles.saveStatus}>
+                {deleteNotice}
+              </p>
+            ) : null}
           </div>
         </div>
-        <button className={styles.dangerButton} disabled type="button">
+        <button
+          className={styles.dangerButton}
+          disabled={!signedIn || signingOut || deleting}
+          onClick={() => {
+            setDeleteNotice("");
+            setConfirmingDelete(true);
+          }}
+          type="button"
+        >
           Удалить аккаунт
         </button>
       </section>
+      {confirmingDelete ? (
+        <dialog
+          aria-describedby={deleteDescriptionId}
+          aria-labelledby={deleteTitleId}
+          className={styles.dialog}
+          closedby="any"
+          onClose={() => {
+            setConfirmingDelete(false);
+          }}
+          ref={deleteDialogRef}
+        >
+          <h1 id={deleteTitleId}>Удалить аккаунт?</h1>
+          <p id={deleteDescriptionId}>
+            Профиль, интеграции, история и отложенные задачи исчезнут без восстановления.
+          </p>
+          {deleteNotice ? (
+            <p aria-live="assertive" className={styles.saveStatus}>
+              {deleteNotice}
+            </p>
+          ) : null}
+          <form className={styles.dialogActions} method="dialog">
+            <button
+              autoFocus
+              className={styles.secondaryButton}
+              disabled={deleting}
+              onClick={() => {
+                const dialog = deleteDialogRef.current;
+
+                if (dialog) {
+                  closeModal(dialog);
+                }
+              }}
+              type="submit"
+              value="cancel"
+            >
+              Отмена
+            </button>
+            <button
+              className={styles.dangerButton}
+              disabled={deleting}
+              onClick={() => {
+                void handleDelete();
+              }}
+              type="button"
+            >
+              {deleting ? "Удаляем…" : "Удалить аккаунт"}
+            </button>
+          </form>
+        </dialog>
+      ) : null}
     </div>
   );
+}
+
+function openModal(dialog: HTMLDialogElement): void {
+  if (typeof dialog.showModal === "function") {
+    dialog.showModal();
+    return;
+  }
+
+  dialog.setAttribute("open", "");
+}
+
+function closeModal(dialog: HTMLDialogElement): void {
+  if (typeof dialog.close === "function") {
+    dialog.close();
+    return;
+  }
+
+  dialog.removeAttribute("open");
+  dialog.dispatchEvent(new Event("close"));
+}
+
+function attachLightDismiss(dialog: HTMLDialogElement): () => void {
+  if ("closedBy" in HTMLDialogElement.prototype) {
+    return () => undefined;
+  }
+
+  let pressedOutside = false;
+
+  const outside = (event: PointerEvent): boolean => {
+    const rect = dialog.getBoundingClientRect();
+    return (
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom
+    );
+  };
+
+  const onPointerDown = (event: PointerEvent): void => {
+    pressedOutside = outside(event);
+  };
+
+  const onPointerUp = (event: PointerEvent): void => {
+    if (pressedOutside && outside(event)) {
+      closeModal(dialog);
+    }
+
+    pressedOutside = false;
+  };
+
+  dialog.addEventListener("pointerdown", onPointerDown);
+  dialog.addEventListener("pointerup", onPointerUp);
+
+  return () => {
+    dialog.removeEventListener("pointerdown", onPointerDown);
+    dialog.removeEventListener("pointerup", onPointerUp);
+  };
 }
 
 function AccountStatus({ account }: Readonly<{ account: AccountState }>) {

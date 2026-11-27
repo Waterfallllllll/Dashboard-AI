@@ -1,5 +1,6 @@
 import {
   CSRF_HEADER,
+  accountDeletionResponseSchema,
   isHttpsUrl,
   sessionResponseSchema,
   signOutResponseSchema
@@ -15,15 +16,25 @@ export type AccountView =
     };
 
 export class AccountSessionError extends Error {
-  readonly code: "unavailable" | "sign-out";
+  readonly code: "unavailable" | "sign-out" | "delete";
 
-  constructor(code: "unavailable" | "sign-out" = "unavailable") {
-    super(
-      code === "sign-out" ? "Не удалось выйти. Повторите попытку." : "Не удалось проверить сессию."
-    );
+  constructor(code: "unavailable" | "sign-out" | "delete" = "unavailable") {
+    super(accountSessionMessage(code));
     this.name = "AccountSessionError";
     this.code = code;
   }
+}
+
+function accountSessionMessage(code: AccountSessionError["code"]): string {
+  if (code === "sign-out") {
+    return "Не удалось выйти. Повторите попытку.";
+  }
+
+  if (code === "delete") {
+    return "Не удалось удалить аккаунт. Повторите попытку.";
+  }
+
+  return "Не удалось проверить сессию.";
 }
 
 export async function loadAccountSession(
@@ -86,6 +97,34 @@ export async function signOutAccount(
 
   if (!parsed.success) {
     throw new AccountSessionError("sign-out");
+  }
+}
+
+export async function deleteAccount(
+  csrfToken: string,
+  fetchImpl: typeof fetch = fetch
+): Promise<void> {
+  const response = await readResponse(
+    fetchImpl("/api/v1/account", {
+      method: "DELETE",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        [CSRF_HEADER]: csrfToken
+      }
+    }),
+    "delete"
+  );
+
+  if (!response.ok) {
+    throw new AccountSessionError("delete");
+  }
+
+  const parsed = accountDeletionResponseSchema.safeParse(await readJson(response, "delete"));
+
+  if (!parsed.success) {
+    throw new AccountSessionError("delete");
   }
 }
 

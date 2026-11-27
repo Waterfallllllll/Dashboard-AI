@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderWithUser } from "@/test/render";
@@ -94,5 +94,62 @@ describe("ProfileSettings", () => {
     expect(await screen.findByText("Не удалось выйти. Повторите попытку.")).toBeInTheDocument();
     expect(screen.getByText("Авторизован")).toBeInTheDocument();
     expect(onSignedOut).not.toHaveBeenCalled();
+  });
+
+  it("просит подтверждение и удаляет аккаунт", async () => {
+    const removeAccount = vi
+      .fn<(csrfToken: string) => Promise<void>>()
+      .mockResolvedValue(undefined);
+    const onAccountDeleted = vi.fn();
+    const { user } = renderWithUser(
+      <ProfileSettings
+        loadSession={async () => signedInAccount}
+        onAccountDeleted={onAccountDeleted}
+        removeAccount={removeAccount}
+      />
+    );
+
+    await screen.findByRole("heading", { name: "Илья" });
+    expect(screen.getByRole("button", { name: "Удалить аккаунт" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Удалить аккаунт" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "Удалить аккаунт?" });
+    await user.click(within(dialog).getByRole("button", { name: "Отмена" }));
+    expect(removeAccount).not.toHaveBeenCalled();
+    expect(dialog).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Удалить аккаунт" }));
+    const confirmation = await screen.findByRole("dialog", { name: "Удалить аккаунт?" });
+    await user.click(within(confirmation).getByRole("button", { name: "Удалить аккаунт" }));
+
+    await waitFor(() => {
+      expect(removeAccount).toHaveBeenCalledWith(signedInAccount.csrfToken);
+    });
+    expect(onAccountDeleted).toHaveBeenCalledOnce();
+  });
+
+  it("оставляет аккаунт, если удаление не удалось", async () => {
+    const removeAccount = vi
+      .fn<(csrfToken: string) => Promise<void>>()
+      .mockRejectedValue(new Error("нет сети"));
+    const onAccountDeleted = vi.fn();
+    const { user } = renderWithUser(
+      <ProfileSettings
+        loadSession={async () => signedInAccount}
+        onAccountDeleted={onAccountDeleted}
+        removeAccount={removeAccount}
+      />
+    );
+
+    await screen.findByRole("heading", { name: "Илья" });
+    await user.click(screen.getByRole("button", { name: "Удалить аккаунт" }));
+    const dialog = await screen.findByRole("dialog", { name: "Удалить аккаунт?" });
+    await user.click(within(dialog).getByRole("button", { name: "Удалить аккаунт" }));
+
+    expect(
+      await screen.findByText("Не удалось удалить аккаунт. Повторите попытку.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Авторизован")).toBeInTheDocument();
+    expect(onAccountDeleted).not.toHaveBeenCalled();
   });
 });

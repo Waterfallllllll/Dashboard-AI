@@ -87,4 +87,32 @@ test.describe("профиль", () => {
 
     await expect(page).toHaveURL(/\/login$/);
   });
+
+  test("после подтверждения удаляет аккаунт и уходит на вход", async ({ page }) => {
+    await page.route("**/api/v1/auth/session", (route) => fulfillJson(route, 200, session));
+    await page.route("**/api/v1/account", (route) => {
+      if (route.request().method() !== "DELETE") {
+        return route.fallback();
+      }
+
+      return fulfillJson(route, 200, {
+        data: { deleted: true },
+        meta: { requestId: "request-3" }
+      });
+    });
+    await page.goto("/settings/profile");
+
+    await expect(page.getByRole("heading", { name: "Илья" })).toBeVisible();
+    await page.getByRole("button", { name: "Удалить аккаунт" }).click();
+    const dialog = page.getByRole("dialog", { name: "Удалить аккаунт?" });
+    await expect(dialog).toBeVisible();
+
+    const deleteRequest = page.waitForRequest(
+      (request) => request.url().includes("/api/v1/account") && request.method() === "DELETE"
+    );
+    await dialog.getByRole("button", { name: "Удалить аккаунт" }).click();
+    expect((await deleteRequest).headers()["x-csrf-token"]).toBe(session.data.csrfToken);
+
+    await expect(page).toHaveURL(/\/login$/);
+  });
 });
