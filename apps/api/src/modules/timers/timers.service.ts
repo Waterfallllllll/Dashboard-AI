@@ -203,9 +203,12 @@ export class TimersService {
     return {
       session: open ? toTimerSessionDto(open, this.now()) : null,
       settled: settled ? toTimerSessionDto(settled, this.now()) : null,
-      next: source
-        ? nextInterval(source.preset, source.phase, source.cycleNumber)
-        : { phase: "work", cycleNumber: 0 },
+      next:
+        settled?.endsAt === null
+          ? { phase: "work", cycleNumber: 0 }
+          : source
+            ? nextInterval(source.preset, source.phase, source.cycleNumber)
+            : { phase: "work", cycleNumber: 0 },
       completedToday,
       dailyGoal
     };

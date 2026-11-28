@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useTickingNow } from "@/lib/browser/use-ticking-now";
 import { publishProductNotice } from "@/features/notifications";
 
+import type { RunTimerCommand, TimerCommandAction } from "../api/timer-client";
 import { playTimerChime } from "../model/timer-chime";
 import {
   getTimerSettingsServerSnapshot,
@@ -50,6 +51,7 @@ type TimerWidgetProps = Readonly<{
   now?: number;
   initialSession?: TimerSession;
   configurable?: boolean;
+  runCommand?: RunTimerCommand;
 }>;
 
 const emptySubscribe = () => () => undefined;
@@ -58,13 +60,16 @@ export function TimerWidget({
   configurable = false,
   initialSession,
   now: nowProp,
-  persist = false
+  persist = false,
+  runCommand
 }: TimerWidgetProps) {
   const liveNow = useTickingNow(nowProp === undefined);
   const now = nowProp ?? liveNow;
   const [localSession, setLocalSession] = useState<TimerSession>(
     () => initialSession ?? createIdleTimer()
   );
+  const [commandPending, setCommandPending] = useState(false);
+  const [commandError, setCommandError] = useState("");
   const storedSession = useSyncExternalStore(
     persist ? subscribeTimerSession : emptySubscribe,
     persist ? getTimerSessionSnapshot : getTimerSessionServerSnapshot,
@@ -81,7 +86,11 @@ export function TimerWidget({
   const due = completePhaseIfDue(aligned, now, settings);
   const remainingMs = getDisplayedRemainingMs(due, now);
   const active = isTimerActive(due);
-  const primaryLabel = due.runStatus === "running" ? "Пауза" : "Старт";
+  const primaryLabel = commandPending
+    ? "Сохраняем…"
+    : due.runStatus === "running"
+      ? "Пауза"
+      : "Старт";
   const previous = useRef({
     phase: due.phase,
     runStatus: due.runStatus,
@@ -97,6 +106,48 @@ export function TimerWidget({
     }
 
     setLocalSession(next);
+  }
+
+  async function executeCommand(
+    action: TimerCommandAction,
+    localFallback: TimerSession
+  ): Promise<void> {
+    if (!runCommand) {
+      commit(localFallback);
+      return;
+    }
+
+    if (action === "skip" && !active) {
+      commit(localFallback);
+      return;
+    }
+
+    if (action === "reset" && !active) {
+      commit({
+        ...localFallback,
+        completedWorkToday: due.completedWorkToday,
+        dailyGoal: due.dailyGoal
+      });
+      return;
+    }
+
+    setCommandPending(true);
+    setCommandError("");
+
+    try {
+      const next = await runCommand({
+        action,
+        session: due,
+        ...(settings ? { settings } : {})
+      });
+      commit(next);
+    } catch (error) {
+      setCommandError(
+        error instanceof Error ? error.message : "Не удалось синхронизировать таймер."
+      );
+    } finally {
+      setCommandPending(false);
+    }
   }
 
   if (due !== session) {
@@ -143,7 +194,11 @@ export function TimerWidget({
   }, [due, now, settings]);
 
   return (
-    <div className={styles.widget} data-timer-active={active ? "true" : "false"}>
+    <div
+      aria-busy={commandPending}
+      className={styles.widget}
+      data-timer-active={active ? "true" : "false"}
+    >
       <p aria-live="polite" className={styles.phase}>
         {getPhaseLabel(due.phase)}
       </p>
@@ -158,8 +213,12 @@ export function TimerWidget({
         <button
           aria-label={primaryLabel}
           className={styles.primary}
+          disabled={commandPending}
           onClick={() => {
-            commit(due.runStatus === "running" ? pauseTimer(due, now) : startTimer(due, now));
+            void executeCommand(
+              due.runStatus === "running" ? "pause" : "start",
+              due.runStatus === "running" ? pauseTimer(due, now) : startTimer(due, now)
+            );
           }}
           type="button"
         >
@@ -173,8 +232,9 @@ export function TimerWidget({
         <button
           aria-label="Пропустить интервал"
           className={styles.iconButton}
+          disabled={commandPending}
           onClick={() => {
-            commit(skipPhase(due, settings));
+            void executeCommand("skip", skipPhase(due, settings));
           }}
           type="button"
         >
@@ -183,14 +243,20 @@ export function TimerWidget({
         <button
           aria-label="Сбросить таймер"
           className={styles.iconButton}
+          disabled={commandPending}
           onClick={() => {
-            commit(resetTimer());
+            void executeCommand("reset", resetTimer());
           }}
           type="button"
         >
           <RotateCcw aria-hidden="true" strokeWidth={1.8} />
         </button>
       </div>
+      {commandError ? (
+        <p className={styles.error} role="alert">
+          {commandError}
+        </p>
+      ) : null}
       {settings ? (
         <TimerSettingsPanel
           journal={settingsSnapshot.journal}

@@ -9,7 +9,7 @@ import { CalendarSyncError, CalendarWidget, syncCalendar } from "@/features/cale
 import { DateTimeWidget } from "@/features/datetime";
 import { NewsWidget, loadNewsSection } from "@/features/news";
 import { RoutinesWidget, type RoutineOccurrence } from "@/features/routines";
-import { TimerWidget } from "@/features/timer";
+import { runTimerCommand, TimerWidget } from "@/features/timer";
 import { WeatherScene, WeatherWidget } from "@/features/weather";
 import { formatInZone, formatUpdatedAt, getSystemTimeZone } from "@/lib/format/date-time";
 
@@ -45,7 +45,12 @@ type BoardLoad =
   | { readonly status: "loading" }
   | { readonly status: "anonymous" }
   | { readonly status: "error" }
-  | { readonly status: "ready"; readonly dashboard: Dashboard; readonly weatherPending: boolean; readonly newsPending: boolean };
+  | {
+      readonly status: "ready";
+      readonly dashboard: Dashboard;
+      readonly weatherPending: boolean;
+      readonly newsPending: boolean;
+    };
 
 type RoutineEdit = Readonly<{
   key: string;
@@ -56,6 +61,7 @@ type DashboardBoardProps = Readonly<{
   layout?: readonly WidgetPlacement[];
   loadDay?: typeof loadDashboard;
   loadNews?: typeof loadNewsSection;
+  serverTimer?: boolean;
   syncCalendarDay?: typeof syncCalendar;
 }>;
 
@@ -63,6 +69,7 @@ export function DashboardBoard({
   layout: layoutProp,
   loadDay = loadDashboard,
   loadNews = loadNewsSection,
+  serverTimer = false,
   syncCalendarDay = syncCalendar
 }: DashboardBoardProps) {
   const [editorOpen, setEditorOpen] = useState(false);
@@ -364,6 +371,7 @@ export function DashboardBoard({
                       }
                       presented={presented}
                       routineItems={routineItems}
+                      serverTimer={serverTimer}
                       status={statusFor(
                         widget.type,
                         loadState,
@@ -432,6 +440,7 @@ function IndependentWidget({
   preference,
   presented,
   routineItems,
+  serverTimer,
   status,
   timeFormat,
   timeZone,
@@ -445,6 +454,7 @@ function IndependentWidget({
   preference: WidgetPreference | null;
   presented: PresentedDashboard | null;
   routineItems: readonly RoutineOccurrence[];
+  serverTimer: boolean;
   status: WidgetStatus;
   timeFormat: "12" | "24";
   timeZone: string;
@@ -482,6 +492,7 @@ function IndependentWidget({
         preference={preference}
         presented={presented}
         routineItems={routineItems}
+        serverTimer={serverTimer}
         timeFormat={timeFormat}
         timeZone={timeZone}
         toggleRoutine={toggleRoutine}
@@ -497,6 +508,7 @@ function WidgetBody({
   preference,
   presented,
   routineItems,
+  serverTimer,
   timeFormat,
   timeZone,
   toggleRoutine,
@@ -507,6 +519,7 @@ function WidgetBody({
   preference: WidgetPreference | null;
   presented: PresentedDashboard | null;
   routineItems: readonly RoutineOccurrence[];
+  serverTimer: boolean;
   timeFormat: "12" | "24";
   timeZone: string;
   toggleRoutine: (id: string) => void;
@@ -555,6 +568,7 @@ function WidgetBody({
           key={presented?.generatedAt ?? "pending"}
           persist={false}
           {...(presented?.timer.data ? { initialSession: presented.timer.data } : {})}
+          {...(serverTimer && presented?.timer.data ? { runCommand: runTimerCommand } : {})}
         />
       );
     case "news":

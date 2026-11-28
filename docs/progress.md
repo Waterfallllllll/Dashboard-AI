@@ -1,3 +1,11 @@
+## 2026-11-28 — Таймер ставит серверные задачи для Telegram
+
+- Production-таймер больше не меняет только локальное React-состояние: страница дашборда запускает, приостанавливает, продолжает, пропускает и сбрасывает сессию через существующие `/api/v1/timers*`. Серверный `endsAt` снова становится источником истины, поэтому worker получает `timer-due` и создаёт Telegram-доставку после завершения интервала.
+- Клиент проверяет ответы общими Zod-контрактами, передаёт CSRF и idempotency key, блокирует повторные нажатия на время запроса и показывает безопасную ошибку синхронизации. Гостевой и тестовый дашборд сохраняет локальный таймер.
+- Сброс больше не переводит серверный таймер к следующей фазе, а досрочный пропуск не создаёт ложное уведомление о завершении.
+- Добавлены `apps/web/src/features/timer/api/timer-client.ts` и `apps/web/src/features/timer/model/timer-snapshot.ts`. Изменены `apps/web/src/features/timer/components/timer-widget.tsx`, `apps/web/src/features/timer/components/timer-widget.module.scss`, `apps/web/src/features/timer/index.ts`, `apps/web/src/features/dashboard/components/dashboard-board.tsx`, `apps/web/src/features/dashboard/model/present-dashboard.ts`, `apps/web/src/app/(protected)/dashboard/page.tsx`, `apps/api/src/modules/timers/timer-jobs.ts`, `apps/api/src/modules/timers/timers.service.ts`.
+- Проверки: `npm run typecheck`, `npm run lint`, Vitest — 135 файлов пройдено / 6 пропущено, 328 тестов пройдено / 18 пропущено; Playwright после установки Chromium — 41 пройден / 5 пропущено; `npm run build` прошёл. Новые переменные окружения не добавлялись.
+
 ## 2026-11-27 — Аватар профиля остаётся в разметке, если файл не загрузился
 
 - E2E «показывает текущий аккаунт» ждал `img` с адресом сессии. Адрес `https://lh3.googleusercontent.com/a/a` в CI не отдаёт картинку, и обработчик ошибки убирал элемент, оставляя только иконку.

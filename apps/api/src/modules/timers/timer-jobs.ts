@@ -16,7 +16,11 @@ export async function followTimer(
     return;
   }
 
-  if (session.completedAt && session.endsAt) {
+  if (
+    session.completedAt &&
+    session.endsAt &&
+    session.completedAt.getTime() >= session.endsAt.getTime()
+  ) {
     const eventType = session.phase === "work" ? "work" : "break";
 
     for (const channel of CHANNELS) {

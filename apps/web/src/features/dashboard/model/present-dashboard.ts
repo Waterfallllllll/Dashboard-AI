@@ -1,8 +1,8 @@
-import type { Dashboard, NewsTopic, TimerSnapshot } from "@dashboard/contracts";
+import type { Dashboard, NewsTopic } from "@dashboard/contracts";
 import type { CalendarEvent } from "@/features/calendar";
 import type { NewsItem } from "@/features/news";
 import type { RoutineOccurrence } from "@/features/routines";
-import type { TimerSession } from "@/features/timer";
+import { timerSessionFromSnapshot, type TimerSession } from "@/features/timer";
 import type { WeatherSnapshot } from "@/features/weather";
 
 import { formatInZone } from "@/lib/format/date-time";
@@ -20,9 +20,6 @@ const NEWS_TOPIC_LABELS = {
 } as const satisfies Record<NewsTopic, NewsItem["topic"]>;
 
 const CALENDAR_COLORS = ["#1f6feb", "#8a5a00", "#1a7f37", "#8250df"] as const;
-const WORK_DURATION_MS = 25 * 60 * 1000;
-const SHORT_BREAK_MS = 5 * 60 * 1000;
-const LONG_BREAK_MS = 15 * 60 * 1000;
 
 export type PresentedSection<T> = Readonly<{
   status: WidgetStatus;
@@ -238,36 +235,11 @@ function presentTimer(section: Dashboard["timer"]): PresentedSection<TimerSessio
     return { status: "error", data: null, updatedAt: null };
   }
 
-  return { status: "success", data: toTimerSession(section.timer), updatedAt: null };
-}
-
-function toTimerSession(snapshot: TimerSnapshot): TimerSession {
-  const active = snapshot.session;
-  const phase = active?.phase ?? snapshot.next.phase;
-  const durationMs = active?.durationMs ?? phaseDuration(phase);
-
   return {
-    mode: "pomodoro",
-    phase,
-    runStatus: active?.runStatus ?? "idle",
-    durationMs,
-    remainingMs: active?.remainingMs ?? durationMs,
-    endsAt: active?.endsAt ? Date.parse(active.endsAt) : null,
-    completedWorkInCycle: active?.cycleNumber ?? snapshot.next.cycleNumber,
-    completedWorkToday: snapshot.completedToday,
-    dailyGoal: snapshot.dailyGoal
+    status: "success",
+    data: timerSessionFromSnapshot(section.timer),
+    updatedAt: null
   };
-}
-
-function phaseDuration(phase: TimerSession["phase"]): number {
-  switch (phase) {
-    case "work":
-      return WORK_DURATION_MS;
-    case "short-break":
-      return SHORT_BREAK_MS;
-    case "long-break":
-      return LONG_BREAK_MS;
-  }
 }
 
 function toWidgetStatus(

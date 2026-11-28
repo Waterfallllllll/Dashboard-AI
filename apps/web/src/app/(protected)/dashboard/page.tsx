@@ -15,7 +15,7 @@ export default function DashboardPage() {
       eyebrow="Сегодня"
       title="Ваш день в одном месте"
     >
-      <DashboardBoard />
+      <DashboardBoard serverTimer />
     </PageScaffold>
   );
 }

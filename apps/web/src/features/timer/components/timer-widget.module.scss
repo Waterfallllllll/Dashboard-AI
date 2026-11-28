@@ -65,6 +65,12 @@
   gap: var(--space-xs);
 }
 
+.error {
+  max-inline-size: 22rem;
+  color: var(--color-error);
+  font: var(--text-caption);
+}
+
 .primary {
   min-block-size: var(--size-touch);
   display: inline-flex;
