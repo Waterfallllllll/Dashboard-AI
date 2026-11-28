@@ -1,8 +1,8 @@
-## 2026-11-28 — Устойчивая догрузка погоды после сбоя Open-Meteo
+## 2026-11-28 — Погода на Render через IP браузера
 
-- Быстрый отказ Open-Meteo в бюджете дашборда больше не залипает в `error`: секция уходит как `unavailable`, а фронт сразу догружает прогноз через `/api/v1/weather` с полным ожиданием. То же для уже полученной ошибки секции.
-- Запрос прогноза к Open-Meteo повторяется один раз и ждёт до 8 с вместо одной попытки на 3 с.
-- Изменены `apps/api/src/modules/weather/weather.service.ts`, `apps/api/src/modules/weather/weather.service.unit.test.ts`, `apps/web/src/features/dashboard/components/dashboard-board.tsx`.
+- На production `/api/v1/weather` отдавал `status: "error"`: Open-Meteo режет shared IP Render. Место по-прежнему читается с API (`/weather/location`), а прогноз при ошибке/unavailable API догружается напрямую с `api.open-meteo.com` из браузера.
+- Бюджет дашборда больше не залипает на быстром `error`; серверный запрос к Open-Meteo повторяется и ждёт до 8 с.
+- Добавлены `apps/web/src/features/dashboard/api/load-browser-weather.ts`, `apps/web/src/features/dashboard/api/parse-open-meteo.ts` и unit-тесты. Изменены `apps/web/src/features/dashboard/api/load-dashboard.ts`, `apps/web/src/features/dashboard/components/dashboard-board.tsx`, `apps/api/src/modules/weather/weather.service.ts`.
 - Новые переменные окружения не добавлялись.
 
 ## 2026-11-28 — Таймер ставит серверные задачи для Telegram

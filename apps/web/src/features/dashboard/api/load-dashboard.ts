@@ -1,11 +1,12 @@
 import {
-  SECTION_ERROR_MESSAGE,
   apiSuccessSchema,
   dashboardResponseSchema,
   weatherSectionSchema,
   type Dashboard,
   type WeatherSection
 } from "@dashboard/contracts";
+
+import { loadBrowserWeatherSection } from "./load-browser-weather";
 
 export type DashboardLoad =
   { readonly status: "anonymous" } | { readonly status: "ready"; readonly dashboard: Dashboard };
@@ -53,17 +54,29 @@ export async function loadWeatherSection(
     const response = await fetchImpl("/api/v1/weather", requestInit(signal));
 
     if (!response.ok) {
-      return { status: "error", message: SECTION_ERROR_MESSAGE };
+      return loadBrowserWeatherSection(fetchImpl, signal);
     }
 
     const parsed = weatherSectionResponseSchema.safeParse(await response.json());
-    return parsed.success ? parsed.data.data : { status: "error", message: SECTION_ERROR_MESSAGE };
+
+    if (!parsed.success) {
+      return loadBrowserWeatherSection(fetchImpl, signal);
+    }
+
+    const section = parsed.data.data;
+
+    if (section.status === "ready" || section.status === "stale") {
+      return section;
+    }
+
+    // На Render Open-Meteo часто режет shared IP API: догружаем прогноз с IP браузера.
+    return loadBrowserWeatherSection(fetchImpl, signal);
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
     }
 
-    return { status: "error", message: SECTION_ERROR_MESSAGE };
+    return loadBrowserWeatherSection(fetchImpl, signal);
   }
 }
 
