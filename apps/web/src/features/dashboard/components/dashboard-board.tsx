@@ -134,7 +134,9 @@ export function DashboardBoard({
           return;
         }
 
-        const weatherPending = result.dashboard.weather.status === "unavailable";
+        const weatherPending =
+          result.dashboard.weather.status === "unavailable" ||
+          result.dashboard.weather.status === "error";
         const newsPending = result.dashboard.news.status === "pending";
         setLoadState({
           status: "ready",
@@ -147,22 +149,16 @@ export function DashboardBoard({
           loadWeatherSection(fetch, controller.signal).then(
             (weather) => {
               if (!ignore) {
-                setLoadState((current) =>
-                  current.status === "ready"
-                    ? {
-                        status: "ready",
-                        dashboard: { ...current.dashboard, weather },
-                        weatherPending: false,
-                        newsPending: current.newsPending
-                      }
-                    : current
-                );
+                setLoadState((current) => withWeatherSection(current, weather));
               }
             },
             (error: unknown) => {
               if (!ignore && !(error instanceof Error && error.name === "AbortError")) {
                 setLoadState((current) =>
-                  current.status === "ready" ? { ...current, weatherPending: false } : current
+                  withWeatherSection(current, {
+                    status: "error",
+                    message: SECTION_ERROR_MESSAGE
+                  })
                 );
               }
             }
@@ -608,6 +604,19 @@ function withNewsSection(current: BoardLoad, news: Dashboard["news"]): BoardLoad
     dashboard: { ...current.dashboard, news },
     weatherPending: current.weatherPending,
     newsPending: false
+  };
+}
+
+function withWeatherSection(current: BoardLoad, weather: Dashboard["weather"]): BoardLoad {
+  if (current.status !== "ready") {
+    return current;
+  }
+
+  return {
+    status: "ready",
+    dashboard: { ...current.dashboard, weather },
+    weatherPending: false,
+    newsPending: current.newsPending
   };
 }
 

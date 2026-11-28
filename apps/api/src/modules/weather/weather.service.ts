@@ -146,7 +146,15 @@ export class WeatherService {
         return { status: "stale", updatedAt: stale.updatedAt, weather: stale.weather };
       }
 
-      return budget(pending, { status: "unavailable" }, DASHBOARD_BUDGET_MS);
+      // Быстрый отказ провайдера не должен залипать в error на дашборде:
+      // фронт догрузит прогноз отдельным /weather с полным ожиданием.
+      return budget(
+        pending.then((section) =>
+          section.status === "error" ? { status: "unavailable" as const } : section
+        ),
+        { status: "unavailable" },
+        DASHBOARD_BUDGET_MS
+      );
     } catch {
       return { status: "error", message: SECTION_ERROR_MESSAGE };
     }
@@ -205,7 +213,8 @@ export class WeatherService {
       provider: "weather",
       fetchImpl: this.fetchImpl,
       breaker: this.forecastBreaker,
-      maxAttempts: 1
+      maxAttempts: 2,
+      timeoutMs: 8_000
     });
     const weather = parseForecast(parseJson(body), place, unit, this.now());
 

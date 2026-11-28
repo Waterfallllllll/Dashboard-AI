@@ -22,12 +22,20 @@ describe("погода на дашборде", () => {
     expect(Date.now() - started).toBeLessThan(700);
   });
 
-  it("сразу сообщает об ошибке, если провайдер отказал", async () => {
+  it("в бюджете дашборда отдаёт unavailable при отказе провайдера", async () => {
     const service = createService(async () => {
       throw new Error("provider down");
     });
 
-    await expect(service.loadForDashboard(viewer)).resolves.toMatchObject({ status: "error" });
+    await expect(service.loadForDashboard(viewer)).resolves.toEqual({ status: "unavailable" });
+  });
+
+  it("в полном запросе сообщает об ошибке, если провайдер отказал", async () => {
+    const service = createService(async () => {
+      throw new Error("provider down");
+    });
+
+    await expect(service.load(viewer)).resolves.toMatchObject({ status: "error" });
   });
 });
 
