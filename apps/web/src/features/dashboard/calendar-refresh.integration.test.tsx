@@ -13,7 +13,11 @@ const emptyCalendarDashboard = { ...readyDashboard, calendar: { status: "empty" 
 
 describe("обновление календаря", () => {
   it("показывает пустой день без перехода в настройки виджетов", async () => {
-    renderWithUser(<DashboardBoard loadDay={async () => ({ status: "ready", dashboard: emptyCalendarDashboard })} />);
+    renderWithUser(
+      <DashboardBoard
+        loadDay={async () => ({ status: "ready", dashboard: emptyCalendarDashboard })}
+      />
+    );
 
     const calendar = await screen.findByRole("article", { name: "Календарь" });
 
@@ -26,7 +30,10 @@ describe("обновление календаря", () => {
   });
 
   it("запрашивает Google и показывает полученные события", async () => {
-    const syncCalendarDay = vi.fn(async () => readyDashboard.calendar);
+    const syncCalendarDay = vi.fn(async (localDate: string) => {
+      void localDate;
+      return readyDashboard.calendar;
+    });
     const { user } = renderWithUser(
       <DashboardBoard
         loadDay={async () => ({ status: "ready", dashboard: emptyCalendarDashboard })}
@@ -34,7 +41,9 @@ describe("обновление календаря", () => {
       />
     );
 
-    expect(await screen.findByRole("heading", { name: "На сегодня событий нет" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "На сегодня событий нет" })
+    ).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Обновить виджет «Календарь»" }));
 
     expect(await screen.findByText("Стендап команды")).toBeInTheDocument();

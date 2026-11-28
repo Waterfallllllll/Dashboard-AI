@@ -25,7 +25,7 @@ const SERVER_SNAPSHOT: NotificationSnapshot = {
 
 let snapshot: NotificationSnapshot = SERVER_SNAPSHOT;
 let loaded = false;
-let hideNoticeTimer: ReturnType<typeof setTimeout> | undefined;
+let hideNoticeTimer: number | undefined;
 const listeners = new Set<() => void>();
 
 export function getNotificationPreferencesSnapshot(): NotificationPreferences {

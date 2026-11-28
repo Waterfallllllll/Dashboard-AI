@@ -22,7 +22,7 @@
 ### Frontend
 
 - React 19.3.1.
-- Next.js 16.4.2 с App Router.
+- Next.js 16.4.6 с App Router.
 - TypeScript 6.0.3 в strict-режиме.
 - Sass/SCSS через пакет `sass` 1.105.2.
 - SCSS Modules для локальных стилей компонентов.

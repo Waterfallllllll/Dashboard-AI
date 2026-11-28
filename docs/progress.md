@@ -436,4 +436,13 @@
 - Добавлен `docs/PORTFOLIO_DEMO_AND_PRODUCTION_PLAN.md`, обновлён `docs/progress.md`.
 - Новые переменные окружения не добавлялись. Проверки не запускались: изменена только документация.
 
+## 2026-11-28 — Render Blueprint
+
+- Добавлен `render.yaml` для публичного Next.js web, приватного Express API, background worker и закрытого PostgreSQL 18 в Frankfurt. Миграции Prisma запускаются перед API и worker.
+- Web принимает Render private `host:port` в `INTERNAL_API_URL`; build arguments передаются в standalone image. API image теперь содержит Prisma CLI, конфигурацию и миграции.
+- Добавлена инструкция `docs/RENDER_DEPLOYMENT.md` с ограничениями Free-планов, настройкой Google OAuth, собственного домена и необязательных интеграций. README и архитектура актуализированы.
+- Next.js обновлён с 16.4.2 до 16.4.6, ESLint — с 10.13.0 до 10.16.0 из-за production security advisories. Исправлены две существовавшие ошибки typecheck web.
+- Новых имён переменных окружения нет. Blueprint запрашивает существующие `APP_ORIGIN`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, а `SESSION_SECRET` и `DATA_ENCRYPTION_KEY` генерирует Render.
+- Проверки: lint и typecheck проходят; Vitest — 328 passed / 18 skipped; Playwright — 41 passed / 5 skipped; production build Next.js 16.4.6 проходит; `npm audit --omit=dev` — 0 vulnerabilities. Docker image локально не собирался: Docker CLI не установлен.
+
 

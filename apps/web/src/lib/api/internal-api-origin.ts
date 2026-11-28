@@ -1,9 +1,10 @@
 export function internalApiOrigin(value: string | undefined): string {
   const raw = value?.trim() || "http://localhost:4000";
+  const candidate = raw.includes("://") ? raw : `http://${raw}`;
   let url: URL;
 
   try {
-    url = new URL(raw);
+    url = new URL(candidate);
   } catch {
     throw new Error("INTERNAL_API_URL должен быть адресом API");
   }

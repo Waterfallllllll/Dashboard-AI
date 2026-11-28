@@ -35,6 +35,9 @@ RUN npm ci --omit=dev --workspace @dashboard/api --workspace @dashboard/contract
   && adduser --system --uid 1001 dashboard
 
 COPY --from=builder --chown=dashboard:nodejs /app/apps/api/dist ./apps/api/dist
+COPY --from=builder --chown=dashboard:nodejs /app/apps/api/prisma ./apps/api/prisma
+COPY --from=builder --chown=dashboard:nodejs /app/apps/api/prisma.config.ts ./apps/api/prisma.config.ts
+COPY --from=builder --chown=dashboard:nodejs /app/apps/api/src/infrastructure/db/shadow-database.ts ./apps/api/src/infrastructure/db/shadow-database.ts
 COPY --from=builder --chown=dashboard:nodejs /app/packages/contracts/dist ./packages/contracts/dist
 
 USER dashboard

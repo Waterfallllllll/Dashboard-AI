@@ -1082,7 +1082,7 @@ Worker:
 `web`:
 
 - `NODE_ENV`;
-- `INTERNAL_API_URL`;
+- `INTERNAL_API_URL` — абсолютный HTTP(S)-адрес или private `host:port` хостинга;
 - `NEXT_PUBLIC_APP_URL`;
 - `DEPLOYMENT_VERSION`;
 - `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` — при нескольких web-инстансах.
